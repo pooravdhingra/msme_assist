@@ -12,7 +12,7 @@ from urllib.parse import quote_plus, urlparse, urlunparse
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load environment variables (for local development)
+# Load environment variables
 load_dotenv()
 
 # State mapping
@@ -60,11 +60,7 @@ def get_mongo_client():
     """Initialize and cache MongoDB client."""
     logger.info("Initializing MongoDB client")
     start_time = time.time()
-    mongo_uri = os.getenv("MONGO_URI")
-    
-    if not mongo_uri:
-        logger.error("MONGO_URI environment variable not set")
-        raise ValueError("MONGO_URI environment variable not set. Please configure it in Streamlit secrets or .env file.")
+    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
     
     try:
         # Parse the MongoDB URI to extract username and password
@@ -76,9 +72,12 @@ def get_mongo_client():
         if username and password:
             encoded_username = quote_plus(username)
             encoded_password = quote_plus(password)
+            
+            # Reconstruct the URI with encoded credentials
             netloc = f"{encoded_username}:{encoded_password}@{parsed_uri.hostname}"
             if parsed_uri.port:
                 netloc += f":{parsed_uri.port}"
+            # Rebuild the URI
             mongo_uri = urlunparse((
                 parsed_uri.scheme,
                 netloc,
@@ -87,26 +86,20 @@ def get_mongo_client():
                 parsed_uri.query,
                 parsed_uri.fragment
             ))
-            logger.info("Reconstructed MONGO_URI with encoded credentials")
-        else:
-            logger.warning("No username or password in MONGO_URI; using provided URI directly")
         
         client = MongoClient(
             mongo_uri,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=10000,
-            retryWrites=True,
-            maxPoolSize=50
+            serverSelectionTimeoutMS=5000,  # 5 seconds timeout for server selection
+            connectTimeoutMS=10000,         # 10 seconds timeout for initial connection
+            retryWrites=True,               # Enable retryable writes
+            maxPoolSize=50                  # Limit connection pool size
         )
         # Test the connection
-        client.server_info()
-        logger.info(f"MongoDB client initialized in {time.time() - start_time:.2f} seconds")
+        client.server_info()  # Raises ConnectionFailure if the connection fails
+        logger.info(f"MongoDB client initialized in {time.time() - start_time:.2f} seconds at {mongo_uri}")
         return client
     except ConnectionFailure as e:
-        logger.error(f"Failed to connect to MongoDB: {str(e)}. Check MONGO_URI, network access, and Atlas IP whitelist.")
-        raise
-    except OperationFailure as e:
-        logger.error(f"Authentication failed: {str(e)}. Verify username and password in MONGO_URI.")
+        logger.error(f"Failed to connect to MongoDB: {str(e)}")
         raise
     except Exception as e:
         logger.error(f"Unexpected error during MongoDB client initialization: {str(e)}")
@@ -123,6 +116,7 @@ class DataManager:
 
     def register_user(self, fname, lname, mobile_number, state, business_name, business_category):
         """Register a new user and return success status with message."""
+        # Input validation
         if not all([fname, lname, mobile_number, state, business_name, business_category]):
             logger.error("All registration fields must be non-empty")
             return False, "All fields are required."
@@ -134,12 +128,20 @@ class DataManager:
             return False, "Invalid state selected."
 
         try:
+            # Check if mobile number exists
             existing_user = self.db.users.find_one({"mobile_number": mobile_number})
             if existing_user:
                 logger.warning(f"Mobile number {mobile_number} already registered")
                 return False, "Mobile number already registered. Please log in."
             
-            state_id = next((key for key, value in STATE_MAPPING.items() if value == state), None)
+            # Find state_id from state name
+            state_id = None
+            for key, value in STATE_MAPPING.items():
+                if value == state:
+                    state_id = key
+                    break
+            
+            # Save user
             user_data = {
                 "fname": fname,
                 "lname": lname,
@@ -193,6 +195,7 @@ class DataManager:
             raise ValueError("user_data must be a dictionary")
 
         try:
+            # Set session expiration (e.g., 30 minutes from now)
             expiration_time = datetime.utcnow() + timedelta(minutes=30)
             session_data = {
                 "session_id": session_id,
@@ -320,7 +323,7 @@ class DataManager:
         """Delete all conversations for a user."""
         if not mobile_number or not isinstance(mobile_number, str):
             logger.error("Invalid mobile_number: mobile_number must be a non-empty string")
-            raise ValueError("mobile_number must be a non-empty string")
+            raise ValueError("mobile_number must be a non-hooks string")
 
         try:
             result = self.db.conversations.delete_many({"mobile_number": mobile_number})
