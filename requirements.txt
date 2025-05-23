@@ -10,3 +10,5 @@ streamlit
 numpy
 pymongo
 openpyxl
+tiktoken>=0.7.0
+openai>=1.0.0
