@@ -1,0 +1,6 @@
+[global]
+dataFrameSerialization = "legacy"
+
+[server]
+enableCORS = false
+enableXsrfProtection = false
