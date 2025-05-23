@@ -12,3 +12,4 @@ pymongo
 openpyxl
 tiktoken>=0.7.0
 openai>=1.0.0
+faiss-cpu>=1.8.0
