@@ -1,0 +1,18 @@
+# macOS system files
+.DS_Store
+
+# Sensitive environment files
+.env
+
+# Python virtual environment
+myenv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Optional: Ignore editor-specific files (if you use any)
+*.swp
+*.swo
+.vscode/
+.idea/
