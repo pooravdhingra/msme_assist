@@ -45,6 +45,21 @@ if "last_query_id" not in st.session_state:
 if "rag_cache" not in st.session_state:
     st.session_state.rag_cache = {}
 
+# Check for session ID in query parameters to restore session
+query_params = st.query_params
+if "session_id" in query_params and st.session_state.user is None:
+    session_id = query_params["session_id"]
+    session = data_manager.find_active_session(session_id)
+    if session:
+        st.session_state.user = session["user_data"]
+        st.session_state.session_id = session_id
+        st.session_state.page = "chat"
+        st.session_state.messages = []  # Messages will be loaded from MongoDB in chat_page
+        logger.info(f"Restored session {session_id} from query parameters")
+    else:
+        logger.warning(f"No active session found for session_id {session_id}")
+        st.query_params.clear()  # Clear invalid session ID
+
 # Generate session ID
 def generate_session_id():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=10))
@@ -115,8 +130,8 @@ def login_page():
         if st.button("Verify OTP"):
             if otp_input == st.session_state.otp:
                 user = data_manager.find_user(st.session_state.temp_mobile)
-                # Store user data including state_id and state_name in session state
-                st.session_state.user = {
+                # Store user data in session state
+                user_data = {
                     "fname": user.get("fname"),
                     "lname": user.get("lname"),
                     "mobile_number": user.get("mobile_number"),
@@ -125,13 +140,17 @@ def login_page():
                     "business_name": user.get("business_name"),
                     "business_category": user.get("business_category")
                 }
+                st.session_state.user = user_data
                 st.session_state.session_id = generate_session_id()
                 st.session_state.messages = []
-                data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id)
+                # Save session to MongoDB with user data
+                data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, user_data)
                 st.session_state.page = "chat"
                 st.session_state.otp_generated = False
                 st.session_state.otp = None
                 st.session_state.last_query_id = None
+                # Pass session_id in query parameters
+                st.query_params["session_id"] = st.session_state.session_id
                 st.success("Login successful!")
                 st.rerun()
             else:
@@ -153,6 +172,7 @@ def chat_page():
             st.session_state.otp_generated = False
             st.session_state.welcome_message_sent = False
             st.session_state.last_query_id = None
+            st.query_params.clear()
             st.rerun()
 
     # Trigger welcome message based on user type

@@ -1,11 +1,12 @@
 import os
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure
 from dotenv import load_dotenv
 import streamlit as st
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -60,7 +61,32 @@ def get_mongo_client():
     logger.info("Initializing MongoDB client")
     start_time = time.time()
     mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+    
     try:
+        # Parse the MongoDB URI to extract username and password
+        parsed_uri = urlparse(mongo_uri)
+        username = parsed_uri.username
+        password = parsed_uri.password
+        
+        # URL-encode username and password if they exist
+        if username and password:
+            encoded_username = quote_plus(username)
+            encoded_password = quote_plus(password)
+            
+            # Reconstruct the URI with encoded credentials
+            netloc = f"{encoded_username}:{encoded_password}@{parsed_uri.hostname}"
+            if parsed_uri.port:
+                netloc += f":{parsed_uri.port}"
+            # Rebuild the URI
+            mongo_uri = urlunparse((
+                parsed_uri.scheme,
+                netloc,
+                parsed_uri.path,
+                parsed_uri.params,
+                parsed_uri.query,
+                parsed_uri.fragment
+            ))
+        
         client = MongoClient(
             mongo_uri,
             serverSelectionTimeoutMS=5000,  # 5 seconds timeout for server selection
@@ -156,23 +182,31 @@ class DataManager:
             logger.error(f"Unexpected error while finding user with mobile {mobile_number}: {str(e)}")
             return None
 
-    def start_session(self, mobile_number, session_id):
-        """Log session start."""
+    def start_session(self, mobile_number, session_id, user_data):
+        """Log session start with user data and expiration."""
         if not session_id or not isinstance(session_id, str):
             logger.error("Invalid session_id: session_id must be a non-empty string")
             raise ValueError("session_id must be a non-empty string")
         if not mobile_number or not isinstance(mobile_number, str):
             logger.error("Invalid mobile_number: mobile_number must be a non-empty string")
             raise ValueError("mobile_number must be a non-empty string")
+        if not isinstance(user_data, dict):
+            logger.error("Invalid user_data: user_data must be a dictionary")
+            raise ValueError("user_data must be a dictionary")
 
         try:
+            # Set session expiration (e.g., 30 minutes from now)
+            expiration_time = datetime.utcnow() + timedelta(minutes=30)
             session_data = {
                 "session_id": session_id,
                 "mobile_number": mobile_number,
-                "start_time": datetime.utcnow()
+                "user_data": user_data,
+                "start_time": datetime.utcnow(),
+                "expiration_time": expiration_time,
+                "is_active": True
             }
-            self.db.sessions.insert_one(session_data)  # Fixed: Insert into sessions collection
-            logger.info(f"Started session {session_id} for mobile {mobile_number}")
+            self.db.sessions.insert_one(session_data)
+            logger.info(f"Started session {session_id} for mobile {mobile_number}, expires at {expiration_time}")
         except OperationFailure as e:
             logger.error(f"Operation failed while starting session {session_id}: {str(e)}")
             raise
@@ -180,8 +214,32 @@ class DataManager:
             logger.error(f"Unexpected error while starting session {session_id}: {str(e)}")
             raise
 
+    def find_active_session(self, session_id):
+        """Find an active session by session ID if it hasn't expired."""
+        if not session_id or not isinstance(session_id, str):
+            logger.error("Invalid session_id: session_id must be a non-empty string")
+            return None
+
+        try:
+            session = self.db.sessions.find_one({
+                "session_id": session_id,
+                "is_active": True,
+                "expiration_time": {"$gt": datetime.utcnow()}
+            })
+            if session:
+                logger.info(f"Found active session {session_id} for mobile {session['mobile_number']}")
+            else:
+                logger.warning(f"No active session found for session_id {session_id}")
+            return session
+        except OperationFailure as e:
+            logger.error(f"Operation failed while finding session {session_id}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error while finding session {session_id}: {str(e)}")
+            return None
+
     def end_session(self, session_id):
-        """Log session end."""
+        """Mark session as inactive and log end time."""
         if not session_id or not isinstance(session_id, str):
             logger.error("Invalid session_id: session_id must be a non-empty string")
             raise ValueError("session_id must be a non-empty string")
@@ -189,7 +247,7 @@ class DataManager:
         try:
             result = self.db.sessions.update_one(
                 {"session_id": session_id},
-                {"$set": {"end_time": datetime.utcnow()}}
+                {"$set": {"end_time": datetime.utcnow(), "is_active": False}}
             )
             if result.matched_count == 0:
                 logger.warning(f"No session found with session_id {session_id} to end")
@@ -265,7 +323,7 @@ class DataManager:
         """Delete all conversations for a user."""
         if not mobile_number or not isinstance(mobile_number, str):
             logger.error("Invalid mobile_number: mobile_number must be a non-empty string")
-            raise ValueError("mobile_number must be a non-empty string")
+            raise ValueError("mobile_number must be a non-hooks string")
 
         try:
             result = self.db.conversations.delete_many({"mobile_number": mobile_number})
