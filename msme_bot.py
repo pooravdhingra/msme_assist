@@ -43,7 +43,7 @@ def init_llm():
 def init_vector_store():
     logger.info("Loading vector store")
     start_time = time.time()
-    vector_store = load_rag_data()
+    vector_store = load_rag_data(faiss_index_path="faiss_index", version_file="faiss_version.txt")
     logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents")
     return vector_store
 

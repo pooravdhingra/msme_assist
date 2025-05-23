@@ -5,18 +5,22 @@ import os
 import logging
 import gdown  # For downloading from Google Drive
 import tempfile  # For temporary file handling
+import hashlib
 from utils import get_embeddings
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp"):
+def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", faiss_index_path="faiss_index", version_file="faiss_version.txt"):
     """
-    Load scheme_db.xlsx, process in chunks to avoid token limits, and create a FAISS vector store.
+    Load scheme_db.xlsx, check for precomputed FAISS index, and return a FAISS vector store.
+    If a valid precomputed index exists, load it; otherwise, process in chunks and create a new index.
     
     Args:
         google_drive_file_id (str): The file ID from the Google Drive shareable link.
+        faiss_index_path (str): Directory containing the precomputed FAISS index.
+        version_file (str): File containing the hash of the Excel file used for the index.
     
     Returns:
         FAISS: FAISS vector store with indexed scheme documents.
@@ -33,6 +37,31 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp"):
             logger.error(f"Failed to download file from Google Drive: {str(e)}")
             raise
     
+        # Compute file hash
+        with open(temp_file_path, "rb") as f:
+            file_hash = hashlib.md5(f.read()).hexdigest()
+        logger.info(f"Computed file hash: {file_hash}")
+
+    # Check for precomputed FAISS index
+    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+        try:
+            with open(version_file, "r") as f:
+                stored_hash = f.read().strip()
+            if stored_hash == file_hash:
+                logger.info(f"Precomputed FAISS index found with matching hash at {faiss_index_path}")
+                embeddings = get_embeddings()
+                vector_store = FAISS.load_local(faiss_index_path, embeddings, allow_dangerous_deserialization=True)
+                logger.info(f"Loaded precomputed FAISS vector store with {vector_store.index.ntotal} documents")
+                os.unlink(temp_file_path)
+                logger.info(f"Temporary file {temp_file_path} deleted")
+                return vector_store
+            else:
+                logger.info(f"Hash mismatch: stored hash {stored_hash}, current hash {file_hash}. Recomputing FAISS index.")
+        except Exception as e:
+            logger.error(f"Failed to load precomputed FAISS index: {str(e)}. Recomputing FAISS index.")
+    else:
+        logger.info(f"No precomputed FAISS index found at {faiss_index_path} or version file missing. Computing new index.")
+
     # Read Excel file
     try:
         df = pd.read_excel(temp_file_path)
@@ -124,5 +153,17 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp"):
     logger.info("Merging vector stores...")
     vector_store1.merge_from(vector_store2)
     logger.info(f"Combined FAISS vector store created with {vector_store1.index.ntotal} documents")
+    
+    # Save the FAISS index and version file
+    try:
+        os.makedirs(faiss_index_path, exist_ok=True)
+        vector_store1.save_local(faiss_index_path)
+        logger.info(f"Saved FAISS vector store to {faiss_index_path}")
+        with open(version_file, "w") as f:
+            f.write(file_hash)
+        logger.info(f"Saved file hash to {version_file}")
+    except Exception as e:
+        logger.error(f"Failed to save FAISS vector store or version: {str(e)}")
+        raise
     
     return vector_store1
