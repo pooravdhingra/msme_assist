@@ -53,6 +53,46 @@ def generate_session_id():
 def generate_query_id(query, timestamp):
     return f"{query[:50]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
+# Restore session from URL query parameters
+def restore_session_from_url():
+    query_params = st.query_params
+    session_id = query_params.get("session_id")
+    if session_id and not st.session_state.session_id:
+        # Check if session_id exists in MongoDB and is active
+        session = data_manager.db.sessions.find_one({"session_id": session_id, "end_time": {"$exists": False}})
+        if session:
+            mobile_number = session.get("mobile_number")
+            user = data_manager.find_user(mobile_number)
+            if user:
+                st.session_state.session_id = session_id
+                st.session_state.user = {
+                    "fname": user.get("fname"),
+                    "lname": user.get("lname"),
+                    "mobile_number": user.get("mobile_number"),
+                    "state_id": user.get("state_id", "Unknown"),
+                    "state_name": user.get("state_name", "Unknown"),
+                    "business_name": user.get("business_name"),
+                    "business_category": user.get("business_category")
+                }
+                st.session_state.page = "chat"
+                # Restore messages from MongoDB
+                conversations = data_manager.get_conversations(mobile_number)
+                all_messages = []
+                for conv in conversations:
+                    for msg in conv["messages"]:
+                        if "content" not in msg or "role" not in msg or "timestamp" not in msg:
+                            logger.warning(f"Skipping malformed message in MongoDB: {msg}")
+                            continue
+                        all_messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"],
+                            "timestamp": msg["timestamp"]
+                        })
+                st.session_state.messages = all_messages
+                logger.info(f"Restored session {session_id} for user {mobile_number}")
+                return True
+    return False
+
 # Registration page
 def registration_page():
     st.title("Register")
@@ -87,12 +127,18 @@ def registration_page():
                 if success:
                     st.success(message)
                     st.session_state.page = "login"
+                    st.query_params.clear()
                     st.rerun()
                 else:
                     st.error(message)
 
 # Login page
 def login_page():
+    # Try to restore session from URL
+    if restore_session_from_url():
+        st.rerun()
+        return
+
     st.title("Login")
     st.markdown("Enter your mobile number to log in.")
 
@@ -125,13 +171,17 @@ def login_page():
                     "business_name": user.get("business_name"),
                     "business_category": user.get("business_category")
                 }
-                st.session_state.session_id = generate_session_id()
+                # Generate session_id only if not already set
+                if not st.session_state.session_id:
+                    st.session_state.session_id = generate_session_id()
+                    data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, st.session_state.user)
                 st.session_state.messages = []
-                data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id)
                 st.session_state.page = "chat"
                 st.session_state.otp_generated = False
                 st.session_state.otp = None
                 st.session_state.last_query_id = None
+                # Add session_id to URL
+                st.query_params["session_id"] = st.session_state.session_id
                 st.success("Login successful!")
                 st.rerun()
             else:
@@ -139,6 +189,38 @@ def login_page():
 
 # Chat page
 def chat_page():
+    # Verify session validity
+    if not st.session_state.session_id or not st.session_state.user:
+        # Try to restore session from URL
+        if restore_session_from_url():
+            st.rerun()
+            return
+        # If restoration fails, redirect to login
+        st.session_state.page = "login"
+        st.session_state.user = None
+        st.session_state.session_id = None
+        st.session_state.messages = []
+        st.session_state.otp_generated = False
+        st.session_state.welcome_message_sent = False
+        st.session_state.last_query_id = None
+        st.query_params.clear()
+        st.rerun()
+        return
+
+    # Check MongoDB session validity
+    session = data_manager.db.sessions.find_one({"session_id": st.session_state.session_id, "end_time": {"$exists": False}})
+    if not session:
+        st.session_state.page = "login"
+        st.session_state.user = None
+        st.session_state.session_id = None
+        st.session_state.messages = []
+        st.session_state.otp_generated = False
+        st.session_state.welcome_message_sent = False
+        st.session_state.last_query_id = None
+        st.query_params.clear()
+        st.rerun()
+        return
+
     col1, col2 = st.columns([1, 1])
     with col1:
         st.markdown(f"Hi, {st.session_state.user['fname']}")
@@ -153,9 +235,14 @@ def chat_page():
             st.session_state.otp_generated = False
             st.session_state.welcome_message_sent = False
             st.session_state.last_query_id = None
+            st.query_params.clear()
             st.rerun()
 
-    # Trigger welcome message based on user type
+    # Ensure session_id is in URL
+    if "session_id" not in st.query_params or st.query_params["session_id"] != st.session_state.session_id:
+        st.query_params["session_id"] = st.session_state.session_id
+
+    # Trigger welcome message only for new users
     if not st.session_state.welcome_message_sent:
         conversations = data_manager.get_conversations(st.session_state.user["mobile_number"])
         has_user_messages = False
@@ -168,7 +255,7 @@ def chat_page():
                 break
         user_type = "returning" if has_user_messages else "new"
 
-        if user_type == "new" or (user_type == "returning" and has_user_messages):
+        if user_type == "new":
             welcome_response = process_query(
                 "welcome",
                 st.session_state.vector_store,
@@ -257,6 +344,9 @@ def chat_page():
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
 
 # Main app logic
+# Check for session restoration first
+restore_session_from_url()
+
 if st.session_state.page == "login":
     login_page()
 elif st.session_state.page == "register":
@@ -268,6 +358,7 @@ elif st.session_state.page == "chat":
 if st.session_state.page == "login":
     if st.button("New User? Register Here"):
         st.session_state.page = "register"
+        st.query_params.clear()
         st.rerun()
 
 # Update existing users to include state_id and state_name

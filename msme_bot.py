@@ -54,32 +54,6 @@ vector_store = init_vector_store()
 def welcome_user(state_name):
     return f"Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
-def welcome_returning_user(user_name, state_name, conversation_summary=None):
-    if not conversation_summary:
-        return f"Welcome back, {user_name}! Since you're from {state_name}, I'll help with schemes and documents for your state and central schemes. How can I assist you today?"
-
-    prompt = f"""You are a friendly assistant for Haqdarshak, helping small business owners in India. Create a natural, concise welcome message for a returning user named {user_name} from {state_name}. 
-
-    **Instructions**:
-    - Start with "Welcome back, {user_name}!"
-    - Mention that since the user is from {state_name}, you will provide schemes and documents applicable to their state and central government schemes.
-    - Summarize the prior conversation in 1-2 sentences (max 50 words) based on this summary: {conversation_summary}
-    - Use conversational phrases like "Last time, we talked about...", "We discussed...", or similar, avoiding repetitive wording.
-    - Mention that you provided helpful details for their business.
-    - End with a question like "How can I help you today?" or a natural variant.
-    - Keep the tone warm, simple, and relatable for micro business owners with low English proficiency.
-
-    **Output**:
-    - Return only the final welcome message.
-    """
-
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        return response.content.strip()
-    except Exception as e:
-        logger.error(f"Failed to generate welcome message: {str(e)}")
-        return f"Welcome back, {user_name}! Since you're from {state_name}, I'll help with schemes and documents for your state and central schemes. Last time, we discussed {conversation_summary.lower()}. I shared tips for your business. How can I help you today?"
-
 # Step 1: Process user query with RAG
 def get_rag_response(query, vector_store):
     start_time = time.time()
@@ -202,63 +176,8 @@ def process_query(query, vector_store, session_id, mobile_number):
             logger.info(f"Generated welcome response for new user in {time.time() - start_time:.2f} seconds: {response}")
             return response
         else:  # returning user
-            if not has_user_messages:
-                logger.info(f"No new welcome message for returning user with only initial welcome message")
-                return None
-            conversation_summary = ""
-            conversation_history = ""
-            all_messages = []
-            for conv in conversations:
-                for msg in conv["messages"]:
-                    if "content" not in msg or "role" not in msg or "timestamp" not in msg:
-                        logger.warning(f"Skipping malformed message in MongoDB: {msg}")
-                        continue
-                    if msg["role"] == "assistant" and "Welcome" in msg["content"]:
-                        continue
-                    all_messages.append((msg["role"], msg["content"], msg["timestamp"]))
-            all_messages = sorted(all_messages, key=lambda x: x[2], reverse=True)[:10]
-            user_count = 0
-            for role, content, _ in all_messages:
-                if role == "user":
-                    user_count += 1
-                    conversation_history += f"User: {content}\n"
-                elif role == "assistant" and user_count > 0:
-                    conversation_history += f"Assistant: {content}\n"
-                if user_count >= 5:
-                    break
-            
-            if conversation_history:
-                summary_prompt = f"Summarize the following conversation history in 1-2 sentences (max 50 words):\n{conversation_history}"
-                try:
-                    summary_response = llm.invoke([{"role": "user", "content": summary_prompt}])
-                    conversation_summary = summary_response.content.strip()
-                    logger.info(f"Conversation summary generated: {conversation_summary}")
-                except Exception as e:
-                    logger.error(f"Failed to generate conversation summary: {str(e)}")
-                    conversation_summary = ""
-
-            response = welcome_returning_user(user_name, state_name, conversation_summary)
-            try:
-                interaction_id = generate_interaction_id(response, datetime.utcnow())
-                recent_conversations = data_manager.get_conversations(mobile_number)
-                if not any(
-                    msg["role"] == "assistant" and msg["content"] == response
-                    for conv in recent_conversations for msg in conv["messages"]
-                ):
-                    data_manager.save_conversation(
-                        session_id,
-                        mobile_number,
-                        [
-                            {"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id}
-                        ]
-                    )
-                    logger.info(f"Saved welcome message for returning user in session {session_id} (Interaction ID: {interaction_id})")
-                else:
-                    logger.debug(f"Skipped saving duplicate welcome message: {response}")
-            except Exception as e:
-                logger.error(f"Failed to save welcome message for returning user in session {session_id}: {str(e)}")
-            logger.info(f"Generated welcome response in {time.time() - start_time:.2f} seconds: {response}")
-            return response
+            logger.info(f"No welcome message for returning user")
+            return None
 
     # Check if vector store is valid
     try:
