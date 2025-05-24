@@ -174,6 +174,8 @@ def login_page():
                 # Generate session_id only if not already set
                 if not st.session_state.session_id:
                     st.session_state.session_id = generate_session_id()
+                    # Always pass user_data, as it's optional in start_session
+                    logger.debug(f"Calling start_session with mobile: {st.session_state.temp_mobile}, session_id: {st.session_state.session_id}, user_data: {st.session_state.user}")
                     data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, st.session_state.user)
                 st.session_state.messages = []
                 st.session_state.page = "chat"

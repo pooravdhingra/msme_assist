@@ -6,6 +6,7 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure
 from dotenv import load_dotenv
 import streamlit as st
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -60,16 +61,41 @@ def get_mongo_client():
     logger.info("Initializing MongoDB client")
     start_time = time.time()
     mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+    
     try:
+        # Parse the MongoDB URI to extract username and password
+        parsed_uri = urlparse(mongo_uri)
+        username = parsed_uri.username
+        password = parsed_uri.password
+        
+        # URL-encode username and password if they exist
+        if username and password:
+            encoded_username = quote_plus(username)
+            encoded_password = quote_plus(password)
+            
+            # Reconstruct the URI with encoded credentials
+            netloc = f"{encoded_username}:{encoded_password}@{parsed_uri.hostname}"
+            if parsed_uri.port:
+                netloc += f":{parsed_uri.port}"
+            # Rebuild the URI
+            mongo_uri = urlunparse((
+                parsed_uri.scheme,
+                netloc,
+                parsed_uri.path,
+                parsed_uri.params,
+                parsed_uri.query,
+                parsed_uri.fragment
+            ))
+        
         client = MongoClient(
             mongo_uri,
-            serverSelectionTimeoutMS=5000,  # 5 seconds timeout for server selection
-            connectTimeoutMS=10000,         # 10 seconds timeout for initial connection
-            retryWrites=True,               # Enable retryable writes
-            maxPoolSize=50                  # Limit connection pool size
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=10000,
+            retryWrites=True,
+            maxPoolSize=50
         )
         # Test the connection
-        client.server_info()  # Raises ConnectionFailure if the connection fails
+        client.server_info()
         logger.info(f"MongoDB client initialized in {time.time() - start_time:.2f} seconds at {mongo_uri}")
         return client
     except ConnectionFailure as e:
@@ -90,7 +116,6 @@ class DataManager:
 
     def register_user(self, fname, lname, mobile_number, state, business_name, business_category):
         """Register a new user and return success status with message."""
-        # Input validation
         if not all([fname, lname, mobile_number, state, business_name, business_category]):
             logger.error("All registration fields must be non-empty")
             return False, "All fields are required."
@@ -102,20 +127,17 @@ class DataManager:
             return False, "Invalid state selected."
 
         try:
-            # Check if mobile number exists
             existing_user = self.db.users.find_one({"mobile_number": mobile_number})
             if existing_user:
                 logger.warning(f"Mobile number {mobile_number} already registered")
                 return False, "Mobile number already registered. Please log in."
             
-            # Find state_id from state name
             state_id = None
             for key, value in STATE_MAPPING.items():
                 if value == state:
                     state_id = key
                     break
             
-            # Save user
             user_data = {
                 "fname": fname,
                 "lname": lname,
@@ -156,8 +178,8 @@ class DataManager:
             logger.error(f"Unexpected error while finding user with mobile {mobile_number}: {str(e)}")
             return None
 
-    def start_session(self, mobile_number, session_id):
-        """Log session start."""
+    def start_session(self, mobile_number, session_id, user_data=None):
+        """Log session start, optionally storing user_data."""
         if not session_id or not isinstance(session_id, str):
             logger.error("Invalid session_id: session_id must be a non-empty string")
             raise ValueError("session_id must be a non-empty string")
@@ -171,8 +193,10 @@ class DataManager:
                 "mobile_number": mobile_number,
                 "start_time": datetime.utcnow()
             }
-            self.db.sessions.insert_one(session_data)  # Fixed: Insert into sessions collection
-            logger.info(f"Started session {session_id} for mobile {mobile_number}")
+            if user_data:
+                session_data["user_data"] = user_data
+            self.db.sessions.insert_one(session_data)
+            logger.info(f"Started session {session_id} for mobile {mobile_number} with user_data: {user_data}")
         except OperationFailure as e:
             logger.error(f"Operation failed while starting session {session_id}: {str(e)}")
             raise
