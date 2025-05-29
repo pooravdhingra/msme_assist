@@ -1,6 +1,4 @@
-[global]
-dataFrameSerialization = "legacy"
-
 [server]
 enableCORS = false
 enableXsrfProtection = false
+fileWatcherType = "none"  # Disable file watcher to avoid inotify limit
