@@ -72,9 +72,37 @@ def detect_language(query):
     
     return "English"
 
-# Welcome user (unchanged)
-def welcome_user(state_name):
-    return f"Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
+# Welcome user
+def welcome_user(state_name, user_name, query_language):
+    """Generate a welcome message in the user's chosen language."""
+    prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a new user named {user_name} from {state_name}.
+
+    **Input**:
+    - Query Language: {query_language}
+
+    **Instructions**:
+    - Generate a welcome message for a new user in the specified language ({query_language}).
+    - For Hindi, use Devanagari script with simple, clear words suitable for micro business owners with low Hindi proficiency.
+    - For English, use simple English with a friendly tone.
+    - The message should welcome the user, mention their state ({state_name}), and offer assistance with schemes and documents applicable to their state and all central government schemes.
+    - Response must be ≤50 words.
+    - Start the response with 'Hi {user_name}!' (English) or 'नमस्ते {user_name}!' (Hindi).
+
+    **Output**:
+    - Return only the welcome message in the specified language.
+    """
+
+    try:
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        generated_response = response.content.strip()
+        logger.info(f"Generated welcome message in {query_language}: {generated_response}")
+        return generated_response
+    except Exception as e:
+        logger.error(f"Failed to generate welcome message: {str(e)}")
+        # Fallback to default messages
+        if query_language == "Hindi":
+            return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
+        return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 # Step 1: Process user query with RAG
 def get_rag_response(query, vector_store):
@@ -145,7 +173,7 @@ def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
 # Main function to process query
-def process_query(query, vector_store, session_id, mobile_number):
+def process_query(query, vector_store, session_id, mobile_number, user_language=None):
     start_time = time.time()
     logger.info(f"Starting query processing for: {query}")
     
@@ -159,9 +187,9 @@ def process_query(query, vector_store, session_id, mobile_number):
         logger.error("User data not found in session state")
         return "Error: User not logged in."
 
-    # Detect query language
-    query_language = detect_language(query)
-    logger.info(f"Detected query language: {query_language}")
+    # Use user_language for welcome message, otherwise detect query language
+    query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
+    logger.info(f"Using query language: {query_language}")
 
     # Check user type
     conversations = data_manager.get_conversations(mobile_number)
@@ -176,10 +204,10 @@ def process_query(query, vector_store, session_id, mobile_number):
     user_type = "returning" if has_user_messages else "new"
     logger.info(f"User type: {user_type}")
 
-    # Handle welcome query (unchanged)
+    # Handle welcome query
     if query.lower() == "welcome":
         if user_type == "new":
-            response = welcome_user(state_name)
+            response = welcome_user(state_name, user_name, query_language)
             try:
                 interaction_id = generate_interaction_id(response, datetime.utcnow())
                 recent_conversations = data_manager.get_conversations(mobile_number)

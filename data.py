@@ -113,10 +113,11 @@ class DataManager:
         db_name = os.getenv("MONGO_DB_NAME", "haqdarshak")
         self.db = self.client[db_name]
         logger.info(f"Using database {db_name}")
+        self.update_existing_users_language()
 
-    def register_user(self, fname, lname, mobile_number, state, business_name, business_category):
+    def register_user(self, fname, lname, mobile_number, state, business_name, business_category, language):
         """Register a new user and return success status with message."""
-        if not all([fname, lname, mobile_number, state, business_name, business_category]):
+        if not all([fname, lname, mobile_number, state, business_name, business_category, language]):
             logger.error("All registration fields must be non-empty")
             return False, "All fields are required."
         if not isinstance(mobile_number, str) or not mobile_number.isdigit():
@@ -125,6 +126,9 @@ class DataManager:
         if not isinstance(state, str) or state not in STATE_MAPPING.values():
             logger.error(f"Invalid state: {state}")
             return False, "Invalid state selected."
+        if language not in ["English", "Hindi"]:
+            logger.error(f"Invalid language: {language}")
+            return False, "Invalid language selected."
 
         try:
             existing_user = self.db.users.find_one({"mobile_number": mobile_number})
@@ -146,10 +150,11 @@ class DataManager:
                 "state_name": state,
                 "business_name": business_name,
                 "business_category": business_category,
+                "language": language,
                 "created_at": datetime.utcnow()
             }
             self.db.users.insert_one(user_data)
-            logger.info(f"Registered user with mobile {mobile_number}, state_id {state_id}, state_name {state}")
+            logger.info(f"Registered user with mobile {mobile_number}, state_id {state_id}, state_name {state}, language {language}")
             return True, "Registration successful! Please log in."
         except OperationFailure as e:
             logger.error(f"Operation failed while registering user with mobile {mobile_number}: {str(e)}")
@@ -365,6 +370,21 @@ class DataManager:
             raise
         except Exception as e:
             logger.error(f"Unexpected error while updating users' state fields: {str(e)}")
+            raise
+
+    def update_existing_users_language(self):
+        """Update existing users to add language 'English' if not present."""
+        try:
+            result = self.db.users.update_many(
+                {"language": {"$exists": False}},
+                {"$set": {"language": "English"}}
+            )
+            logger.info(f"Updated {result.modified_count} users with language 'English'")
+        except OperationFailure as e:
+            logger.error(f"Operation failed while updating users' language fields: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error while updating users' language fields: {str(e)}")
             raise
 
     def close(self):

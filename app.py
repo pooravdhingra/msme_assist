@@ -72,7 +72,8 @@ def restore_session_from_url():
                     "state_id": user.get("state_id", "Unknown"),
                     "state_name": user.get("state_name", "Unknown"),
                     "business_name": user.get("business_name"),
-                    "business_category": user.get("business_category")
+                    "business_category": user.get("business_category"),
+                    "language": user.get("language", "English")
                 }
                 st.session_state.page = "chat"
                 # Restore messages from MongoDB
@@ -104,6 +105,7 @@ def registration_page():
         lname = st.text_input("Last Name")
         mobile_number = st.text_input("Mobile Number (10 digits)")
         state = st.selectbox("State", list(STATE_MAPPING.values()))
+        language = st.selectbox("Preferred Language", ["English", "Hindi"])
 
         st.subheader("Business Details")
         business_name = st.text_input("Business Name")
@@ -120,9 +122,11 @@ def registration_page():
                 st.error("Business name is required.")
             elif not state:
                 st.error("State is required.")
+            elif not language:
+                st.error("Language is required.")
             else:
                 success, message = data_manager.register_user(
-                    fname, lname, mobile_number, state, business_name, business_category
+                    fname, lname, mobile_number, state, business_name, business_category, language
                 )
                 if success:
                     st.success(message)
@@ -161,7 +165,7 @@ def login_page():
         if st.button("Verify OTP"):
             if otp_input == st.session_state.otp:
                 user = data_manager.find_user(st.session_state.temp_mobile)
-                # Store user data including state_id and state_name in session state
+                # Store user data including state_id, state_name, and language in session state
                 st.session_state.user = {
                     "fname": user.get("fname"),
                     "lname": user.get("lname"),
@@ -169,7 +173,8 @@ def login_page():
                     "state_id": user.get("state_id", "Unknown"),
                     "state_name": user.get("state_name", "Unknown"),
                     "business_name": user.get("business_name"),
-                    "business_category": user.get("business_category")
+                    "business_category": user.get("business_category"),
+                    "language": user.get("language", "English")
                 }
                 # Generate session_id only if not already set
                 if not st.session_state.session_id:
@@ -262,7 +267,8 @@ def chat_page():
                 "welcome",
                 st.session_state.vector_store,
                 st.session_state.session_id,
-                st.session_state.user["mobile_number"]
+                st.session_state.user["mobile_number"],
+                user_language=st.session_state.user["language"]
             )
             if welcome_response:  # Only append if a welcome message was generated
                 if not any(msg["role"] == "assistant" and msg["content"] == welcome_response for msg in st.session_state.messages):
@@ -333,7 +339,8 @@ def chat_page():
                 query,
                 st.session_state.vector_store,
                 st.session_state.session_id,
-                st.session_state.user["mobile_number"]
+                st.session_state.user["mobile_number"],
+                user_language=st.session_state.user["language"]
             )
             if not any(msg["role"] == "assistant" and msg["content"] == response for msg in st.session_state.messages):
                 st.session_state.messages.append({
