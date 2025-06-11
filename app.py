@@ -73,7 +73,11 @@ def restore_session_from_url():
                     "state_name": user.get("state_name", "Unknown"),
                     "business_name": user.get("business_name"),
                     "business_category": user.get("business_category"),
-                    "language": user.get("language", "English")
+                    "language": user.get("language", "English"),
+                    "gender": user.get("gender"),
+                    "udyam_registered": user.get("udyam_registered"),
+                    "turnover": user.get("turnover"),
+                    "preferred_application_mode": user.get("preferred_application_mode")
                 }
                 st.session_state.page = "chat"
                 # Restore messages from MongoDB
@@ -106,10 +110,28 @@ def registration_page():
         mobile_number = st.text_input("Mobile Number (10 digits)")
         state = st.selectbox("State", list(STATE_MAPPING.values()))
         language = st.selectbox("Preferred Language", ["English", "Hindi"])
+        gender = st.selectbox("Gender", ["Male", "Female", "Other"])
 
         st.subheader("Business Details")
         business_name = st.text_input("Business Name")
-        business_category = st.selectbox("Business Category", ["Manufacturing", "Services", "Retail"])
+        business_category = st.selectbox(
+            "Business Category",
+            [
+                "Manufacturing",
+                "Services",
+                "Retail",
+                "Agriculture and Allied Sectors",
+                "Traders/Wholesalers",
+            ],
+        )
+
+        udyam_registered = st.selectbox(
+            "Is your business Udyam Registered? (optional)", ["", "Yes", "No"], index=0
+        )
+        turnover = st.text_input("Annual Turnover (optional)")
+        preferred_application_mode = st.selectbox(
+            "Preferred Application Mode (Optional)", ["", "Offline", "Online"], index=0
+        )
 
         submit_button = st.form_submit_button("Register")
 
@@ -124,9 +146,21 @@ def registration_page():
                 st.error("State is required.")
             elif not language:
                 st.error("Language is required.")
+            elif not gender:
+                st.error("Gender is required.")
             else:
                 success, message = data_manager.register_user(
-                    fname, lname, mobile_number, state, business_name, business_category, language
+                    fname,
+                    lname,
+                    mobile_number,
+                    state,
+                    business_name,
+                    business_category,
+                    language,
+                    gender,
+                    udyam_registered or None,
+                    turnover or None,
+                    preferred_application_mode or None
                 )
                 if success:
                     st.success(message)
@@ -174,7 +208,11 @@ def login_page():
                     "state_name": user.get("state_name", "Unknown"),
                     "business_name": user.get("business_name"),
                     "business_category": user.get("business_category"),
-                    "language": user.get("language", "English")
+                    "language": user.get("language", "English"),
+                    "gender": user.get("gender"),
+                    "udyam_registered": user.get("udyam_registered"),
+                    "turnover": user.get("turnover"),
+                    "preferred_application_mode": user.get("preferred_application_mode")
                 }
                 # Generate session_id only if not already set
                 if not st.session_state.session_id:
