@@ -108,6 +108,8 @@ def get_mongo_client():
 class DataManager:
     """Manages MongoDB operations for users, sessions, conversations, and embeddings."""
 
+    OPTIONAL_FIELDS = ["udyam_registered", "turnover", "preferred_application_mode"]
+
     def __init__(self):
         self.client = get_mongo_client()
         db_name = os.getenv("MONGO_DB_NAME", "haqdarshak")
@@ -254,6 +256,24 @@ class DataManager:
         except Exception as e:
             logger.error(f"Unexpected error while updating user with mobile {mobile_number}: {str(e)}")
             return False, f"Error updating profile: {str(e)}"
+
+    def get_missing_optional_fields(self, mobile_number) -> list[str]:
+        """Return optional profile fields that are empty or missing."""
+        user = self.find_user(mobile_number)
+        if not user:
+            logger.warning(f"No user found when checking optional fields for {mobile_number}")
+            return self.OPTIONAL_FIELDS.copy()
+
+        missing = []
+        for field in self.OPTIONAL_FIELDS:
+            value = user.get(field)
+            if value is None or value == "":
+                missing.append(field)
+        return missing
+
+    def is_profile_complete(self, mobile_number) -> bool:
+        """Return True if no optional fields are missing."""
+        return len(self.get_missing_optional_fields(mobile_number)) == 0
 
     def start_session(self, mobile_number, session_id, user_data=None):
         """Log session start, optionally storing user_data."""
