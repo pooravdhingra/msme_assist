@@ -6,11 +6,14 @@ import logging
 import gdown  # For downloading from Google Drive
 import tempfile  # For temporary file handling
 import hashlib
+import requests
 from utils import get_embeddings
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+__all__ = ["load_rag_data", "load_dfl_data"]
 
 def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", faiss_index_path="faiss_index", version_file="faiss_version.txt"):
     """
@@ -169,3 +172,79 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
         raise
     
     return vector_store1
+
+
+def load_dfl_data(google_drive_file_id, faiss_index_path="dfl_faiss_index", version_file="dfl_version.txt"):
+    """Download a Google Doc containing digital/financial literacy content and
+    return a FAISS vector store.
+
+    The document is fetched via the export endpoint, hashed using MD5 and the
+    resulting hash is compared with ``version_file``. If the hash matches, a
+    previously generated FAISS index stored in ``faiss_index_path`` is loaded.
+    Otherwise the text is downloaded, chunked into a few pages per document and
+    a new FAISS index is built and saved along with the hash.
+
+    Args:
+        google_drive_file_id (str): ID of the Google Doc to download.
+        faiss_index_path (str): Directory of the precomputed FAISS index.
+        version_file (str): File containing the hash of the downloaded text.
+
+    Returns:
+        FAISS: Vector store built from the document text.
+    """
+
+    download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
+    logger.info(f"Downloading Google Doc from {download_url}")
+    try:
+        response = requests.get(download_url)
+        response.raise_for_status()
+        text = response.text
+        file_hash = hashlib.md5(text.encode("utf-8")).hexdigest()
+        logger.info(f"Downloaded document and computed hash {file_hash}")
+    except Exception as e:
+        logger.error(f"Failed to download Google Doc: {str(e)}")
+        raise
+
+    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+        try:
+            with open(version_file, "r") as vf:
+                stored_hash = vf.read().strip()
+            if stored_hash == file_hash:
+                logger.info(
+                    f"Precomputed DFL FAISS index found with matching hash at {faiss_index_path}"
+                )
+                embeddings = get_embeddings()
+                return FAISS.load_local(
+                    faiss_index_path,
+                    embeddings,
+                    allow_dangerous_deserialization=True,
+                )
+            else:
+                logger.info(
+                    f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recomputing index."
+                )
+        except Exception as e:
+            logger.error(f"Failed to load precomputed DFL index: {str(e)}. Recomputing.")
+
+    logger.info("Creating new DFL FAISS index")
+    chunk_size = 6000  # roughly four to five pages of text
+    documents = []
+    for i in range(0, len(text), chunk_size):
+        chunk = text[i : i + chunk_size].strip()
+        if chunk:
+            documents.append(Document(page_content=chunk, metadata={"chunk": i // chunk_size}))
+
+    embeddings = get_embeddings()
+    vector_store = FAISS.from_documents(documents, embeddings)
+
+    try:
+        os.makedirs(faiss_index_path, exist_ok=True)
+        vector_store.save_local(faiss_index_path)
+        with open(version_file, "w") as vf:
+            vf.write(file_hash)
+        logger.info(f"Saved DFL FAISS index to {faiss_index_path} and hash to {version_file}")
+    except Exception as e:
+        logger.error(f"Failed to save DFL FAISS index: {str(e)}")
+        raise
+
+    return vector_store
