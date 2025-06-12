@@ -61,7 +61,7 @@ def init_dfl_vector_store():
     return vector_store
 
 llm = init_llm()
-vector_store = init_vector_store()
+scheme_vector_store = init_vector_store()
 dfl_vector_store = init_dfl_vector_store()
 
 # Helper function to detect language
@@ -187,7 +187,7 @@ def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
 # Main function to process query
-def process_query(query, vector_store, session_id, mobile_number, user_language=None):
+def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
     start_time = time.time()
     logger.info(f"Starting query processing for: {query}")
     
@@ -247,15 +247,22 @@ def process_query(query, vector_store, session_id, mobile_number, user_language=
             logger.info(f"No welcome message for returning user")
             return None
 
-    # Check if vector store is valid
+    # Check if vector stores are valid
     try:
-        doc_count = vector_store.index.ntotal
-        logger.info(f"Vector store contains {doc_count} documents")
+        doc_count = scheme_vector_store.index.ntotal
+        logger.info(f"Scheme vector store contains {doc_count} documents")
         if doc_count == 0:
             logger.error("Vector store is empty")
             if query_language == "Hindi":
                 return "कोई योजना डेटा उपलब्ध नहीं है। कृपया डेटा स्रोत की जाँच करें।"
             return "No scheme data available. Please check the data source."
+        dfl_count = dfl_vector_store.index.ntotal
+        logger.info(f"DFL vector store contains {dfl_count} documents")
+        if dfl_count == 0:
+            logger.error("DFL vector store is empty")
+            if query_language == "Hindi":
+                return "कोई DFL डेटा उपलब्ध नहीं है। कृपया डेटा स्रोत की जाँच करें।"
+            return "No DFL data available. Please check the data source."
     except Exception as e:
         logger.error(f"Vector store check failed: {str(e)}")
         if query_language == "Hindi":
@@ -263,7 +270,7 @@ def process_query(query, vector_store, session_id, mobile_number, user_language=
         return "Error accessing scheme data."
 
     # Check if query is related to any previous query in the session
-    rag_response = None
+    scheme_rag = None
     related_prev_query = None
     session_cache = st.session_state.rag_cache.get(session_id, {})
 
@@ -281,18 +288,20 @@ def process_query(query, vector_store, session_id, mobile_number, user_language=
 
     # Check if the current query is a follow-up to the most recent response
     if recent_query and recent_response and is_query_related(query, recent_response):
-        rag_response = session_cache.get(recent_query, None)
+        scheme_rag = session_cache.get(recent_query, None)
         related_prev_query = recent_query
         logger.info(f"Using cached RAG response from recent query: {recent_query}")
 
     # If no cached response is found or query is not a follow-up, perform RAG search
-    if rag_response is None:
-        rag_response = get_rag_response(query, vector_store)
+    if scheme_rag is None:
+        scheme_rag = get_rag_response(query, scheme_vector_store)
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
         cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        st.session_state.rag_cache[session_id][cache_key] = rag_response
+        st.session_state.rag_cache[session_id][cache_key] = scheme_rag
         logger.info(f"Stored new RAG response for query: {query} with key: {cache_key}")
+
+    dfl_rag = get_rag_response(query, dfl_vector_store)
 
     # Process query and RAG response with a single LLM call
     special_schemes = ["Udyam", "FSSAI", "Shop Act"]
@@ -314,7 +323,8 @@ def process_query(query, vector_store, session_id, mobile_number, user_language=
     **Input**:
     - Query: {query}
     - Query Language: {query_language}
-    - RAG Response: {rag_response}
+    - Scheme RAG Response: {scheme_rag}
+    - DFL RAG Response: {dfl_rag}
     - Related Previous Query (if any): {related_prev_query if related_prev_query else 'None'}
     - Most Recent Assistant Response: {recent_response if 'recent_response' in locals() else 'None'}
     - Conversation History (last 5 query-response pairs, excluding welcome messages): {conversation_history}
@@ -375,11 +385,11 @@ def process_query(query, vector_store, session_id, mobile_number, user_language=
             if match:
                 scheme_name = match.group(1)
                 logger.info(f"LLM indicated new RAG search needed for scheme: {scheme_name}")
-                rag_response = get_rag_response(scheme_name, vector_store)
+                scheme_rag = get_rag_response(scheme_name, scheme_vector_store)
                 cache_key = f"{scheme_name}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-                st.session_state.rag_cache[session_id][cache_key] = rag_response
+                st.session_state.rag_cache[session_id][cache_key] = scheme_rag
                 logger.info(f"Stored new RAG response for scheme: {scheme_name} with key: {cache_key}")
-                prompt = prompt.replace(f"RAG Response: {rag_response}", f"RAG Response: {rag_response}")
+                prompt = prompt.replace(f"Scheme RAG Response: {scheme_rag}", f"Scheme RAG Response: {scheme_rag}")
                 response = llm.invoke([{"role": "user", "content": prompt}])
                 generated_response = response.content.strip()
                 logger.info(f"Generated response after new RAG search: {generated_response}")
