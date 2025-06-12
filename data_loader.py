@@ -175,23 +175,6 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
 
 
 def load_dfl_data(google_drive_file_id, faiss_index_path="dfl_faiss_index", version_file="dfl_version.txt"):
-    """Download a Google Doc containing digital/financial literacy content and
-    return a FAISS vector store.
-
-    The document is fetched via the export endpoint, hashed using MD5 and the
-    resulting hash is compared with ``version_file``. If the hash matches, a
-    previously generated FAISS index stored in ``faiss_index_path`` is loaded.
-    Otherwise the text is downloaded, chunked into a few pages per document and
-    a new FAISS index is built and saved along with the hash.
-
-    Args:
-        google_drive_file_id (str): ID of the Google Doc to download.
-        faiss_index_path (str): Directory of the precomputed FAISS index.
-        version_file (str): File containing the hash of the downloaded text.
-
-    Returns:
-        FAISS: Vector store built from the document text.
-    """
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
     logger.info(f"Downloading Google Doc from {download_url}")
@@ -227,7 +210,7 @@ def load_dfl_data(google_drive_file_id, faiss_index_path="dfl_faiss_index", vers
             logger.error(f"Failed to load precomputed DFL index: {str(e)}. Recomputing.")
 
     logger.info("Creating new DFL FAISS index")
-    chunk_size = 6000  # roughly four to five pages of text
+    chunk_size = 8000
     documents = []
     for i in range(0, len(text), chunk_size):
         chunk = text[i : i + chunk_size].strip()
