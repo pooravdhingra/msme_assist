@@ -343,16 +343,18 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
        - Specific_Scheme_Apply_Intent (e.g., 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
        - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?')
        - Non_Scheme_Know_Intent (e.g., 'How to use UPI?', 'GST kya hai?', 'यूपीआई का उपयोग कैसे करें?')
+       - DFL_Intent (digital/financial literacy topics)
        - Out_of_Scope (e.g., 'What’s the weather?', 'Namaste', 'मौसम कैसा है?')
        - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं')
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay'). For Contextual_Follow_Up, prioritize the Most Recent Assistant Response for context. If the query refers to a specific part (e.g., 'the first scheme'), identify the referenced scheme or topic.
 
     3. **Generate Response Based on Intent**:
        - **Out_of_Scope**: Return: 'Sorry, I can only help with government schemes, digital/financial literacy, or business growth. Please ask about these topics.' (English), 'Maaf kijiye, main sirf sarkari yojanaon, digital/financial literacy, ya business growth ke baare mein madad kar sakta hoon. In vishayon ke baare mein poochhein.' (Hinglish), or 'क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल/वित्तीय साक्षरता, या व्यवसाय वृद्धि के बारे में मदद कर सकता हूँ। कृपया इन विषयों के बारे में पूछें।' (Hindi).
-       - **Specific_Scheme_Know_Intent**: Share scheme name, purpose, benefits from RAG Response (≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, then state-specific. Ask: 'Want details on eligibility or how to apply?' (English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' (Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi).
-       - **Specific_Scheme_Apply_Intent**: Share application process from RAG Response (≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). For Udyam, FSSAI, or Shop Act, add: 'Haqdarshak can help you get this document for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi).
-       - **Schemes_Know_Intent**: List schemes from RAG Response (2–3 lines each, ≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or 'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi).
-       - **Non_Scheme_Know_Intent**: Answer using simple language (≤100 words). Use examples (e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग फोनपे की तरह करें'). Use verified external info if needed.
+       - **Specific_Scheme_Know_Intent**: Share scheme name, purpose, benefits from **Scheme RAG Response** (≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, then state-specific. Ask: 'Want details on eligibility or how to apply?' (English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' (Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi).
+       - **Specific_Scheme_Apply_Intent**: Share application process from **Scheme RAG Response** (≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). For Udyam, FSSAI, or Shop Act, add: 'Haqdarshak can help you get this document for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi).
+       - **Schemes_Know_Intent**: List schemes from **Scheme RAG Response** (2–3 lines each, ≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or 'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi).
+       - **Non_Scheme_Know_Intent**: Answer using **DFL RAG Response** in simple language (≤100 words). Use examples (e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग फोनपे की तरह करें'). Use verified external info if needed.
+       - **DFL_Intent**: Respond using **DFL RAG Response** in simple language (≤100 words) with relevant examples.
        - **Contextual_Follow_Up**: Use the Most Recent Assistant Response to identify the topic. If the RAG Response does not match the referenced scheme, indicate a new RAG search is needed. Provide a relevant follow-up response (≤100 words) using the RAG Response, filtering for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., 'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?').
        - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don’t have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
 
@@ -360,7 +362,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
     - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
     - Core Rules:
-       - For scheme queries, ONLY use RAG Response or cached RAG responses.
+       - For scheme queries, ONLY use **Scheme RAG Response** or cached scheme responses.
+       - For DFL queries, ONLY use **DFL RAG Response**.
        - Ensure scheme-related responses only include schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS).
        - List CSS schemes first, followed by state-specific schemes.
        - Response must be ≤100 words.
@@ -370,6 +373,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     **Output**:
     - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
+    - Scheme answers must come only from scheme data, and DFL answers must come from the DFL document.
     """
 
     try:
