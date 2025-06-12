@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
-from data_loader import load_rag_data
+from data_loader import load_rag_data, load_dfl_data
 from utils import get_embeddings
 import streamlit as st
 from data import DataManager
@@ -47,8 +47,22 @@ def init_vector_store():
     logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents")
     return vector_store
 
+@st.cache_resource
+def init_dfl_vector_store():
+    logger.info("Loading DFL vector store")
+    start_time = time.time()
+    google_drive_file_id = os.getenv("DFL_GOOGLE_DOC_ID")
+    if not google_drive_file_id:
+        raise ValueError("DFL_GOOGLE_DOC_ID environment variable not set")
+    vector_store = load_dfl_data(google_drive_file_id)
+    logger.info(
+        f"DFL vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents"
+    )
+    return vector_store
+
 llm = init_llm()
 vector_store = init_vector_store()
+dfl_vector_store = init_dfl_vector_store()
 
 # Helper function to detect language
 def detect_language(query):
