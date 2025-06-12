@@ -31,7 +31,7 @@ def init_llm():
     if not api_key:
         raise ValueError("XAI_API_KEY environment variable not set")
     llm = ChatOpenAI(
-        model="grok-3",
+        model="grok-3-mini-fast",
         api_key=api_key,
         base_url="https://api.x.ai/v1",
         temperature=0
