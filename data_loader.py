@@ -83,7 +83,7 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
     
     # Relevant columns to include in the document
     relevant_columns = [
-        "name",
+        "program_name",
         "applicability",
         "type- SCH/DOC",
         "service type",
@@ -92,10 +92,12 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
         "objective(Eligibility)",
         "application method",
         "process",
-        "benefit value description",
         "benefit amount (description)",
+        "status",
         "tags",
-        "beneficiary type"
+        "scheme_support",
+        "scheme_sector",
+        "scheme_cohort"
     ]
     
     # Function to process a chunk into LangChain Documents
