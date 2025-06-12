@@ -306,6 +306,7 @@ def chat_page():
             welcome_response = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
+                st.session_state.dfl_vector_store,
                 st.session_state.session_id,
                 st.session_state.user["mobile_number"],
                 user_language=st.session_state.user["language"]
@@ -378,6 +379,7 @@ def chat_page():
             response = process_query(
                 query,
                 st.session_state.scheme_vector_store,
+                st.session_state.dfl_vector_store,
                 st.session_state.session_id,
                 st.session_state.user["mobile_number"],
                 user_language=st.session_state.user["language"]
