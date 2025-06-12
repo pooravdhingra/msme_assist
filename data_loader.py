@@ -76,6 +76,16 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
         # Clean up the temporary file
         os.unlink(temp_file_path)
         logger.info(f"Temporary file {temp_file_path} deleted")
+        
+    try:
+        original_count = len(df)
+        df = df[df["status"].astype(str) == "5"]
+        logger.info(
+            f"Filtered dataframe from {original_count} to {len(df)} rows where status == '5'"
+        )
+    except KeyError:
+        logger.error("Column 'status' not found in Excel file")
+        raise
     
     # Split data into two chunks
     total_rows = len(df)
