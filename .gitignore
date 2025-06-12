@@ -6,7 +6,9 @@
 
 # Ignore FAISS index files and related metadata
 faiss_index/
+dfl_faiss_index/
 faiss_version.txt
+dfl_version.txt
 
 # Python virtual environment
 myenv/
