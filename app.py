@@ -2,7 +2,7 @@ import streamlit as st
 import random
 import string
 from datetime import datetime, timedelta
-from msme_bot import load_rag_data, process_query, welcome_user
+from msme_bot import load_rag_data, load_dfl_data, process_query, welcome_user
 from data import DataManager, STATE_MAPPING
 import numpy as np
 import logging
@@ -15,8 +15,10 @@ logger = logging.getLogger(__name__)
 data_manager = DataManager()
 
 # Initialize Streamlit session state
-if "vector_store" not in st.session_state:
-    st.session_state.vector_store = load_rag_data()
+if "scheme_vector_store" not in st.session_state:
+    st.session_state.scheme_vector_store = load_rag_data()
+if "dfl_vector_store" not in st.session_state:
+    st.session_state.dfl_vector_store = load_dfl_data()
 
 if "page" not in st.session_state:
     st.session_state.page = "login"
@@ -303,7 +305,7 @@ def chat_page():
         if user_type == "new":
             welcome_response = process_query(
                 "welcome",
-                st.session_state.vector_store,
+                st.session_state.scheme_vector_store,
                 st.session_state.session_id,
                 st.session_state.user["mobile_number"],
                 user_language=st.session_state.user["language"]
@@ -375,7 +377,7 @@ def chat_page():
             # Get and append bot response
             response = process_query(
                 query,
-                st.session_state.vector_store,
+                st.session_state.scheme_vector_store,
                 st.session_state.session_id,
                 st.session_state.user["mobile_number"],
                 user_language=st.session_state.user["language"]
