@@ -74,14 +74,16 @@ def detect_language(query):
     # Common Hindi words in Roman script for Hinglish detection
     hindi_words = [
         "kya", "kaise", "ke", "mein", "hai", "kaun", "kahan", "kab",
-        "batao", "sarkari", "yojana", "paise", "karobar", "dukaan"
+        "batao", "sarkari", "yojana", "paise", "karobar", "dukaan", "nayi", "naye", "chahiye", "madad", "karo",
+        "dikhao", "samjhao", "tarika", "aur", "arey", "bhi", "kya", "hai", "hoga", "hogi", "ho", "hoon", "magar", "lekin", "par", "toh", "ab", "phir", "kuch", "thoda", "zyada", "sab", "koi", "kuchh", "aap", "tum", "main",
+        "hum", "unhe", "unko", "unse", "yeh", "woh", "aisa", "aisi", "aise"
     ]
     query_lower = query.lower()
     hindi_word_count = sum(1 for word in hindi_words if word in query_lower)
     total_words = len(query_lower.split())
     
     # If more than 30% of words are Hindi or mixed with English
-    if total_words > 0 and hindi_word_count / total_words > 0.3:
+    if total_words > 0 and hindi_word_count / total_words > 0.25:
         return "Hinglish"
     
     return "English"
@@ -119,13 +121,25 @@ def welcome_user(state_name, user_name, query_language):
         return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 # Step 1: Process user query with RAG
-def get_rag_response(query, vector_store):
+def get_rag_response(query, vector_store, business_category=None, turnover=None, preferred_application_mode=None):
     start_time = time.time()
     try:
-        logger.debug(f"Processing query: {query}")
+        details = []
+        if business_category:
+            details.append(f"business category: {business_category}")
+        if turnover:
+            details.append(f"turnover: {turnover}")
+        if preferred_application_mode:
+            details.append(f"preferred application mode: {preferred_application_mode}")
+
+        full_query = query
+        if details:
+            full_query = f"{query}. {' '.join(details)}"
+
+        logger.debug(f"Processing query: {full_query}")
         embeddings = get_embeddings()
         embed_start = time.time()
-        query_embedding = embeddings.embed_query(query)
+        query_embedding = embeddings.embed_query(full_query)
         logger.debug(f"Query embedding generated in {time.time() - embed_start:.2f} seconds (first 10 values): {query_embedding[:10]}")
         retrieve_start = time.time()
         retriever = vector_store.as_retriever(search_kwargs={"k": 10})
@@ -135,7 +149,7 @@ def get_rag_response(query, vector_store):
             retriever=retriever,
             return_source_documents=True
         )
-        result = qa_chain.invoke({"query": query})
+        result = qa_chain.invoke({"query": full_query})
         logger.debug(f"Retrieval and QA completed in {time.time() - retrieve_start:.2f} seconds")
         response = result["result"]
         sources = result["source_documents"]
@@ -187,80 +201,6 @@ def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
 
-def is_scheme_query(query: str) -> bool:
-    """Simple keyword based check for scheme related queries."""
-    keywords = [
-        "scheme",
-        "yojana",
-        "loan",
-        "credit",
-        "subsidy",
-        "udyam",
-        "fssai",
-        "pmfme",
-        "mudra",
-        "योजना",
-    ]
-    q = query.lower()
-    return any(k in q for k in keywords)
-
-
-def normalize_yes_no(answer: str, query_language: str) -> str:
-    """Use the LLM to normalize a yes/no style user response."""
-    prompt = (
-        "Return 'Yes' or 'No' based on the user reply.\n"
-        f"User Reply: {answer}\nLanguage: {query_language}\nOutput:"
-    )
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        result = response.content.strip()
-        if result not in {"Yes", "No"}:
-            raise ValueError("Unexpected normalization result")
-        return result
-    except Exception as e:
-        logger.error(f"Failed to normalize yes/no response: {e}")
-        return "No"
-
-
-def collect_missing_profile_details(missing_fields, query_language):
-    """Ask user for missing profile details and update in the database."""
-    questions = {
-        "udyam_registered": {
-            "English": "Is your business Udyam registered? (Yes/No)",
-            "Hindi": "क्या आपका व्यवसाय उद्यम पंजीकृत है? (हाँ/नहीं)",
-            "Hinglish": "Kya aapka business Udyam registered hai? (Yes/No)",
-        },
-        "turnover": {
-            "English": "What is your annual turnover?",
-            "Hindi": "आपका वार्षिक टर्नओवर कितना है?",
-            "Hinglish": "Aapka annual turnover kitna hai?",
-        },
-        "preferred_application_mode": {
-            "English": "Do you prefer applying offline or online?",
-            "Hindi": "क्या आप ऑफलाइन या ऑनलाइन आवेदन करना पसंद करते हैं?",
-            "Hinglish": "Kya aap offline ya online apply karna pasand karte hain?",
-        },
-    }
-
-    mobile_number = st.session_state.user.get("mobile_number")
-    for field in missing_fields:
-        question = questions.get(field, {}).get(query_language, f"Please provide {field}:")
-        answer = input(question + " ")
-        norm_prompt = (
-            f"Normalize the following user response for field '{field}'.\n"
-            f"Language: {query_language}\nResponse: {answer}\nOutput:"
-        )
-        try:
-            resp = llm.invoke([{"role": "user", "content": norm_prompt}])
-            normalized = resp.content.strip()
-        except Exception as e:
-            logger.error(f"Failed to normalize response for {field}: {e}")
-            normalized = answer
-        success, _ = data_manager.update_user_profile(mobile_number, **{field: normalized})
-        if success:
-            st.session_state.user[field] = normalized
-
-
 # Main function to process query
 def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
     start_time = time.time()
@@ -272,6 +212,10 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         user_name = user["fname"]
         state_id = user.get("state_id", "Unknown")
         state_name = user.get("state_name", "Unknown")
+        business_name = user.get("business_name", "Unknown")
+        business_category = user.get("business_category", "Unknown")
+        turnover = user.get("turnover", "Not Provided")
+        preferred_application_mode = user.get("preferred_application_mode", "Not Provided")
     except AttributeError:
         logger.error("User data not found in session state")
         return "Error: User not logged in."
@@ -295,16 +239,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     profile_complete = data_manager.is_profile_complete(mobile_number)
     missing_fields = data_manager.get_missing_optional_fields(mobile_number)
-    if is_scheme_query(query) and not profile_complete:
-        missing = ", ".join(missing_fields)
-        consent_msgs = {
-            "English": f"To give better scheme suggestions, I need some more info ({missing}). Share now? (Yes/No)",
-            "Hindi": f"बेहतर योजना सुझाव के लिए मुझे {missing} जैसी जानकारी चाहिए। अभी साझा करना चाहेंगे? (हाँ/नहीं)",
-            "Hinglish": f"Behtar scheme advice ke liye mujhe {missing} jaise details chahiye. Abhi share karenge? (Yes/No)",
-        }
-        consent_answer = input(consent_msgs.get(query_language, consent_msgs["English"]) + " ")
-        if normalize_yes_no(consent_answer, query_language) == "Yes":
-            collect_missing_profile_details(missing_fields, query_language)
 
     # Handle welcome query
     if query.lower() == "welcome":
@@ -385,7 +319,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     # If no cached response is found or query is not a follow-up, perform RAG search
     if scheme_rag is None:
-        scheme_rag = get_rag_response(query, scheme_vector_store)
+        scheme_rag = get_rag_response(
+            query,
+            scheme_vector_store,
+            business_category=business_category,
+            turnover=turnover,
+            preferred_application_mode=preferred_application_mode
+        )
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
         cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
@@ -393,7 +333,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         logger.info(f"Stored new RAG response for query: {query} with key: {cache_key}")
 
     if dfl_rag is None:
-        dfl_rag = get_rag_response(query, dfl_vector_store)
+        dfl_rag = get_rag_response(
+            query,
+            dfl_vector_store,
+            business_category=business_category,
+            turnover=turnover,
+            preferred_application_mode=preferred_application_mode
+        )
         if session_id not in st.session_state.dfl_rag_cache:
             st.session_state.dfl_rag_cache[session_id] = {}
         dfl_cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
@@ -415,11 +361,15 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     for role, content, _ in session_messages:
         conversation_history += f"{role.capitalize()}: {content}\n"
 
-    prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a {user_type} user named {user_name} from {state_name} (state_id: {state_id}).
+    prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a {user_type} user named {user_name} from {state_name} (state_id: {state_id}). The user's business is called {business_name} in the {business_category} category. Annual turnover: {turnover}. Preferred application mode: {preferred_application_mode}.
 
     **Input**:
     - Query: {query}
     - Query Language: {query_language}
+    - Business Name: {business_name}
+    - Business Category: {business_category}
+    - Turnover: {turnover}
+    - Preferred Application Mode: {preferred_application_mode}
     - Scheme RAG Response: {scheme_rag}
     - DFL RAG Response: {dfl_rag}
     - Related Previous Query (if any): {related_prev_query if related_prev_query else 'None'}
@@ -487,7 +437,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             if match:
                 scheme_name = match.group(1)
                 logger.info(f"LLM indicated new RAG search needed for scheme: {scheme_name}")
-                scheme_rag = get_rag_response(scheme_name, scheme_vector_store)
+                scheme_rag = get_rag_response(
+                    scheme_name,
+                    scheme_vector_store,
+                    business_category=business_category,
+                    turnover=turnover,
+                    preferred_application_mode=preferred_application_mode
+                )
                 cache_key = f"{scheme_name}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
                 st.session_state.rag_cache[session_id][cache_key] = scheme_rag
                 logger.info(f"Stored new RAG response for scheme: {scheme_name} with key: {cache_key}")
