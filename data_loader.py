@@ -86,7 +86,7 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
     except KeyError:
         logger.error("Column 'status' not found in Excel file")
         raise
-    
+
     # Split data into two chunks
     total_rows = len(df)
     midpoint = total_rows // 2  # ~500 rows per chunk
@@ -220,7 +220,7 @@ def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eI
             logger.error(f"Failed to load precomputed DFL index: {str(e)}. Recomputing.")
 
     logger.info("Creating new DFL FAISS index")
-    chunk_size = 8000
+    chunk_size = 4000
     documents = []
     for i in range(0, len(text), chunk_size):
         chunk = text[i : i + chunk_size].strip()
