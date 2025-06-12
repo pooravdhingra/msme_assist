@@ -186,6 +186,81 @@ def is_query_related(query, prev_response):
 def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
+
+def is_scheme_query(query: str) -> bool:
+    """Simple keyword based check for scheme related queries."""
+    keywords = [
+        "scheme",
+        "yojana",
+        "loan",
+        "credit",
+        "subsidy",
+        "udyam",
+        "fssai",
+        "pmfme",
+        "mudra",
+        "योजना",
+    ]
+    q = query.lower()
+    return any(k in q for k in keywords)
+
+
+def normalize_yes_no(answer: str, query_language: str) -> str:
+    """Use the LLM to normalize a yes/no style user response."""
+    prompt = (
+        "Return 'Yes' or 'No' based on the user reply.\n"
+        f"User Reply: {answer}\nLanguage: {query_language}\nOutput:"
+    )
+    try:
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        result = response.content.strip()
+        if result not in {"Yes", "No"}:
+            raise ValueError("Unexpected normalization result")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to normalize yes/no response: {e}")
+        return "No"
+
+
+def collect_missing_profile_details(missing_fields, query_language):
+    """Ask user for missing profile details and update in the database."""
+    questions = {
+        "udyam_registered": {
+            "English": "Is your business Udyam registered? (Yes/No)",
+            "Hindi": "क्या आपका व्यवसाय उद्यम पंजीकृत है? (हाँ/नहीं)",
+            "Hinglish": "Kya aapka business Udyam registered hai? (Yes/No)",
+        },
+        "turnover": {
+            "English": "What is your annual turnover?",
+            "Hindi": "आपका वार्षिक टर्नओवर कितना है?",
+            "Hinglish": "Aapka annual turnover kitna hai?",
+        },
+        "preferred_application_mode": {
+            "English": "Do you prefer applying offline or online?",
+            "Hindi": "क्या आप ऑफलाइन या ऑनलाइन आवेदन करना पसंद करते हैं?",
+            "Hinglish": "Kya aap offline ya online apply karna pasand karte hain?",
+        },
+    }
+
+    mobile_number = st.session_state.user.get("mobile_number")
+    for field in missing_fields:
+        question = questions.get(field, {}).get(query_language, f"Please provide {field}:")
+        answer = input(question + " ")
+        norm_prompt = (
+            f"Normalize the following user response for field '{field}'.\n"
+            f"Language: {query_language}\nResponse: {answer}\nOutput:"
+        )
+        try:
+            resp = llm.invoke([{"role": "user", "content": norm_prompt}])
+            normalized = resp.content.strip()
+        except Exception as e:
+            logger.error(f"Failed to normalize response for {field}: {e}")
+            normalized = answer
+        success, _ = data_manager.update_user_profile(mobile_number, **{field: normalized})
+        if success:
+            st.session_state.user[field] = normalized
+
+
 # Main function to process query
 def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
     start_time = time.time()
@@ -217,6 +292,19 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             break
     user_type = "returning" if has_user_messages else "new"
     logger.info(f"User type: {user_type}")
+
+    profile_complete = data_manager.is_profile_complete(mobile_number)
+    missing_fields = data_manager.get_missing_optional_fields(mobile_number)
+    if is_scheme_query(query) and not profile_complete:
+        missing = ", ".join(missing_fields)
+        consent_msgs = {
+            "English": f"To give better scheme suggestions, I need some more info ({missing}). Share now? (Yes/No)",
+            "Hindi": f"बेहतर योजना सुझाव के लिए मुझे {missing} जैसी जानकारी चाहिए। अभी साझा करना चाहेंगे? (हाँ/नहीं)",
+            "Hinglish": f"Behtar scheme advice ke liye mujhe {missing} jaise details chahiye. Abhi share karenge? (Yes/No)",
+        }
+        consent_answer = input(consent_msgs.get(query_language, consent_msgs["English"]) + " ")
+        if normalize_yes_no(consent_answer, query_language) == "Yes":
+            collect_missing_profile_details(missing_fields, query_language)
 
     # Handle welcome query
     if query.lower() == "welcome":
