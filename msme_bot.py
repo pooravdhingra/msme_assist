@@ -464,7 +464,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
        - For DFL queries, ONLY use **DFL RAG Response**.
        - Ensure scheme-related responses only include schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS).
        - List CSS schemes first, followed by state-specific schemes.
-       - Response must be ≤100 words.
+       - Response must be ≤120 words.
        - Never mention agent fees unless specified in RAG Response.
        - For returning users, use conversation history to maintain context.
        - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope.
