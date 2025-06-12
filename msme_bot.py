@@ -271,8 +271,10 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     # Check if query is related to any previous query in the session
     scheme_rag = None
+    dfl_rag = None
     related_prev_query = None
     session_cache = st.session_state.rag_cache.get(session_id, {})
+    dfl_session_cache = st.session_state.dfl_rag_cache.get(session_id, {})
 
     # Get the most recent query-response pair from the current session
     recent_query = None
@@ -289,6 +291,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Check if the current query is a follow-up to the most recent response
     if recent_query and recent_response and is_query_related(query, recent_response):
         scheme_rag = session_cache.get(recent_query, None)
+        dfl_rag = dfl_session_cache.get(recent_query, None)
         related_prev_query = recent_query
         logger.info(f"Using cached RAG response from recent query: {recent_query}")
 
@@ -301,7 +304,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         st.session_state.rag_cache[session_id][cache_key] = scheme_rag
         logger.info(f"Stored new RAG response for query: {query} with key: {cache_key}")
 
-    dfl_rag = get_rag_response(query, dfl_vector_store)
+    if dfl_rag is None:
+        dfl_rag = get_rag_response(query, dfl_vector_store)
+        if session_id not in st.session_state.dfl_rag_cache:
+            st.session_state.dfl_rag_cache[session_id] = {}
+        dfl_cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        st.session_state.dfl_rag_cache[session_id][dfl_cache_key] = dfl_rag
+        logger.info(f"Stored new DFL RAG response for query: {query} with key: {dfl_cache_key}")
 
     # Process query and RAG response with a single LLM call
     special_schemes = ["Udyam", "FSSAI", "Shop Act"]
@@ -328,7 +337,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     - Related Previous Query (if any): {related_prev_query if related_prev_query else 'None'}
     - Most Recent Assistant Response: {recent_response if 'recent_response' in locals() else 'None'}
     - Conversation History (last 5 query-response pairs, excluding welcome messages): {conversation_history}
-    - Cached RAG Responses for Session: {st.session_state.rag_cache.get(session_id, {})}
+    - Cached Scheme RAG Responses for Session: {st.session_state.rag_cache.get(session_id, {})}
+    - Cached DFL RAG Responses for Session: {st.session_state.dfl_rag_cache.get(session_id, {})}
 
     **Instructions**:
     1. **Language Handling**:
