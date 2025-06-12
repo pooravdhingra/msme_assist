@@ -46,6 +46,8 @@ if "last_query_id" not in st.session_state:
 
 if "rag_cache" not in st.session_state:
     st.session_state.rag_cache = {}
+if "dfl_rag_cache" not in st.session_state:
+    st.session_state.dfl_rag_cache = {}
 
 # Generate session ID
 def generate_session_id():
