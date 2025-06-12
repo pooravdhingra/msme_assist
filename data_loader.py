@@ -174,7 +174,7 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
     return vector_store1
 
 
-def load_dfl_data(google_drive_file_id, faiss_index_path="dfl_faiss_index", version_file="dfl_version.txt"):
+def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE", faiss_index_path="dfl_faiss_index", version_file="dfl_version.txt"):
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
     logger.info(f"Downloading Google Doc from {download_url}")
