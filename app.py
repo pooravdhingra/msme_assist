@@ -85,7 +85,7 @@ def restore_session_from_url():
                 }
                 st.session_state.page = "chat"
                 # Restore messages from MongoDB
-                conversations = data_manager.get_conversations(mobile_number)
+                conversations = data_manager.get_conversations(mobile_number, limit=10)
                 all_messages = []
                 for conv in conversations:
                     for msg in conv["messages"]:
@@ -293,7 +293,7 @@ def chat_page():
 
     # Trigger welcome message only for new users
     if not st.session_state.welcome_message_sent:
-        conversations = data_manager.get_conversations(st.session_state.user["mobile_number"])
+        conversations = data_manager.get_conversations(st.session_state.user["mobile_number"], limit=10)
         has_user_messages = False
         for conv in conversations:
             for msg in conv["messages"]:
@@ -328,7 +328,7 @@ def chat_page():
     all_messages = []
 
     # Fetch past conversations from MongoDB
-    conversations = data_manager.get_conversations(st.session_state.user["mobile_number"])
+    conversations = data_manager.get_conversations(st.session_state.user["mobile_number"], limit=10)
     for conv in conversations:
         for msg in conv["messages"]:
             if "content" not in msg or "role" not in msg or "timestamp" not in msg:

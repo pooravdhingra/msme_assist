@@ -362,14 +362,26 @@ class DataManager:
             logger.error(f"Unexpected error while saving conversation for session {session_id}: {str(e)}")
             raise
 
-    def get_conversations(self, mobile_number):
-        """Retrieve all conversations for a user, sorted by timestamp."""
+    def get_conversations(self, mobile_number, limit=None):
+        """Retrieve conversations for a user sorted by most recent first.
+
+        Parameters
+        ----------
+        mobile_number : str
+            The mobile number of the user.
+        limit : int, optional
+            Maximum number of conversations to return. If ``None`` all
+            conversations are returned.
+        """
         if not mobile_number or not isinstance(mobile_number, str):
             logger.error("Invalid mobile_number: mobile_number must be a non-empty string")
             raise ValueError("mobile_number must be a non-empty string")
 
         try:
-            conversations = list(self.db.conversations.find({"mobile_number": mobile_number}).sort("timestamp", 1))
+            cursor = self.db.conversations.find({"mobile_number": mobile_number}).sort("timestamp", -1)
+            if isinstance(limit, int) and limit > 0:
+                cursor = cursor.limit(limit)
+            conversations = list(cursor)
             if not conversations:
                 logger.warning(f"No conversations found for mobile_number {mobile_number}")
             else:
