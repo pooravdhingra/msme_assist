@@ -1,6 +1,7 @@
 import logging
 import time
 from datetime import datetime, timedelta
+from dataclasses import dataclass
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
@@ -64,6 +65,34 @@ llm = init_llm()
 scheme_vector_store = init_vector_store()
 dfl_vector_store = init_dfl_vector_store()
 
+# Dataclass to hold user context information
+@dataclass
+class UserContext:
+    name: str
+    state_id: str
+    state_name: str
+    business_name: str
+    business_category: str
+    turnover: str
+    preferred_application_mode: str
+
+# Retrieve user information from Streamlit session state
+def get_user_context(session_state):
+    try:
+        user = session_state.user
+        return UserContext(
+            name=user["fname"],
+            state_id=user.get("state_id", "Unknown"),
+            state_name=user.get("state_name", "Unknown"),
+            business_name=user.get("business_name", "Unknown"),
+            business_category=user.get("business_category", "Unknown"),
+            turnover=user.get("turnover", "Not Provided"),
+            preferred_application_mode=user.get("preferred_application_mode", "Not Provided"),
+        )
+    except AttributeError:
+        logger.error("User data not found in session state")
+        return None
+
 # Helper function to detect language
 def detect_language(query):
     # Check for Devanagari script (Hindi)
@@ -87,6 +116,19 @@ def detect_language(query):
         return "Hinglish"
     
     return "English"
+
+# Build conversation history string from stored messages
+def build_conversation_history(messages):
+    conversation_history = ""
+    session_messages = []
+    for msg in messages[-10:]:
+        if msg["role"] == "assistant" and "Welcome" in msg["content"]:
+            continue
+        session_messages.append((msg["role"], msg["content"], msg["timestamp"]))
+    session_messages = sorted(session_messages, key=lambda x: x[2], reverse=True)[:5]
+    for role, content, _ in session_messages:
+        conversation_history += f"{role.capitalize()}: {content}\n"
+    return conversation_history
 
 # Welcome user
 def welcome_user(state_name, user_name, query_language):
@@ -205,6 +247,67 @@ def is_query_related(query, prev_response):
         logger.error(f"Failed to determine query relation: {str(e)}")
         return False
 
+# Classify the intent of the user's query
+def classify_intent(query, prev_response, conversation_history):
+    """Return one of the predefined intent labels."""
+    prompt = f"""You are an assistant for Haqdarshak. Classify the user's intent.
+
+    **Input**:
+    - Query: {query}
+    - Previous Assistant Response: {prev_response}
+    - Conversation History: {conversation_history}
+
+    **Instructions**:
+    Return only one label from the following:
+    Specific_Scheme_Know_Intent,
+    Specific_Scheme_Apply_Intent,
+    Schemes_Know_Intent,
+    Non_Scheme_Know_Intent,
+    DFL_Intent,
+    Out_of_Scope,
+    Contextual_Follow_Up.
+    """
+    try:
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        return response.content.strip()
+    except Exception as e:
+        logger.error(f"Failed to classify intent: {str(e)}")
+        return "Out_of_Scope"
+
+# Generate final response based on intent and RAG output
+def generate_response(intent, rag_response, user_info, language, context):
+    if intent == "Out_of_Scope":
+        if language == "Hindi":
+            return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
+        if language == "Hinglish":
+            return "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
+        return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+
+    prompt = f"""You are a helpful assistant for Haqdarshak assisting small business owners in India.
+
+    **Input**:
+    - Intent: {intent}
+    - RAG Response: {rag_response}
+    - User Name: {user_info.name}
+    - State: {user_info.state_name} ({user_info.state_id})
+    - Conversation Context: {context}
+    - Language: {language}
+
+    **Instructions**:
+    Respond in the specified language using a friendly tone and short sentences. Start with 'Hi {user_info.name}!' for English, 'Namaste {user_info.name}!' for Hinglish, or 'नमस्ते {user_info.name}!' for Hindi.
+    Keep the answer under 120 words and use the RAG Response to answer based on the intent.
+    """
+    try:
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        return response.content.strip()
+    except Exception as e:
+        logger.error(f"Failed to generate response: {str(e)}")
+        if language == "Hindi":
+            return "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
+        if language == "Hinglish":
+            return "Sorry, main aapka query process nahi kar saka."
+        return "Sorry, I couldn't process your query."
+
 # Generate unique interaction ID
 def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
@@ -214,20 +317,18 @@ def generate_interaction_id(query, timestamp):
 def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
     start_time = time.time()
     logger.info(f"Starting query processing for: {query}")
-    
-    # Retrieve user data from session state
-    try:
-        user = st.session_state.user
-        user_name = user["fname"]
-        state_id = user.get("state_id", "Unknown")
-        state_name = user.get("state_name", "Unknown")
-        business_name = user.get("business_name", "Unknown")
-        business_category = user.get("business_category", "Unknown")
-        turnover = user.get("turnover", "Not Provided")
-        preferred_application_mode = user.get("preferred_application_mode", "Not Provided")
-    except AttributeError:
-        logger.error("User data not found in session state")
+
+    # Retrieve user data from session state using helper
+    user_info = get_user_context(st.session_state)
+    if not user_info:
         return "Error: User not logged in."
+    user_name = user_info.name
+    state_id = user_info.state_id
+    state_name = user_info.state_name
+    business_name = user_info.business_name
+    business_category = user_info.business_category
+    turnover = user_info.turnover
+    preferred_application_mode = user_info.preferred_application_mode
 
     # Use user_language for welcome message, otherwise detect query language
     query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
@@ -319,176 +420,70 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                     recent_query = st.session_state.messages[msg_index - 1]["content"]
                 break
 
-    # Check if the current query is a follow-up to the most recent response
-    if recent_query and recent_response and is_query_related(query, recent_response):
-        scheme_rag = session_cache.get(recent_query, None)
-        dfl_rag = dfl_session_cache.get(recent_query, None)
-        related_prev_query = recent_query
-        logger.info(f"Using cached RAG response from recent query: {recent_query}")
+    conversation_history = build_conversation_history(st.session_state.messages)
+    intent = classify_intent(query, recent_response or "", conversation_history)
+    logger.info(f"Classified intent: {intent}")
 
-    # If no cached response is found or query is not a follow-up, perform RAG search
-    if scheme_rag is None:
+    scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up"}
+    dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
+
+    if recent_query and recent_response and is_query_related(query, recent_response):
+        if intent in scheme_intents:
+            scheme_rag = session_cache.get(recent_query, None)
+        elif intent in dfl_intents:
+            dfl_rag = dfl_session_cache.get(recent_query, None)
+        related_prev_query = recent_query
+
+    if scheme_rag is None and intent in scheme_intents:
         scheme_rag = get_rag_response(
             query,
             scheme_vector_store,
             business_category=business_category,
             turnover=turnover,
-            preferred_application_mode=preferred_application_mode
+            preferred_application_mode=preferred_application_mode,
         )
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
         cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         st.session_state.rag_cache[session_id][cache_key] = scheme_rag
-        logger.info(f"Stored new RAG response for query: {query} with key: {cache_key}")
 
-    if dfl_rag is None:
+    if dfl_rag is None and intent in dfl_intents:
         dfl_rag = get_rag_response(
             query,
             dfl_vector_store,
             business_category=business_category,
             turnover=turnover,
-            preferred_application_mode=preferred_application_mode
+            preferred_application_mode=preferred_application_mode,
         )
         if session_id not in st.session_state.dfl_rag_cache:
             st.session_state.dfl_rag_cache[session_id] = {}
         dfl_cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         st.session_state.dfl_rag_cache[session_id][dfl_cache_key] = dfl_rag
-        logger.info(f"Stored new DFL RAG response for query: {query} with key: {dfl_cache_key}")
 
-    # Process query and RAG response with a single LLM call
-    special_schemes = ["Udyam", "FSSAI", "Shop Act"]
-    link = "https://haqdarshak.com/contact"
-    
-    # Prepare conversation history for prompt
-    conversation_history = ""
-    session_messages = []
-    for msg in st.session_state.messages[-10:]:
-        if msg["role"] == "assistant" and "Welcome" in msg["content"]:
-            continue
-        session_messages.append((msg["role"], msg["content"], msg["timestamp"]))
-    session_messages = sorted(session_messages, key=lambda x: x[2], reverse=True)[:5]
-    for role, content, _ in session_messages:
-        conversation_history += f"{role.capitalize()}: {content}\n"
+    rag_response = scheme_rag if intent in scheme_intents else dfl_rag
+    generated_response = generate_response(intent, rag_response or "", user_info, query_language, conversation_history)
 
-    prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a {user_type} user named {user_name} from {state_name} (state_id: {state_id}). The user's business is called {business_name} in the {business_category} category. Annual turnover: {turnover}. Preferred application mode: {preferred_application_mode}.
-
-    **Input**:
-    - Query: {query}
-    - Query Language: {query_language}
-    - Business Name: {business_name}
-    - Business Category: {business_category}
-    - Turnover: {turnover}
-    - Preferred Application Mode: {preferred_application_mode}
-    - Scheme RAG Response: {scheme_rag}
-    - DFL RAG Response: {dfl_rag}
-    - Related Previous Query (if any): {related_prev_query if related_prev_query else 'None'}
-    - Most Recent Assistant Response: {recent_response if 'recent_response' in locals() else 'None'}
-    - Conversation History (last 5 query-response pairs, excluding welcome messages): {conversation_history}
-    - Cached Scheme RAG Responses for Session: {st.session_state.rag_cache.get(session_id, {})}
-    - Cached DFL RAG Responses for Session: {st.session_state.dfl_rag_cache.get(session_id, {})}
-
-    **Instructions**:
-    1. **Language Handling**:
-       - The query language is provided as {query_language} (English, Hindi, or Hinglish).
-       - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
-       - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script.
-       - For English queries, respond in simple English.
-       - Ensure responses use short sentences, a friendly tone, and relatable examples.
-
-    2. **Classify the Query Intent**:
-       - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?')
-       - Specific_Scheme_Apply_Intent (e.g., 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
-       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?')
-       - Non_Scheme_Know_Intent (e.g., 'How to use UPI?', 'GST kya hai?', 'यूपीआई का उपयोग कैसे करें?')
-       - DFL_Intent (digital/financial literacy topics)
-       - Out_of_Scope (e.g., 'What’s the weather?', 'Namaste', 'मौसम कैसा है?')
-       - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं')
-       - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay'). For Contextual_Follow_Up, prioritize the Most Recent Assistant Response for context. If the query refers to a specific part (e.g., 'the first scheme'), identify the referenced scheme or topic.
-
-    3. **Generate Response Based on Intent**:
-       - **Out_of_Scope**: Return: 'Sorry, I can only help with government schemes, digital/financial literacy, or business growth. Please ask about these topics.' (English), 'Maaf kijiye, main sirf sarkari yojanaon, digital/financial literacy, ya business growth ke baare mein madad kar sakta hoon. In vishayon ke baare mein poochhein.' (Hinglish), or 'क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल/वित्तीय साक्षरता, या व्यवसाय वृद्धि के बारे में मदद कर सकता हूँ। कृपया इन विषयों के बारे में पूछें।' (Hindi).
-       - **Specific_Scheme_Know_Intent**: Share scheme name, purpose, benefits from **Scheme RAG Response** (≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, then state-specific. Ask: 'Want details on eligibility or how to apply?' (English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' (Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi).
-       - **Specific_Scheme_Apply_Intent**: Share application process from **Scheme RAG Response** (≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). For Udyam, FSSAI, or Shop Act, add: 'Haqdarshak can help you get this document for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi).
-       - **Schemes_Know_Intent**: List schemes from **Scheme RAG Response** (2–3 lines each, ≤100 words). Filter for schemes where 'applicability' includes {state_id} or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or 'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi). 
-       - **Non_Scheme_Know_Intent**: Answer using **DFL RAG Response** in simple language (≤100 words). Use examples (e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग फोनपे की तरह करें'). Use verified external info if needed.
-       - **DFL_Intent**: Respond using **DFL RAG Response** in simple language (≤100 words) with relevant examples.
-       - **Contextual_Follow_Up**: Use the Most Recent Assistant Response to identify the topic. If the RAG Response does not match the referenced scheme, indicate a new RAG search is needed. Provide a relevant follow-up response (≤100 words) using the RAG Response, filtering for schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., 'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?').
-       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don’t have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
-
-    **Response Guidelines**:
-    - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
-    - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
-    - Core Rules:
-       - For scheme queries, ONLY use **Scheme RAG Response** or cached scheme responses.
-       - For DFL queries, ONLY use **DFL RAG Response** or cached DFL responses. 
-       - Ensure scheme-related responses only include schemes where 'applicability' includes {state_id} or 'scheme type' is 'Centrally Sponsored Scheme' (CSS).
-       - List CSS schemes first, followed by state-specific schemes.
-       - Response must be ≤120 words.
-       - Never mention agent fees unless specified in RAG Response.
-       - For returning users, use conversation history to maintain context.
-       - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope.
-
-    **Output**:
-    - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
-    - Scheme answers must come only from scheme data, and DFL answers must come from the DFL document.
-    """
-
+    # Save conversation to MongoDB
     try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        generated_response = response.content.strip()
-        logger.debug(f"LLM prompt: {prompt}")
-        logger.debug(f"LLM response: {generated_response}")
-        logger.info(f"Generated response in {time.time() - start_time:.2f} seconds: {generated_response}")
-
-        # Handle new RAG search if needed
-        if "I need to fetch more details about" in generated_response:
-            match = re.search(r"I need to fetch more details about (.+?)\. Please confirm", generated_response)
-            if match:
-                scheme_name = match.group(1)
-                logger.info(f"LLM indicated new RAG search needed for scheme: {scheme_name}")
-                scheme_rag = get_rag_response(
-                    scheme_name,
-                    scheme_vector_store,
-                    business_category=business_category,
-                    turnover=turnover,
-                    preferred_application_mode=preferred_application_mode
-                )
-                cache_key = f"{scheme_name}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-                st.session_state.rag_cache[session_id][cache_key] = scheme_rag
-                logger.info(f"Stored new RAG response for scheme: {scheme_name} with key: {cache_key}")
-                prompt = prompt.replace(f"Scheme RAG Response: {scheme_rag}", f"Scheme RAG Response: {scheme_rag}")
-                response = llm.invoke([{"role": "user", "content": prompt}])
-                generated_response = response.content.strip()
-                logger.info(f"Generated response after new RAG search: {generated_response}")
-
-        # Save conversation to MongoDB
-        try:
-            interaction_id = generate_interaction_id(query, datetime.utcnow())
-            recent_conversations = data_manager.get_conversations(mobile_number)
-            messages_to_save = [
-                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id}
-            ]
-            if not any(
-                any(msg["interaction_id"] == interaction_id for msg in conv["messages"] if "interaction_id" in msg)
-                for conv in recent_conversations
-            ):
-                data_manager.save_conversation(
-                    session_id,
-                    mobile_number,
-                    messages_to_save
-                )
-                logger.info(f"Saved conversation for session {session_id}: {query} -> {generated_response} (Interaction ID: {interaction_id})")
-            else:
-                logger.debug(f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})")
-        except Exception as e:
-            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
-
-        return generated_response
+        interaction_id = generate_interaction_id(query, datetime.utcnow())
+        recent_conversations = data_manager.get_conversations(mobile_number)
+        messages_to_save = [
+            {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+            {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+        ]
+        if not any(
+            any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+            for conv in recent_conversations
+        ):
+            data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+            logger.info(
+                f"Saved conversation for session {session_id}: {query} -> {generated_response} (Interaction ID: {interaction_id})"
+            )
+        else:
+            logger.debug(
+                f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
+            )
     except Exception as e:
-        logger.error(f"Response generation failed in {time.time() - start_time:.2f} seconds: {str(e)}")
-        if query_language == "Hindi":
-            return "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका। कृपया पुनः प्रयास करें।"
-        elif query_language == "Hinglish":
-            return "Sorry, main aapka query process nahi kar saka. Please dobara try karein."
-        return "Sorry, I couldn’t process your query. Please try again."
+        logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+
+    return generated_response
