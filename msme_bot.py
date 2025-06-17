@@ -419,7 +419,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
     logger.info(f"Using query language: {query_language}")
 
-    # Check user type
+    # Check user type and fetch recent conversations once
     conversations = data_manager.get_conversations(mobile_number, limit=10)
     has_user_messages = False
     for conv in conversations:
@@ -441,10 +441,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             response = welcome_user(state_name, user_name, query_language)
             try:
                 interaction_id = generate_interaction_id(response, datetime.utcnow())
-                recent_conversations = data_manager.get_conversations(mobile_number, limit=10)
                 if not any(
                     msg["role"] == "assistant" and msg["content"] == response
-                    for conv in recent_conversations for msg in conv["messages"]
+                    for conv in conversations for msg in conv["messages"]
                 ):
                     data_manager.save_conversation(
                         session_id,
@@ -558,14 +557,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Save conversation to MongoDB
     try:
         interaction_id = generate_interaction_id(query, datetime.utcnow())
-        recent_conversations = data_manager.get_conversations(mobile_number, limit=10)
         messages_to_save = [
             {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
             {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
         ]
         if not any(
             any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-            for conv in recent_conversations
+            for conv in conversations
         ):
             data_manager.save_conversation(session_id, mobile_number, messages_to_save)
             logger.info(
