@@ -155,32 +155,49 @@ def build_conversation_history(messages):
     return conversation_history
 
 # Summarize recent conversation for contextual RAG
-def summarize_conversation(messages, max_pairs: int = 5) -> str:
-    """Return a concise summary of the last few user and assistant messages."""
+def summarize_conversation(messages, current_query: str | None = None, max_pairs: int = 5) -> str:
+    """Summarize recent conversation, prioritizing the most recent pairs.
+
+    The current query guides what context from previous responses to include.
+    """
     history_pairs = []
-    pair = {}
+    pair = []
     for msg in reversed(messages):
         if msg["role"] == "assistant" and "Welcome" in msg["content"]:
             continue
-        if msg["role"] == "assistant":
-            pair["assistant"] = msg["content"]
-        elif msg["role"] == "user":
-            pair["user"] = msg["content"]
-        if "assistant" in pair and "user" in pair:
-            history_pairs.append((pair["user"], pair["assistant"]))
+        pair.append(msg)
+        if len(pair) == 2:
+            if pair[0]["role"] == "assistant" and pair[1]["role"] == "user":
+                history_pairs.append((pair[1]["content"], pair[0]["content"]))
+            elif pair[0]["role"] == "user" and pair[1]["role"] == "assistant":
+                history_pairs.append((pair[0]["content"], pair[1]["content"]))
+            pair = []
             if len(history_pairs) >= max_pairs:
                 break
-            pair = {}
-    history_pairs.reverse()
-    convo_text = ""
-    for u, a in history_pairs:
-        convo_text += f"User: {u}\nAssistant: {a}\n"
+
+    convo_text = "".join(
+        f"User: {u}\nAssistant: {a}\n" for u, a in history_pairs
+    )
     if not convo_text:
+        logger.debug("No complete message pairs to summarize")
         return ""
-    prompt = f"Summarize the conversation below focusing on scheme names mentioned, details already provided, and follow-up questions. Keep it under 100 words.\n\n{convo_text}\n\nSummary:"
+    logger.debug(f"Summarizing {len(history_pairs)} conversation pairs with query: {current_query}")
+
+    base_prompt = (
+        "Summarize the conversation below focusing on scheme names mentioned, "
+        "details already provided, and follow-up questions."
+    )
+    if current_query:
+        base_prompt += f" Only include context relevant to the current query: {current_query}."
+    base_prompt += " Keep it under 100 words."
+
+    prompt = f"{base_prompt}\n\n{convo_text}\n\nSummary:"
+
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
-        return response.content.strip()
+        summary = response.content.strip()
+        logger.debug(f"Conversation summary: {summary}")
+        return summary
     except Exception as e:
         logger.error(f"Failed to summarize conversation: {str(e)}")
         return convo_text[:500]
@@ -543,7 +560,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     conversation_history = build_conversation_history(st.session_state.messages)
     intent = classify_intent(query, recent_response or "", conversation_history)
-    conversation_summary = summarize_conversation(st.session_state.messages)
+    conversation_summary = st.session_state.get("conversation_summary", "")
+    logger.info(f"Using conversation summary: {conversation_summary}")
     logger.info(f"Classified intent: {intent}")
 
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
