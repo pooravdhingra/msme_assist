@@ -114,8 +114,32 @@ def detect_language(query):
     # If more than 30% of words are Hindi or mixed with English
     if total_words > 0 and hindi_word_count / total_words > 0.25:
         return "Hinglish"
-    
+
     return "English"
+
+# ---------------------------------------------------------------------------
+# Tone and style helper
+# ---------------------------------------------------------------------------
+
+def get_system_prompt(language, user_name="User"):
+    """Return tone and style instructions based on the language."""
+    tone_rules = {
+        "English": (
+            "Use simple English with a friendly tone and short sentences. "
+            "Start with 'Hi {name}!' and keep the answer under 120 words."
+        ),
+        "Hindi": (
+            "सरल देवनागरी हिंदी में उत्तर दें और मित्रतापूर्ण रहें. "
+            "'नमस्ते {name}!' से शुरू करें और उत्तर 120 शब्दों से कम रखें."
+        ),
+        "Hinglish": (
+            "Respond in Hinglish using Roman script with a friendly tone. "
+            "Start with 'Namaste {name}!' and keep the answer under 120 words."
+        ),
+    }
+
+    rule = tone_rules.get(language, tone_rules["English"])
+    return rule.format(name=user_name)
 
 # Build conversation history string from stored messages
 def build_conversation_history(messages):
@@ -283,6 +307,7 @@ def generate_response(intent, rag_response, user_info, language, context):
             return "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
         return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
 
+    tone_prompt = get_system_prompt(language, user_info.name)
     prompt = f"""You are a helpful assistant for Haqdarshak assisting small business owners in India.
 
     **Input**:
@@ -293,9 +318,11 @@ def generate_response(intent, rag_response, user_info, language, context):
     - Conversation Context: {context}
     - Language: {language}
 
-    **Instructions**:
-    Respond in the specified language using a friendly tone and short sentences. Start with 'Hi {user_info.name}!' for English, 'Namaste {user_info.name}!' for Hinglish, or 'नमस्ते {user_info.name}!' for Hindi.
-    Keep the answer under 120 words and use the RAG Response to answer based on the intent.
+    **Tone Instructions**:
+    {tone_prompt}
+
+    **Task**:
+    Use the RAG Response to answer based on the intent.
     """
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
