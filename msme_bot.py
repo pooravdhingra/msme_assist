@@ -75,6 +75,7 @@ class UserContext:
     business_category: str
     turnover: str
     preferred_application_mode: str
+    gender: str
 
 # Retrieve user information from Streamlit session state
 def get_user_context(session_state):
@@ -88,6 +89,7 @@ def get_user_context(session_state):
             business_category=user.get("business_category", "Unknown"),
             turnover=user.get("turnover", "Not Provided"),
             preferred_application_mode=user.get("preferred_application_mode", "Not Provided"),
+            gender=user.get("gender", "Unknown"),
         )
     except AttributeError:
         logger.error("User data not found in session state")
@@ -187,10 +189,12 @@ def welcome_user(state_name, user_name, query_language):
         return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 # Step 1: Process user query with RAG
-def get_rag_response(query, vector_store, business_category=None, turnover=None, preferred_application_mode=None):
+def get_rag_response(query, vector_store, gender=None, business_category=None, turnover=None, preferred_application_mode=None):
     start_time = time.time()
     try:
         details = []
+        if gender:
+            details.append(f"gender: {gender}")
         if business_category:
             details.append(f"business category: {business_category}")
         if turnover:
@@ -241,6 +245,32 @@ def get_rag_response(query, vector_store, business_category=None, turnover=None,
     except Exception as e:
         logger.error(f"RAG retrieval failed in {time.time() - start_time:.2f} seconds: {str(e)}")
         return "Error retrieving scheme information."
+
+
+def get_scheme_response(query, vector_store, gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+    """Wrapper for scheme dataset retrieval with clearer logging."""
+    logger.info("Querying scheme dataset")
+    return get_rag_response(
+        query,
+        vector_store,
+        gender=gender,
+        business_category=business_category,
+        turnover=turnover,
+        preferred_application_mode=preferred_application_mode,
+    )
+
+
+def get_dfl_response(query, vector_store, gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+    """Wrapper for DFL dataset retrieval with clearer logging."""
+    logger.info("Querying DFL dataset")
+    return get_rag_response(
+        query,
+        vector_store,
+        gender=gender,
+        business_category=business_category,
+        turnover=turnover,
+        preferred_application_mode=preferred_application_mode,
+    )
 
 # Check query similarity for context
 def is_query_related(query, prev_response):
@@ -356,6 +386,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     business_category = user_info.business_category
     turnover = user_info.turnover
     preferred_application_mode = user_info.preferred_application_mode
+    gender = user_info.gender
 
     # Use user_language for welcome message, otherwise detect query language
     query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
@@ -454,38 +485,43 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
 
+    if intent in scheme_intents:
+        scheme_rag = session_cache.get(query)
+    elif intent in dfl_intents:
+        dfl_rag = dfl_session_cache.get(query)
+
     if recent_query and recent_response and is_query_related(query, recent_response):
         if intent in scheme_intents:
-            scheme_rag = session_cache.get(recent_query, None)
+            scheme_rag = session_cache.get(recent_query, scheme_rag)
         elif intent in dfl_intents:
-            dfl_rag = dfl_session_cache.get(recent_query, None)
+            dfl_rag = dfl_session_cache.get(recent_query, dfl_rag)
         related_prev_query = recent_query
 
     if scheme_rag is None and intent in scheme_intents:
-        scheme_rag = get_rag_response(
+        scheme_rag = get_scheme_response(
             query,
             scheme_vector_store,
+            gender=gender,
             business_category=business_category,
             turnover=turnover,
             preferred_application_mode=preferred_application_mode,
         )
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
-        cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        st.session_state.rag_cache[session_id][cache_key] = scheme_rag
+        st.session_state.rag_cache[session_id][query] = scheme_rag
 
     if dfl_rag is None and intent in dfl_intents:
-        dfl_rag = get_rag_response(
+        dfl_rag = get_dfl_response(
             query,
             dfl_vector_store,
+            gender=gender,
             business_category=business_category,
             turnover=turnover,
             preferred_application_mode=preferred_application_mode,
         )
         if session_id not in st.session_state.dfl_rag_cache:
             st.session_state.dfl_rag_cache[session_id] = {}
-        dfl_cache_key = f"{query}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        st.session_state.dfl_rag_cache[session_id][dfl_cache_key] = dfl_rag
+        st.session_state.dfl_rag_cache[session_id][query] = dfl_rag
 
     rag_response = scheme_rag if intent in scheme_intents else dfl_rag
     generated_response = generate_response(intent, rag_response or "", user_info, query_language, conversation_history)
