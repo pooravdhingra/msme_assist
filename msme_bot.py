@@ -420,7 +420,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     logger.info(f"Using query language: {query_language}")
 
     # Check user type
-    conversations = data_manager.get_conversations(mobile_number)
+    conversations = data_manager.get_conversations(mobile_number, limit=10)
     has_user_messages = False
     for conv in conversations:
         for msg in conv["messages"]:
@@ -441,7 +441,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             response = welcome_user(state_name, user_name, query_language)
             try:
                 interaction_id = generate_interaction_id(response, datetime.utcnow())
-                recent_conversations = data_manager.get_conversations(mobile_number)
+                recent_conversations = data_manager.get_conversations(mobile_number, limit=10)
                 if not any(
                     msg["role"] == "assistant" and msg["content"] == response
                     for conv in recent_conversations for msg in conv["messages"]
@@ -558,7 +558,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Save conversation to MongoDB
     try:
         interaction_id = generate_interaction_id(query, datetime.utcnow())
-        recent_conversations = data_manager.get_conversations(mobile_number)
+        recent_conversations = data_manager.get_conversations(mobile_number, limit=10)
         messages_to_save = [
             {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
             {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
