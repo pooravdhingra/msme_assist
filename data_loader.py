@@ -135,6 +135,7 @@ def load_rag_data(
     # Relevant columns to include in the document
     relevant_columns = [
         "program_name",
+        "guid",
         "applicability",
         "type- SCH/DOC",
         "service type",

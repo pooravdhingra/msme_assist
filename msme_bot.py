@@ -156,7 +156,7 @@ def build_conversation_history(messages):
 
 # Summarize recent conversation for contextual RAG
 def summarize_conversation(messages, current_query: str | None = None, max_pairs: int = 5) -> str:
-    """Summarize recent conversation, prioritizing the most recent pairs.
+    """Summarize recent conversation, prioritizing the most recent pairs. Do not include information from older pairs if context has switched (user now talking about different scheme or switched from schemes intent to dfl or vice versa).
 
     The current query guides what context from previous responses to include.
     """
@@ -430,7 +430,9 @@ def generate_response(intent, rag_response, user_info, language, context):
        - **Confirmation_New_RAG**: If the user confirms to initiate a new RAG search, respond with the details of the scheme they are interested in, refer to conversation context for details.
     **Output**:
        - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
-       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don’t have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
+       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don't have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
+       - Do not mention any other scheme when a specific scheme is being talked about.
+       - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
        - No need to mention user profile details in every response, only include where contextually relevant.
        - Scheme answers must come only from scheme data, and DFL answers must come from the DFL document. All answers must be given from provided internal data sources.
     """
