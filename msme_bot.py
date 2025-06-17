@@ -119,29 +119,26 @@ def detect_language(query):
 
     return "English"
 
-# ---------------------------------------------------------------------------
-# Tone and style helper
-# ---------------------------------------------------------------------------
-
 def get_system_prompt(language, user_name="User"):
-    """Return tone and style instructions based on the language."""
-    tone_rules = {
-        "English": (
-            "Use simple English with a friendly tone and short sentences. "
-            "Start with 'Hi {name}!' and keep the answer under 120 words."
-        ),
-        "Hindi": (
-            "सरल देवनागरी हिंदी में उत्तर दें और मित्रतापूर्ण रहें. "
-            "'नमस्ते {name}!' से शुरू करें और उत्तर 120 शब्दों से कम रखें."
-        ),
-        "Hinglish": (
-            "Respond in Hinglish using Roman script with a friendly tone. "
-            "Start with 'Namaste {name}!' and keep the answer under 120 words."
-        ),
-    }
 
-    rule = tone_rules.get(language, tone_rules["English"])
-    return rule.format(name=user_name)
+    """Return tone and style instructions."""
+
+    system_rules = f"""1. **Language Handling**:
+       - The query language is provided as {language} (English, Hindi, or Hinglish).
+       - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
+       - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script.
+       - For English queries, respond in simple English.
+       
+       2. **Response Guidelines**:
+       - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
+       - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
+       - Response must be ≤120 words.
+       - Never mention agent fees unless specified in RAG Response for scheme queries.
+       - For returning users, use conversation history to maintain context.
+       - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
+
+    system_prompt = system_rules.format(language=language, user_name=user_name)
+    return system_prompt
 
 # Build conversation history string from stored messages
 def build_conversation_history(messages):
@@ -189,10 +186,12 @@ def welcome_user(state_name, user_name, query_language):
         return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 # Step 1: Process user query with RAG
-def get_rag_response(query, vector_store, gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_rag_response(query, vector_store, state = "ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
     start_time = time.time()
     try:
         details = []
+        if state:
+            details.append(f"state: {state}")
         if gender:
             details.append(f"gender: {gender}")
         if business_category:
@@ -247,12 +246,13 @@ def get_rag_response(query, vector_store, gender=None, business_category=None, t
         return "Error retrieving scheme information."
 
 
-def get_scheme_response(query, vector_store, gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_scheme_response(query, vector_store, state = "ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
     """Wrapper for scheme dataset retrieval with clearer logging."""
     logger.info("Querying scheme dataset")
     return get_rag_response(
         query,
         vector_store,
+        state=state,
         gender=gender,
         business_category=business_category,
         turnover=turnover,
@@ -260,12 +260,13 @@ def get_scheme_response(query, vector_store, gender=None, business_category=None
     )
 
 
-def get_dfl_response(query, vector_store, gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_dfl_response(query, vector_store, state = "ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
     """Wrapper for DFL dataset retrieval with clearer logging."""
     logger.info("Querying DFL dataset")
     return get_rag_response(
         query,
         vector_store,
+        state=state,
         gender=gender,
         business_category=business_category,
         turnover=turnover,
@@ -313,13 +314,18 @@ def classify_intent(query, prev_response, conversation_history):
 
     **Instructions**:
     Return only one label from the following:
-    Specific_Scheme_Know_Intent,
-    Specific_Scheme_Apply_Intent,
-    Schemes_Know_Intent,
-    Non_Scheme_Know_Intent,
-    DFL_Intent,
-    Out_of_Scope,
-    Contextual_Follow_Up.
+       - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?')
+       - Specific_Scheme_Apply_Intent (e.g., 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
+       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?')
+       - Non_Scheme_Know_Intent (e.g., 'How to use UPI?', 'GST kya hai?', 'यूपीआई का उपयोग कैसे करें?')
+       - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?')
+       - Out_of_Scope (e.g., 'What’s the weather?', 'Namaste', 'मौसम कैसा है?')
+       - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं')
+    
+    **Tips**:
+       - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay'). 
+       - For Contextual_Follow_Up, prioritize the Previous Assistant Response for context. If the query refers to a specific part (e.g., 'the first scheme'), identify the referenced scheme or topic.
+       - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
     """
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
@@ -338,22 +344,43 @@ def generate_response(intent, rag_response, user_info, language, context):
         return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
 
     tone_prompt = get_system_prompt(language, user_info.name)
-    prompt = f"""You are a helpful assistant for Haqdarshak assisting small business owners in India.
+
+    special_schemes = ["Udyam", "FSSAI", "Shop Act"]
+    link = "https://haqdarshak.com/contact"
+
+    prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
     **Input**:
     - Intent: {intent}
     - RAG Response: {rag_response}
     - User Name: {user_info.name}
     - State: {user_info.state_name} ({user_info.state_id})
+    - Gender: {user_info.gender}
+    - Business Name: {user_info.business_name}
+    - Business Category: {user_info.business_category}
+    - Turnover: {user_info.turnover}
+    - Preferred Application Mode: {user_info.preferred_application_mode}
     - Conversation Context: {context}
     - Language: {language}
 
-    **Tone Instructions**:
+    **Language Handling and Tone Instructions**:
     {tone_prompt}
 
     **Task**:
-    Use the RAG Response to answer based on the intent.
+    **Generate Response Based on Intent**:
+       - **Specific_Scheme_Know_Intent**: Share scheme name, purpose, benefits from **RAG Response** (≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, then state-specific. Ask: 'Want details on eligibility or how to apply?' (English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' (Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi).
+       - **Specific_Scheme_Apply_Intent**: Share application process from **RAG Response** (≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). For Udyam, FSSAI, or Shop Act, add: 'Haqdarshak can help you get this document for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi).
+       - **Schemes_Know_Intent**: List schemes from **RAG Response** (2–3 lines each, ≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or 'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi). 
+       - **Non_Scheme_Know_Intent**: Answer using **RAG Response** in simple language (≤120 words). Use examples (e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग फोनपे की तरह करें'). Use verified external info if needed.
+       - **DFL_Intent**: Respond using **RAG Response** in simple language (≤120 words) with relevant examples.
+       - **Contextual_Follow_Up**: Use the Previous Assistant Response and Conversation Context to identify the topic. If the RAG Response does not match the referenced scheme, indicate a new RAG search is needed. Provide a relevant follow-up response (≤120 words) using the RAG Response, filtering for schemes where 'applicability' includes state_id or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., 'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?').
+       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don’t have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
+
+    **Output**:
+       - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
+       - Scheme answers must come only from scheme data, and DFL answers must come from the DFL document. All answers must be given from provided internal data sources.
     """
+
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
         return response.content.strip()
@@ -501,6 +528,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         scheme_rag = get_scheme_response(
             query,
             scheme_vector_store,
+            state=state_id,
             gender=gender,
             business_category=business_category,
             turnover=turnover,
@@ -514,6 +542,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         dfl_rag = get_dfl_response(
             query,
             dfl_vector_store,
+            state=state_id,
             gender=gender,
             business_category=business_category,
             turnover=turnover,
