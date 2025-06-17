@@ -64,6 +64,7 @@ def init_dfl_vector_store():
 llm = init_llm()
 scheme_vector_store = init_vector_store()
 dfl_vector_store = init_dfl_vector_store()
+embeddings = get_embeddings()
 
 # Dataclass to hold user context information
 @dataclass
@@ -206,7 +207,6 @@ def get_rag_response(query, vector_store, state = "ALL_STATES", gender=None, bus
             full_query = f"{query}. {' '.join(details)}"
 
         logger.debug(f"Processing query: {full_query}")
-        embeddings = get_embeddings()
         embed_start = time.time()
         query_embedding = embeddings.embed_query(full_query)
         logger.debug(f"Query embedding generated in {time.time() - embed_start:.2f} seconds (first 10 values): {query_embedding[:10]}")

@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import lru_cache
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+@lru_cache(maxsize=1)
 def get_embeddings():
     """
     Initialize and return the OpenAI embedding model.
