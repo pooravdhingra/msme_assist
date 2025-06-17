@@ -154,6 +154,54 @@ def build_conversation_history(messages):
         conversation_history += f"{role.capitalize()}: {content}\n"
     return conversation_history
 
+# Summarize recent conversation for contextual RAG
+def summarize_conversation(messages, current_query: str | None = None, max_pairs: int = 5) -> str:
+    """Summarize recent conversation, prioritizing the most recent pairs.
+
+    The current query guides what context from previous responses to include.
+    """
+    history_pairs = []
+    pair = []
+    for msg in reversed(messages):
+        if msg["role"] == "assistant" and "Welcome" in msg["content"]:
+            continue
+        pair.append(msg)
+        if len(pair) == 2:
+            if pair[0]["role"] == "assistant" and pair[1]["role"] == "user":
+                history_pairs.append((pair[1]["content"], pair[0]["content"]))
+            elif pair[0]["role"] == "user" and pair[1]["role"] == "assistant":
+                history_pairs.append((pair[0]["content"], pair[1]["content"]))
+            pair = []
+            if len(history_pairs) >= max_pairs:
+                break
+
+    convo_text = "".join(
+        f"User: {u}\nAssistant: {a}\n" for u, a in history_pairs
+    )
+    if not convo_text:
+        logger.debug("No complete message pairs to summarize")
+        return ""
+    logger.debug(f"Summarizing {len(history_pairs)} conversation pairs with query: {current_query}")
+
+    base_prompt = (
+        "Summarize the conversation below focusing on scheme names mentioned, "
+        "details already provided, and follow-up questions."
+    )
+    if current_query:
+        base_prompt += f" Only include context relevant to the current query: {current_query}."
+    base_prompt += " Keep it under 100 words."
+
+    prompt = f"{base_prompt}\n\n{convo_text}\n\nSummary:"
+
+    try:
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        summary = response.content.strip()
+        logger.debug(f"Conversation summary: {summary}")
+        return summary
+    except Exception as e:
+        logger.error(f"Failed to summarize conversation: {str(e)}")
+        return convo_text[:500]
+
 # Welcome user
 def welcome_user(state_name, user_name, query_language):
     """Generate a welcome message in the user's chosen language."""
@@ -187,7 +235,7 @@ def welcome_user(state_name, user_name, query_language):
         return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 # Step 1: Process user query with RAG
-def get_rag_response(query, vector_store, state = "ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
     start_time = time.time()
     try:
         details = []
@@ -203,8 +251,10 @@ def get_rag_response(query, vector_store, state = "ALL_STATES", gender=None, bus
             details.append(f"preferred application mode: {preferred_application_mode}")
 
         full_query = query
+        if conversation_summary:
+            full_query = f"{full_query}. Context: {conversation_summary}"
         if details:
-            full_query = f"{query}. {' '.join(details)}"
+            full_query = f"{full_query}. {' '.join(details)}"
 
         logger.debug(f"Processing query: {full_query}")
         embed_start = time.time()
@@ -246,12 +296,13 @@ def get_rag_response(query, vector_store, state = "ALL_STATES", gender=None, bus
         return "Error retrieving scheme information."
 
 
-def get_scheme_response(query, vector_store, state = "ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_scheme_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
     """Wrapper for scheme dataset retrieval with clearer logging."""
     logger.info("Querying scheme dataset")
     return get_rag_response(
         query,
         vector_store,
+        conversation_summary,
         state=state,
         gender=gender,
         business_category=business_category,
@@ -260,12 +311,13 @@ def get_scheme_response(query, vector_store, state = "ALL_STATES", gender=None, 
     )
 
 
-def get_dfl_response(query, vector_store, state = "ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_dfl_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
     """Wrapper for DFL dataset retrieval with clearer logging."""
     logger.info("Querying DFL dataset")
     return get_rag_response(
         query,
         vector_store,
+        conversation_summary,
         state=state,
         gender=gender,
         business_category=business_category,
@@ -508,6 +560,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     conversation_history = build_conversation_history(st.session_state.messages)
     intent = classify_intent(query, recent_response or "", conversation_history)
+    conversation_summary = st.session_state.get("conversation_summary", "")
+    logger.debug(f"Using conversation summary: {conversation_summary}")
     logger.info(f"Classified intent: {intent}")
 
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
@@ -529,6 +583,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         scheme_rag = get_scheme_response(
             query,
             scheme_vector_store,
+            conversation_summary,
             state=state_id,
             gender=gender,
             business_category=business_category,
@@ -543,6 +598,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         dfl_rag = get_dfl_response(
             query,
             dfl_vector_store,
+            conversation_summary,
             state=state_id,
             gender=gender,
             business_category=business_category,

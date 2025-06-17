@@ -2,7 +2,13 @@ import streamlit as st
 import random
 import string
 from datetime import datetime, timedelta
-from msme_bot import load_rag_data, load_dfl_data, process_query, welcome_user
+from msme_bot import (
+    load_rag_data,
+    load_dfl_data,
+    process_query,
+    welcome_user,
+    summarize_conversation,
+)
 from data import DataManager, STATE_MAPPING
 import numpy as np
 import logging
@@ -34,6 +40,8 @@ if "session_id" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "conversation_summary" not in st.session_state:
+    st.session_state.conversation_summary = ""
 
 if "otp_generated" not in st.session_state:
     st.session_state.otp_generated = False
@@ -320,7 +328,14 @@ def chat_page():
                         "content": welcome_response,
                         "timestamp": datetime.utcnow()
                     })
+                    st.session_state.conversation_summary = summarize_conversation(
+                        st.session_state.messages,
+                        current_query="welcome",
+                    )
                     logger.debug(f"Appended welcome message to session state: {welcome_response}")
+                    logger.debug(
+                        f"Conversation summary after welcome: {st.session_state.conversation_summary}"
+                    )
             st.session_state.welcome_message_sent = True
 
     # Combine past conversations from MongoDB and current session messages
@@ -392,9 +407,16 @@ def chat_page():
                     "content": response,
                     "timestamp": datetime.utcnow()
                 })
+                st.session_state.conversation_summary = summarize_conversation(
+                    st.session_state.messages,
+                    current_query=query,
+                )
                 with st.chat_message("assistant", avatar="logo.jpeg"):
                     st.markdown(f"{response} *({datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')})*")
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
+                logger.debug(
+                    f"Updated conversation summary: {st.session_state.conversation_summary}"
+                )
 
 # Main app logic
 # Check for session restoration first
