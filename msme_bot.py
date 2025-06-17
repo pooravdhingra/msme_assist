@@ -321,7 +321,8 @@ def classify_intent(query, prev_response, conversation_history):
        - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?')
        - Out_of_Scope (e.g., 'What’s the weather?', 'Namaste', 'मौसम कैसा है?')
        - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं')
-    
+       - Confirmation_New_RAG (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.')
+
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay'). 
        - For Contextual_Follow_Up, prioritize the Previous Assistant Response for context. If the query refers to a specific part (e.g., 'the first scheme'), identify the referenced scheme or topic.
@@ -375,9 +376,10 @@ def generate_response(intent, rag_response, user_info, language, context):
        - **DFL_Intent**: Respond using **RAG Response** in simple language (≤120 words) with relevant examples.
        - **Contextual_Follow_Up**: Use the Previous Assistant Response and Conversation Context to identify the topic. If the RAG Response does not match the referenced scheme, indicate a new RAG search is needed. Provide a relevant follow-up response (≤120 words) using the RAG Response, filtering for schemes where 'applicability' includes state_id or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., 'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?').
        - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don’t have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
-
+       - **Confirmation_New_RAG**: If the user confirms to initiate a new RAG search, respond with the details of the scheme they are interested in, refer to conversation context for details.
     **Output**:
        - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
+       - No need to mention user profile details in every response, only include where contextually relevant.
        - Scheme answers must come only from scheme data, and DFL answers must come from the DFL document. All answers must be given from provided internal data sources.
     """
 
@@ -508,7 +510,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     intent = classify_intent(query, recent_response or "", conversation_history)
     logger.info(f"Classified intent: {intent}")
 
-    scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up"}
+    scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
 
     if intent in scheme_intents:
