@@ -328,10 +328,12 @@ def chat_page():
                         "content": welcome_response,
                         "timestamp": datetime.utcnow()
                     })
+
                     st.session_state.conversation_summary = summarize_conversation(
                         st.session_state.messages,
                         current_query="welcome",
                     )
+
                     logger.debug(f"Appended welcome message to session state: {welcome_response}")
                     logger.debug(
                         f"Conversation summary after welcome: {st.session_state.conversation_summary}"
@@ -407,10 +409,12 @@ def chat_page():
                     "content": response,
                     "timestamp": datetime.utcnow()
                 })
+
                 st.session_state.conversation_summary = summarize_conversation(
                     st.session_state.messages,
                     current_query=query,
                 )
+
                 with st.chat_message("assistant", avatar="logo.jpeg"):
                     st.markdown(f"{response} *({datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')})*")
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
