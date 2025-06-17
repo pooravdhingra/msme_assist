@@ -4,7 +4,6 @@ from langchain_core.documents import Document
 import os
 import logging
 import gdown  # For downloading from Google Drive
-import tempfile  # For temporary file handling
 import hashlib
 import requests
 from utils import get_embeddings
@@ -15,7 +14,12 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["load_rag_data", "load_dfl_data"]
 
-def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", faiss_index_path="faiss_index", version_file="faiss_version.txt"):
+def load_rag_data(
+    google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp",
+    faiss_index_path="faiss_index",
+    version_file="faiss_version.txt",
+    cached_file_path="scheme_db_latest.xlsx",
+):
     """
     Load scheme_db.xlsx, check for precomputed FAISS index, and return a FAISS vector store.
     If a valid precomputed index exists, load it; otherwise, process in chunks and create a new index.
@@ -28,42 +32,77 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
     Returns:
         FAISS: FAISS vector store with indexed scheme documents.
     """
-    # Download the Google Sheet as an Excel file
-    download_url = f"https://docs.google.com/spreadsheets/d/{google_drive_file_id}/export?format=xlsx"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
-        temp_file_path = temp_file.name
-        logger.info(f"Downloading Google Sheet from Google Drive (File ID: {google_drive_file_id}) to {temp_file_path}")
-        try:
-            gdown.download(download_url, temp_file_path, quiet=False)
-            logger.info("Download completed")
-        except Exception as e:
-            logger.error(f"Failed to download file from Google Drive: {str(e)}")
-            raise
-    
-        # Compute file hash
-        with open(temp_file_path, "rb") as f:
-            file_hash = hashlib.md5(f.read()).hexdigest()
-        logger.info(f"Computed file hash: {file_hash}")
-
-    # Check for precomputed FAISS index
+    # Check if index and version hash exist and cached file matches
     if os.path.exists(faiss_index_path) and os.path.exists(version_file):
         try:
-            with open(version_file, "r") as f:
-                stored_hash = f.read().strip()
-            if stored_hash == file_hash:
-                logger.info(f"Precomputed FAISS index found with matching hash at {faiss_index_path}")
-                embeddings = get_embeddings()
-                vector_store = FAISS.load_local(faiss_index_path, embeddings, allow_dangerous_deserialization=True)
-                logger.info(f"Loaded precomputed FAISS vector store with {vector_store.index.ntotal} documents")
-                os.unlink(temp_file_path)
-                logger.info(f"Temporary file {temp_file_path} deleted")
-                return vector_store
-            else:
-                logger.info(f"Hash mismatch: stored hash {stored_hash}, current hash {file_hash}. Recomputing FAISS index.")
+            with open(version_file, "r") as vf:
+                stored_hash = vf.read().strip()
+            if os.path.exists(cached_file_path):
+                with open(cached_file_path, "rb") as cf:
+                    cached_hash = hashlib.md5(cf.read()).hexdigest()
+                if cached_hash == stored_hash:
+                    logger.info(
+                        f"Using existing FAISS index and cached file with hash {stored_hash}"
+                    )
+                    embeddings = get_embeddings()
+                    return FAISS.load_local(
+                        faiss_index_path,
+                        embeddings,
+                        allow_dangerous_deserialization=True,
+                    )
         except Exception as e:
-            logger.error(f"Failed to load precomputed FAISS index: {str(e)}. Recomputing FAISS index.")
+            logger.error(
+                f"Failed to load precomputed FAISS index: {str(e)}. Will attempt download."
+            )
+
+    # Download the Google Sheet as an Excel file
+    download_url = f"https://docs.google.com/spreadsheets/d/{google_drive_file_id}/export?format=xlsx"
+    temp_file_path = cached_file_path
+    logger.info(
+        f"Downloading Google Sheet from Google Drive (File ID: {google_drive_file_id}) to {temp_file_path}"
+    )
+    try:
+        gdown.download(download_url, temp_file_path, quiet=False)
+        logger.info("Download completed")
+    except Exception as e:
+        logger.error(f"Failed to download file from Google Drive: {str(e)}")
+        raise
+
+    # Compute file hash
+    with open(temp_file_path, "rb") as f:
+        file_hash = hashlib.md5(f.read()).hexdigest()
+    logger.info(f"Computed file hash: {file_hash}")
+
+    # If index exists and hash matches, skip processing
+    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+        try:
+            with open(version_file, "r") as vf:
+                stored_hash = vf.read().strip()
+            if stored_hash == file_hash:
+                logger.info(
+                    f"Precomputed FAISS index found with matching hash at {faiss_index_path}"
+                )
+                embeddings = get_embeddings()
+                return FAISS.load_local(
+                    faiss_index_path,
+                    embeddings,
+                    allow_dangerous_deserialization=True,
+                )
+            else:
+                logger.info(
+                    f"Hash mismatch: stored hash {stored_hash}, current hash {file_hash}. Recomputing FAISS index."
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to load precomputed FAISS index: {str(e)}. Recomputing FAISS index."
+            )
+
     else:
-        logger.info(f"No precomputed FAISS index found at {faiss_index_path} or version file missing. Computing new index.")
+        logger.info(
+            f"No precomputed FAISS index found at {faiss_index_path} or version file missing. Computing new index."
+        )
+
+
 
     # Read Excel file
     try:
@@ -73,9 +112,8 @@ def load_rag_data(google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp", fais
         logger.error(f"Failed to read Excel file: {str(e)}")
         raise
     finally:
-        # Clean up the temporary file
-        os.unlink(temp_file_path)
-        logger.info(f"Temporary file {temp_file_path} deleted")
+        # Keep the downloaded file for future reuse
+        logger.info(f"Cached file available at {temp_file_path}")
         
     try:
         original_count = len(df)
