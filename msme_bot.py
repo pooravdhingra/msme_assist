@@ -383,12 +383,7 @@ def classify_intent(query, prev_response, conversation_history):
     """
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
-        final_text = response.content.strip()
-        if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
-            screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
-            if screening_link not in final_text:
-                final_text += f"\n{screening_link}"
-        return final_text
+        return response.content.strip()
     except Exception as e:
         logger.error(f"Failed to classify intent: {str(e)}")
         return "Out_of_Scope"
