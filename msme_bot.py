@@ -154,7 +154,7 @@ def build_conversation_history(messages):
 def summarize_conversation(messages, current_query: str | None = None, max_pairs: int = 3) -> str:
     """Summarize recent conversation, prioritizing the most recent pairs. Do not include information from older pairs if context has switched (user now talking about different scheme or switched from schemes intent to dfl or vice versa).
 
-    The current query guides what context from previous responses to include.
+    The current query guides what context from previous responses to include. The purpose is to provide context for next response generation so summary should provide relevant information from user and assistant that has been exchanged.
     """
     history_pairs = []
     pair = []
@@ -472,7 +472,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     logger.info(f"Using query language: {query_language}")
 
     # Check user type and fetch recent conversations once
-    conversations = data_manager.get_conversations(mobile_number, limit=10)
+    conversations = data_manager.get_conversations(mobile_number, limit=8)
     has_user_messages = False
     for conv in conversations:
         for msg in conv["messages"]:
