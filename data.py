@@ -108,8 +108,6 @@ def get_mongo_client():
 class DataManager:
     """Manages MongoDB operations for users, sessions, conversations, and embeddings."""
 
-    OPTIONAL_FIELDS = ["udyam_registered", "turnover", "preferred_application_mode"]
-
     def __init__(self):
         self.client = get_mongo_client()
         db_name = os.getenv("MONGO_DB_NAME", "haqdarshak")
@@ -118,7 +116,7 @@ class DataManager:
         self.update_existing_users_language()
 
     def register_user(self, fname, lname, mobile_number, state, business_name, business_category, language,
-                      gender, udyam_registered=None, turnover=None, preferred_application_mode=None):
+                      gender):
         """Register a new user and return success status with message."""
         if not all([fname, lname, mobile_number, state, business_name, business_category, language, gender]):
             logger.error("All registration fields must be non-empty")
@@ -135,12 +133,6 @@ class DataManager:
         if gender not in ["Male", "Female", "Other"]:
             logger.error(f"Invalid gender: {gender}")
             return False, "Invalid gender selected."
-        if udyam_registered and udyam_registered not in ["Yes", "No"]:
-            logger.error(f"Invalid udyam_registered value: {udyam_registered}")
-            return False, "Invalid value for Udyam registration."
-        if preferred_application_mode and preferred_application_mode not in ["Offline", "Online"]:
-            logger.error(f"Invalid preferred_application_mode: {preferred_application_mode}")
-            return False, "Invalid preferred application mode selected."
 
         try:
             existing_user = self.db.users.find_one({"mobile_number": mobile_number})
@@ -164,9 +156,6 @@ class DataManager:
                 "business_category": business_category,
                 "language": language,
                 "gender": gender,
-                "udyam_registered": udyam_registered,
-                "turnover": turnover,
-                "preferred_application_mode": preferred_application_mode,
                 "created_at": datetime.utcnow()
             }
             self.db.users.insert_one(user_data)
@@ -207,7 +196,7 @@ class DataManager:
 
         allowed_fields = {
             "fname", "lname", "business_name", "business_category", "language",
-            "gender", "udyam_registered", "turnover", "preferred_application_mode", "state"
+            "gender", "state"
         }
 
         update_data = {}
@@ -221,12 +210,6 @@ class DataManager:
             if key == "gender" and value not in ["Male", "Female", "Other"]:
                 logger.error(f"Invalid gender: {value}")
                 return False, "Invalid gender selected."
-            if key == "udyam_registered" and value not in ["Yes", "No"]:
-                logger.error(f"Invalid udyam_registered value: {value}")
-                return False, "Invalid value for Udyam registration."
-            if key == "preferred_application_mode" and value not in ["Offline", "Online"]:
-                logger.error(f"Invalid preferred_application_mode: {value}")
-                return False, "Invalid preferred application mode selected."
             if key == "state":
                 if value not in STATE_MAPPING.values():
                     logger.error(f"Invalid state: {value}")
@@ -257,23 +240,6 @@ class DataManager:
             logger.error(f"Unexpected error while updating user with mobile {mobile_number}: {str(e)}")
             return False, f"Error updating profile: {str(e)}"
 
-    def get_missing_optional_fields(self, mobile_number) -> list[str]:
-        """Return optional profile fields that are empty or missing."""
-        user = self.find_user(mobile_number)
-        if not user:
-            logger.warning(f"No user found when checking optional fields for {mobile_number}")
-            return self.OPTIONAL_FIELDS.copy()
-
-        missing = []
-        for field in self.OPTIONAL_FIELDS:
-            value = user.get(field)
-            if value is None or value == "":
-                missing.append(field)
-        return missing
-
-    def is_profile_complete(self, mobile_number) -> bool:
-        """Return True if no optional fields are missing."""
-        return len(self.get_missing_optional_fields(mobile_number)) == 0
 
     def start_session(self, mobile_number, session_id, user_data=None):
         """Log session start, optionally storing user_data."""

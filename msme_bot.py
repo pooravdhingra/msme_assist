@@ -74,8 +74,6 @@ class UserContext:
     state_name: str
     business_name: str
     business_category: str
-    turnover: str
-    preferred_application_mode: str
     gender: str
 
 # Retrieve user information from Streamlit session state
@@ -88,8 +86,6 @@ def get_user_context(session_state):
             state_name=user.get("state_name", "Unknown"),
             business_name=user.get("business_name", "Unknown"),
             business_category=user.get("business_category", "Unknown"),
-            turnover=user.get("turnover", "Not Provided"),
-            preferred_application_mode=user.get("preferred_application_mode", "Not Provided"),
             gender=user.get("gender", "Unknown"),
         )
     except AttributeError:
@@ -236,7 +232,7 @@ def welcome_user(state_name, user_name, query_language):
         return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 # Step 1: Process user query with RAG
-def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None):
     start_time = time.time()
     try:
         details = []
@@ -246,10 +242,6 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
             details.append(f"gender: {gender}")
         if business_category:
             details.append(f"business category: {business_category}")
-        if turnover:
-            details.append(f"turnover: {turnover}")
-        if preferred_application_mode:
-            details.append(f"preferred application mode: {preferred_application_mode}")
 
         full_query = query
         if conversation_summary:
@@ -297,7 +289,7 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
         return {"text": "Error retrieving scheme information.", "sources": []}
 
 
-def get_scheme_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_scheme_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None):
     """Wrapper for scheme dataset retrieval with clearer logging."""
     logger.info("Querying scheme dataset")
     return get_rag_response(
@@ -307,12 +299,10 @@ def get_scheme_response(query, vector_store, conversation_summary=None, state="A
         state=state,
         gender=gender,
         business_category=business_category,
-        turnover=turnover,
-        preferred_application_mode=preferred_application_mode,
     )
 
 
-def get_dfl_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
+def get_dfl_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None):
     """Wrapper for DFL dataset retrieval with clearer logging."""
     logger.info("Querying DFL dataset")
     return get_rag_response(
@@ -322,8 +312,6 @@ def get_dfl_response(query, vector_store, conversation_summary=None, state="ALL_
         state=state,
         gender=gender,
         business_category=business_category,
-        turnover=turnover,
-        preferred_application_mode=preferred_application_mode,
     )
 
 # Check query similarity for context
@@ -413,8 +401,6 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     - Gender: {user_info.gender}
     - Business Name: {user_info.business_name}
     - Business Category: {user_info.business_category}
-    - Turnover: {user_info.turnover}
-    - Preferred Application Mode: {user_info.preferred_application_mode}
     - Conversation Context: {context}
     - Language: {language}"""
     if scheme_guid:
@@ -479,8 +465,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     state_name = user_info.state_name
     business_name = user_info.business_name
     business_category = user_info.business_category
-    turnover = user_info.turnover
-    preferred_application_mode = user_info.preferred_application_mode
     gender = user_info.gender
 
     # Use user_language for welcome message, otherwise detect query language
@@ -500,8 +484,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     user_type = "returning" if has_user_messages else "new"
     logger.info(f"User type: {user_type}")
 
-    profile_complete = data_manager.is_profile_complete(mobile_number)
-    missing_fields = data_manager.get_missing_optional_fields(mobile_number)
 
     # Handle welcome query
     if query.lower() == "welcome":
@@ -601,8 +583,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             state=state_id,
             gender=gender,
             business_category=business_category,
-            turnover=turnover,
-            preferred_application_mode=preferred_application_mode,
         )
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
@@ -616,8 +596,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             state=state_id,
             gender=gender,
             business_category=business_category,
-            turnover=turnover,
-            preferred_application_mode=preferred_application_mode,
         )
         if session_id not in st.session_state.dfl_rag_cache:
             st.session_state.dfl_rag_cache[session_id] = {}
