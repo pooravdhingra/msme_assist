@@ -388,10 +388,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
 
     tone_prompt = get_system_prompt(language, user_info.name)
 
-    special_schemes = ["Udyam", "FSSAI", "Shop Act"]
-    link = "https://haqdarshak.com/contact"
-
-    prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
+    base_prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
     **Input**:
     - Intent: {intent}
@@ -404,23 +401,80 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     - Conversation Context: {context}
     - Language: {language}"""
     if scheme_guid:
-        prompt += f"\n    - Scheme GUID: {scheme_guid}"
+        base_prompt += f"\n    - Scheme GUID: {scheme_guid}"
 
-    prompt += f"""
+    base_prompt += f"""
 
     **Language Handling and Tone Instructions**:
     {tone_prompt}
 
     **Task**:
-    **Generate Response Based on Intent**:
-       - **Specific_Scheme_Know_Intent**: Share scheme name, purpose, benefits from **RAG Response** (≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, then state-specific. Ask: 'Want details on eligibility or how to apply?' (English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' (Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi).
-       - **Specific_Scheme_Apply_Intent**: Share application process from **RAG Response** (≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). For Udyam, FSSAI, or Shop Act, add: 'Haqdarshak can help you get this document for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi).
-       - **Specific_Scheme_Eligibility_Intent**: Summarize eligibility rules from **RAG Response** (≤120 words) and provide a link to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. Ask the user to verify their eligibility there.
-       - **Schemes_Know_Intent**: List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or 'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi).
-       - **Non_Scheme_Know_Intent**: Answer using **RAG Response** in simple language (≤120 words). Use examples (e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग फोनपे की तरह करें'). Use verified external info if needed.
-       - **DFL_Intent**: Respond using **RAG Response** in simple language (≤120 words) with relevant examples.
-       - **Contextual_Follow_Up**: Use the Previous Assistant Response and Conversation Context to identify the topic. If the RAG Response does not match the referenced scheme, indicate a new RAG search is needed. Provide a relevant follow-up response (≤120 words) using the RAG Response, filtering for schemes where 'applicability' includes state_id or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., 'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?').
-       - **Confirmation_New_RAG**: If the user confirms to initiate a new RAG search, respond with the details of the scheme they are interested in, refer to conversation context for details.
+    """
+
+    special_schemes = ["Udyam", "FSSAI", "Shop Act"]
+    link = "https://haqdarshak.com/contact"
+
+    if intent == "Specific_Scheme_Know_Intent":
+        intent_prompt = (
+            "Share scheme name, purpose, benefits from **RAG Response** (≤120 words). "
+            "Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' "
+            "or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, "
+            "then state-specific. Ask: 'Want details on eligibility or how to apply?' "
+            "(English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' "
+            "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
+        )
+    elif intent == "Specific_Scheme_Apply_Intent":
+        intent_prompt = (
+            "Share application process from **RAG Response** (≤120 words). Filter for schemes "
+            "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
+            "'Centrally Sponsored Scheme' (CSS)."
+        )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
+            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
+            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+        )
+    elif intent == "Specific_Scheme_Eligibility_Intent":
+        intent_prompt = (
+            "Summarize eligibility rules from **RAG Response** (≤120 words) and provide a link "
+            f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
+            "Ask the user to verify their eligibility there."
+        )
+    elif intent == "Schemes_Know_Intent":
+        intent_prompt = (
+            "List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes "
+            "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
+            "'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' "
+            "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
+            "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
+        )
+    elif intent == "Non_Scheme_Know_Intent":
+        intent_prompt = (
+            "Answer using **RAG Response** in simple language (≤120 words). Use examples "
+            "(e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग "
+            "फोनपे की तरह करें'). Use verified external info if needed."
+        )
+    elif intent == "DFL_Intent":
+        intent_prompt = "Respond using **RAG Response** in simple language (≤120 words) with relevant examples."
+    elif intent == "Contextual_Follow_Up":
+        intent_prompt = (
+            "Use the Previous Assistant Response and Conversation Context to identify the topic. "
+            "If the RAG Response does not match the referenced scheme, indicate a new RAG search "
+            "is needed. Provide a relevant follow-up response (≤120 words) using the RAG Response, "
+            "filtering for schemes where 'applicability' includes state_id or 'scheme type' is "
+            "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., "
+            "'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?')."
+        )
+    elif intent == "Confirmation_New_RAG":
+        intent_prompt = (
+            "If the user confirms to initiate a new RAG search, respond with the details of the "
+            "scheme they are interested in, refer to conversation context for details."
+        )
+    else:
+        intent_prompt = ""
+
+    output_prompt = """
     **Output**:
        - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
        - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don't have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
@@ -429,6 +483,8 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
        - No need to mention user profile details in every response, only include where contextually relevant.
        - Scheme answers must come only from scheme data, and DFL answers must come from the DFL document. All answers must be given from provided internal data sources.
     """
+
+    prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
 
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
