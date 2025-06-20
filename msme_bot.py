@@ -290,10 +290,10 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
             logger.debug(f"Document {i+1}:")
             logger.debug(f"  Content: {doc.page_content}")
             logger.debug(f"  Metadata: {doc.metadata}")
-        return response
+        return {"text": response, "sources": sources}
     except Exception as e:
         logger.error(f"RAG retrieval failed in {time.time() - start_time:.2f} seconds: {str(e)}")
-        return "Error retrieving scheme information."
+        return {"text": "Error retrieving scheme information.", "sources": []}
 
 
 def get_scheme_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None, turnover=None, preferred_application_mode=None):
@@ -368,6 +368,7 @@ def classify_intent(query, prev_response, conversation_history):
     Return only one label from the following:
        - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?')
        - Specific_Scheme_Apply_Intent (e.g., 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
+       - Specific_Scheme_Eligibility_Intent (e.g., 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
        - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?')
        - Non_Scheme_Know_Intent (e.g., 'How to use UPI?', 'GST kya hai?', 'यूपीआई का उपयोग कैसे करें?')
        - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?')
@@ -382,13 +383,18 @@ def classify_intent(query, prev_response, conversation_history):
     """
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
-        return response.content.strip()
+        final_text = response.content.strip()
+        if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+            screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+            if screening_link not in final_text:
+                final_text += f"\n{screening_link}"
+        return final_text
     except Exception as e:
         logger.error(f"Failed to classify intent: {str(e)}")
         return "Out_of_Scope"
 
 # Generate final response based on intent and RAG output
-def generate_response(intent, rag_response, user_info, language, context):
+def generate_response(intent, rag_response, user_info, language, context, scheme_guid=None):
     if intent == "Out_of_Scope":
         if language == "Hindi":
             return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
@@ -414,7 +420,11 @@ def generate_response(intent, rag_response, user_info, language, context):
     - Turnover: {user_info.turnover}
     - Preferred Application Mode: {user_info.preferred_application_mode}
     - Conversation Context: {context}
-    - Language: {language}
+    - Language: {language}"""
+    if scheme_guid:
+        prompt += f"\n    - Scheme GUID: {scheme_guid}"
+
+    prompt += f"""
 
     **Language Handling and Tone Instructions**:
     {tone_prompt}
@@ -423,7 +433,8 @@ def generate_response(intent, rag_response, user_info, language, context):
     **Generate Response Based on Intent**:
        - **Specific_Scheme_Know_Intent**: Share scheme name, purpose, benefits from **RAG Response** (≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, then state-specific. Ask: 'Want details on eligibility or how to apply?' (English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' (Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi).
        - **Specific_Scheme_Apply_Intent**: Share application process from **RAG Response** (≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). For Udyam, FSSAI, or Shop Act, add: 'Haqdarshak can help you get this document for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi).
-       - **Schemes_Know_Intent**: List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or 'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi). 
+       - **Specific_Scheme_Eligibility_Intent**: Summarize eligibility rules from **RAG Response** (≤120 words) and provide a link to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. Ask the user to verify their eligibility there.
+       - **Schemes_Know_Intent**: List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or 'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi).
        - **Non_Scheme_Know_Intent**: Answer using **RAG Response** in simple language (≤120 words). Use examples (e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग फोनपे की तरह करें'). Use verified external info if needed.
        - **DFL_Intent**: Respond using **RAG Response** in simple language (≤120 words) with relevant examples.
        - **Contextual_Follow_Up**: Use the Previous Assistant Response and Conversation Context to identify the topic. If the RAG Response does not match the referenced scheme, indicate a new RAG search is needed. Provide a relevant follow-up response (≤120 words) using the RAG Response, filtering for schemes where 'applicability' includes state_id or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., 'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?').
@@ -439,7 +450,12 @@ def generate_response(intent, rag_response, user_info, language, context):
 
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
-        return response.content.strip()
+        final_text = response.content.strip()
+        if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+            screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+            if screening_link not in final_text:
+                final_text += f"\n{screening_link}"
+        return final_text
     except Exception as e:
         logger.error(f"Failed to generate response: {str(e)}")
         if language == "Hindi":
@@ -566,7 +582,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     logger.info(f"Using conversation summary: {conversation_summary}")
     logger.info(f"Classified intent: {intent}")
 
-    scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
+    scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
 
     if intent in scheme_intents:
@@ -612,7 +628,22 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         st.session_state.dfl_rag_cache[session_id][query] = dfl_rag
 
     rag_response = scheme_rag if intent in scheme_intents else dfl_rag
-    generated_response = generate_response(intent, rag_response or "", user_info, query_language, conversation_history)
+    rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
+    scheme_guid = None
+    if intent == "Specific_Scheme_Eligibility_Intent" and isinstance(rag_response, dict):
+        for doc in rag_response.get("sources", []):
+            guid = doc.metadata.get("guid") if doc and doc.metadata else None
+            if guid:
+                scheme_guid = guid
+                break
+    generated_response = generate_response(
+        intent,
+        rag_text or "",
+        user_info,
+        query_language,
+        conversation_history,
+        scheme_guid=scheme_guid,
+    )
 
     # Save conversation to MongoDB
     try:
