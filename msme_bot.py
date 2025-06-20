@@ -379,7 +379,7 @@ def classify_intent(query, prev_response, conversation_history):
         return "Out_of_Scope"
 
 # Generate final response based on intent and RAG output
-def generate_response(intent, rag_response, user_info, language, context, scheme_guid=None):
+def generate_response(intent, rag_response, user_info, language, context, scheme_guid=None, scheme_details=None):
     if intent == "Out_of_Scope":
         if language == "Hindi":
             return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
@@ -401,6 +401,8 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     - Business Category: {user_info.business_category}
     - Conversation Context: {context}
     - Language: {language}"""
+    if scheme_details:
+        base_prompt += f"\n    - User Provided Scheme Details: {scheme_details}"
     if scheme_guid:
         base_prompt += f"\n    - Scheme GUID: {scheme_guid}"
 
@@ -410,6 +412,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     {tone_prompt}
 
     **Task**:
+    Use any user-provided scheme details to personalise the scheme information whenever relevant.
     """
 
     special_schemes = ["Udyam", "FSSAI", "Shop Act"]
@@ -446,7 +449,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         intent_prompt = (
             "List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes "
             "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS). Ask: 'Want more details on any scheme?' "
+            "'Centrally Sponsored Scheme' (CSS). Use any provided scheme details to choose the most relevant schemes. Ask: 'Want more details on any scheme?' "
             "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
@@ -508,6 +511,119 @@ def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
 
+# ---- Scheme personalisation helpers ----
+def ask_scheme_question(key, language):
+    questions_en = {
+        "credit_or_subsidy": "Are you looking for loans/credit or other subsidies?",
+        "loan_amount": "How much loan are you looking for?",
+        "loan_purpose": "What is the purpose of taking this loan?",
+        "turnover": "What is your approximate annual turnover?",
+        "business_type": "What business do you do?",
+        "sc_st": "Are you SC/ST?",
+    }
+
+    questions_hi = {
+        "credit_or_subsidy": "क्या आप लोन/क्रेडिट लेना चाहते हैं या कोई सब्सिडी?",
+        "loan_amount": "आप कितने रुपये का लोन चाहते हैं?",
+        "loan_purpose": "यह लोन किस काम के लिए है?",
+        "turnover": "आपका वार्षिक टर्नओवर लगभग कितना है?",
+        "business_type": "आप कौन सा व्यापार करते हैं?",
+        "sc_st": "क्या आप SC/ST हैं?",
+    }
+
+    questions_hinglish = {
+        "credit_or_subsidy": "Kya aap loan/credit chahte hain ya koi subsidy?",
+        "loan_amount": "Kitna loan chahiye?",
+        "loan_purpose": "Yeh loan kis kaam ke liye hai?",
+        "turnover": "Aapka yearly turnover lagbhag kitna hai?",
+        "business_type": "Aap kaunsa business karte hain?",
+        "sc_st": "Kya aap SC/ST hain?",
+    }
+
+    if language == "Hindi":
+        return questions_hi.get(key, "")
+    if language == "Hinglish":
+        return questions_hinglish.get(key, "")
+    return questions_en.get(key, "")
+
+
+def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, user_info, conversation_history, conversation_summary):
+    language = st.session_state.scheme_flow_data.get("language", detect_language(answer))
+    step = st.session_state.scheme_flow_step
+    details = st.session_state.scheme_flow_data
+    path = details.get("path")
+
+    # Determine next step based on current state
+    if step == 0:
+        if re.search(r"loan|credit|\u0930\u094d?\u0923|\u0915\u0930\u094d?\u091c", answer, re.IGNORECASE):
+            details["path"] = "credit"
+            st.session_state.scheme_flow_step = 1
+            return ask_scheme_question("loan_amount", language), False
+        else:
+            details["path"] = "non_credit"
+            st.session_state.scheme_flow_step = 1
+            return ask_scheme_question("turnover", language), False
+
+    if details.get("path") == "credit":
+        if step == 1:
+            details["loan_amount"] = answer
+            st.session_state.scheme_flow_step = 2
+            return ask_scheme_question("loan_purpose", language), False
+        if step == 2:
+            details["loan_purpose"] = answer
+            st.session_state.scheme_flow_step = 3
+            return ask_scheme_question("turnover", language), False
+        if step == 3:
+            details["turnover"] = answer
+            st.session_state.scheme_flow_step = 4
+            return ask_scheme_question("business_type", language), False
+        if step == 4:
+            details["business_type"] = answer
+            st.session_state.scheme_flow_step = 5
+            return ask_scheme_question("sc_st", language), False
+        if step == 5:
+            details["sc_st"] = answer
+            st.session_state.scheme_flow_active = False
+            st.session_state.scheme_flow_step = None
+    else:
+        if step == 1:
+            details["turnover"] = answer
+            st.session_state.scheme_flow_step = 2
+            return ask_scheme_question("business_type", language), False
+        if step == 2:
+            details["business_type"] = answer
+            st.session_state.scheme_flow_step = 3
+            return ask_scheme_question("sc_st", language), False
+        if step == 3:
+            details["sc_st"] = answer
+            st.session_state.scheme_flow_active = False
+            st.session_state.scheme_flow_step = None
+
+    if st.session_state.scheme_flow_active:
+        return "", False
+
+    # Flow completed, fetch schemes using initial query
+    query = details.get("initial_query", "")
+    rag = get_scheme_response(
+        query,
+        scheme_vector_store,
+        conversation_summary,
+        state=user_info.state_id,
+        gender=user_info.gender,
+        business_category=user_info.business_category,
+    )
+    rag_text = rag.get("text") if isinstance(rag, dict) else rag
+    response = generate_response(
+        "Schemes_Know_Intent",
+        rag_text or "",
+        user_info,
+        language,
+        conversation_history,
+        scheme_details=details,
+    )
+    return response, True
+
+
 # Main function to process query
 def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
     start_time = time.time()
@@ -540,6 +656,39 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             break
     user_type = "returning" if has_user_messages else "new"
     logger.info(f"User type: {user_type}")
+
+    conversation_history = build_conversation_history(st.session_state.messages)
+    conversation_summary = st.session_state.get("conversation_summary", "")
+
+    if st.session_state.get("scheme_flow_active"):
+        resp, _ = handle_scheme_flow(
+            query,
+            scheme_vector_store,
+            session_id,
+            mobile_number,
+            user_info,
+            conversation_history,
+            conversation_summary,
+        )
+        generated_response = resp
+        try:
+            interaction_id = generate_interaction_id(query, datetime.utcnow())
+            messages_to_save = [
+                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+            ]
+            if not any(
+                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                for conv in conversations
+            ):
+                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+            else:
+                logger.debug(
+                    f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
+                )
+        except Exception as e:
+            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+        return generated_response
 
 
     # Handle welcome query
@@ -617,6 +766,32 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     logger.info(f"Using conversation summary: {conversation_summary}")
     logger.info(f"Classified intent: {intent}")
 
+    maintain_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
+    if intent not in maintain_intents:
+        st.session_state.scheme_flow_data = {}
+        st.session_state.scheme_flow_active = False
+        st.session_state.scheme_flow_step = None
+
+    if intent == "Schemes_Know_Intent" and not st.session_state.scheme_flow_active:
+        st.session_state.scheme_flow_active = True
+        st.session_state.scheme_flow_step = 0
+        st.session_state.scheme_flow_data = {"initial_query": query, "language": query_language}
+        first_q = ask_scheme_question("credit_or_subsidy", query_language)
+        try:
+            interaction_id = generate_interaction_id(query, datetime.utcnow())
+            messages_to_save = [
+                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                {"role": "assistant", "content": first_q, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+            ]
+            if not any(
+                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                for conv in conversations
+            ):
+                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+        except Exception as e:
+            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+        return first_q
+
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
 
@@ -674,6 +849,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         query_language,
         conversation_history,
         scheme_guid=scheme_guid,
+        scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
     )
 
     # Save conversation to MongoDB
