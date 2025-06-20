@@ -212,8 +212,8 @@ def welcome_user(state_name, user_name, query_language):
     - Generate a welcome message for a new user in the specified language ({query_language}).
     - For Hindi, use Devanagari script with simple, clear words suitable for micro business owners with low Hindi proficiency.
     - For English, use simple English with a friendly tone.
-    - The message should welcome the user, mention their state ({state_name}), and offer assistance with schemes and documents applicable to their state and all central government schemes.
-    - Response must be ≤50 words.
+    - The message should welcome the user, mention their state ({state_name}), and offer assistance with schemes and documents applicable to their state and all central government schemes or help with digital/financial literacy and business growth.
+    - Response must be ≤70 words.
     - Start the response with 'Hi {user_name}!' (English) or 'नमस्ते {user_name}!' (Hindi).
 
     **Output**:
@@ -412,7 +412,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     {tone_prompt}
 
     **Task**:
-    Use any user-provided scheme details to personalise the scheme information whenever relevant.
+    Use any user-provided scheme details to pick relevant schemes from retrieved data and personalise the scheme information wherever applicable.
     """
 
     special_schemes = ["Udyam", "FSSAI", "Shop Act"]
@@ -449,7 +449,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         intent_prompt = (
             "List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes "
             "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS). Use any provided scheme details to choose the most relevant schemes. Ask: 'Want more details on any scheme?' "
+            "'Centrally Sponsored Scheme' (CSS). Use any user provided scheme details to choose the most relevant schemes. Ask: 'Want more details on any scheme?' "
             "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
