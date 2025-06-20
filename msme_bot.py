@@ -244,11 +244,20 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
         if business_category:
             details.append(f"business category: {business_category}")
 
+        fallback_details = []
+        if state:
+            fallback_details.append(f"state: {state}")
+        if gender:
+            fallback_details.append(f"gender: {gender}")
+
         full_query = query
         if conversation_summary:
             full_query = f"{full_query}. Context: {conversation_summary}"
+            fallback_query = f"{full_query}. Context: {conversation_summary}"
         if details:
             full_query = f"{full_query}. {' '.join(details)}"
+        if fallback_details:
+            fallback_query = f"{fallback_query}. {' '.join(fallback_details)}"
 
         logger.debug(f"Processing query: {full_query}")
         embed_start = time.time()
@@ -278,7 +287,6 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
                 sources = result["source_documents"]
         if not sources:
             logger.warning(f"No documents retrieved for query: {query}")
-            fallback_query = f"schemes for {state} or all states"
             logger.info(f"Attempting fallback retrieval with query: {fallback_query}")
             result = qa_chain.invoke({"query": fallback_query})
             response = result["result"]
@@ -456,8 +464,8 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         intent_prompt = (
             "List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes "
             "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS). Use any provided scheme details to choose the most relevant schemes. "
-            "If no close match is found, still list the top 2-3 schemes applicable in the user's state or all states. Ask: 'Want more details on any scheme?' "
+            "'Centrally Sponsored Scheme' (CSS). Use any user provided scheme details to choose the most relevant schemes. "
+            "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. Finally Ask: 'Want more details on any scheme?' "
             "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
