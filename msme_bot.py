@@ -766,7 +766,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     logger.info(f"Using conversation summary: {conversation_summary}")
     logger.info(f"Classified intent: {intent}")
 
-    maintain_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
+    maintain_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     if intent not in maintain_intents:
         st.session_state.scheme_flow_data = {}
         st.session_state.scheme_flow_active = False
