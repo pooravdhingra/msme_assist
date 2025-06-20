@@ -321,7 +321,8 @@ def chat_page():
                 user_language=st.session_state.user["language"]
             )
             if welcome_response:  # Only append if a welcome message was generated
-                if not any(msg["role"] == "assistant" and msg["content"] == welcome_response for msg in st.session_state.messages):
+                last_msg = st.session_state.messages[-1] if st.session_state.messages else None
+                if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == welcome_response):
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": welcome_response,
@@ -383,7 +384,8 @@ def chat_page():
         if query_id != st.session_state.last_query_id:
             st.session_state.last_query_id = query_id
             # Append user query if not already in session state
-            if not any(msg["role"] == "user" and msg["content"] == query for msg in st.session_state.messages):
+            last_msg = st.session_state.messages[-1] if st.session_state.messages else None
+            if not last_msg or not (last_msg["role"] == "user" and last_msg["content"] == query):
                 st.session_state.messages.append({
                     "role": "user",
                     "content": query,
@@ -402,7 +404,8 @@ def chat_page():
                 st.session_state.user["mobile_number"],
                 user_language=st.session_state.user["language"]
             )
-            if not any(msg["role"] == "assistant" and msg["content"] == response for msg in st.session_state.messages):
+            last_msg = st.session_state.messages[-1] if st.session_state.messages else None
+            if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response,
