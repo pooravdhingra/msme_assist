@@ -155,7 +155,7 @@ def build_conversation_history(messages):
     return conversation_history
 
 # Summarize recent conversation for contextual RAG
-def summarize_conversation(messages, current_query: str | None = None, max_pairs: int = 5) -> str:
+def summarize_conversation(messages, current_query: str | None = None, max_pairs: int = 3) -> str:
     """Summarize recent conversation, prioritizing the most recent pairs. Do not include information from older pairs if context has switched (user now talking about different scheme or switched from schemes intent to dfl or vice versa).
 
     The current query guides what context from previous responses to include.
@@ -184,8 +184,9 @@ def summarize_conversation(messages, current_query: str | None = None, max_pairs
     logger.debug(f"Summarizing {len(history_pairs)} conversation pairs with query: {current_query}")
 
     base_prompt = (
-        "Summarize the conversation below focusing on scheme names mentioned, "
-        "details already provided, and follow-up questions."
+        f"Summarize the last {max_pairs} query-response pairs below. "
+        "Include only the most recent scheme or DFL topic mentioned and any details already provided. "
+        "If multiple schemes or DFL topics appear, keep only the most recent."
     )
     if current_query:
         base_prompt += f" Only include context relevant to the current query: {current_query}."
