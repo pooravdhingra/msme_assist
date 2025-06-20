@@ -255,7 +255,7 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
         query_embedding = embeddings.embed_query(full_query)
         logger.debug(f"Query embedding generated in {time.time() - embed_start:.2f} seconds (first 10 values): {query_embedding[:10]}")
         retrieve_start = time.time()
-        retriever = vector_store.as_retriever(search_kwargs={"k": 10})
+        retriever = vector_store.as_retriever(search_kwargs={"k": 5})
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
@@ -278,6 +278,13 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
                 sources = result["source_documents"]
         if not sources:
             logger.warning(f"No documents retrieved for query: {query}")
+            fallback_query = f"schemes for {state} or all states"
+            logger.info(f"Attempting fallback retrieval with query: {fallback_query}")
+            result = qa_chain.invoke({"query": fallback_query})
+            response = result["result"]
+            sources = result["source_documents"]
+        if not sources:
+            logger.warning(f"Fallback also returned no documents for query: {query}")
             return "No relevant scheme information found."
         logger.info(f"Retrieved {len(sources)} documents for query: {query}")
         for i, doc in enumerate(sources):
@@ -449,7 +456,8 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         intent_prompt = (
             "List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes "
             "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS). Use any user provided scheme details to choose the most relevant schemes. Ask: 'Want more details on any scheme?' "
+            "'Centrally Sponsored Scheme' (CSS). Use any provided scheme details to choose the most relevant schemes. "
+            "If no close match is found, still list the top 2-3 schemes applicable in the user's state or all states. Ask: 'Want more details on any scheme?' "
             "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
