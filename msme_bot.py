@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from data_loader import load_rag_data, load_dfl_data
-from utils import get_embeddings
+from utils import get_embeddings, extract_scheme_guid
 import streamlit as st
 from data import DataManager
 import re
@@ -837,11 +837,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
     scheme_guid = None
     if intent == "Specific_Scheme_Eligibility_Intent" and isinstance(rag_response, dict):
-        for doc in rag_response.get("sources", []):
-            guid = doc.metadata.get("guid") if doc and doc.metadata else None
-            if guid:
-                scheme_guid = guid
-                break
+        scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
     generated_response = generate_response(
         intent,
         rag_text or "",
