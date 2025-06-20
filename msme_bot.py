@@ -371,8 +371,8 @@ def classify_intent(query, prev_response, conversation_history):
        - Specific_Scheme_Eligibility_Intent (e.g., 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
        - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?')
        - Non_Scheme_Know_Intent (e.g., 'How to use UPI?', 'GST kya hai?', 'यूपीआई का उपयोग कैसे करें?')
-       - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?')
-       - Out_of_Scope (e.g., 'What’s the weather?', 'Namaste', 'मौसम कैसा है?')
+       - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'How can going digital help grow business', etc.)
+       - Out_of_Scope (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?')
        - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं')
        - Confirmation_New_RAG (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.')
 
