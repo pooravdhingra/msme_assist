@@ -367,8 +367,8 @@ def classify_intent(query, prev_response, conversation_history):
     **Instructions**:
     Return only one label from the following:
        - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?')
-       - Specific_Scheme_Apply_Intent (e.g., 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
-       - Specific_Scheme_Eligibility_Intent (e.g., 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
+       - Specific_Scheme_Apply_Intent (e.g., 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
+       - Specific_Scheme_Eligibility_Intent (e.g., 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
        - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?')
        - Non_Scheme_Know_Intent (e.g., 'How to use UPI?', 'GST kya hai?', 'यूपीआई का उपयोग कैसे करें?')
        - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?')
