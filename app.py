@@ -310,16 +310,10 @@ def chat_page():
 
     # Trigger welcome message only for new users
     if not st.session_state.welcome_message_sent:
-        conversations = data_manager.get_conversations(st.session_state.user["mobile_number"], limit=10)
-        has_user_messages = False
-        for conv in conversations:
-            for msg in conv["messages"]:
-                if msg["role"] == "user" or (msg["role"] == "assistant" and "Welcome" not in msg["content"]):
-                    has_user_messages = True
-                    break
-            if has_user_messages:
-                break
-        user_type = "returning" if has_user_messages else "new"
+        conversations = data_manager.get_conversations(
+            st.session_state.user["mobile_number"], limit=10
+        )
+        user_type = "returning" if conversations else "new"
 
         if user_type == "new":
             welcome_response = process_query(
