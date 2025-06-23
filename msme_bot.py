@@ -362,6 +362,27 @@ def is_query_related(query, prev_response):
 # Classify the intent of the user's query
 def classify_intent(query, prev_response, conversation_history):
     """Return one of the predefined intent labels."""
+    lower_query = query.lower().strip()
+    gratitude_keywords = [
+        "thank you",
+        "thanks",
+        "thx",
+        "got it",
+        "ok thanks",
+        "theek hai",
+        "thik hai",
+        "accha",
+        "acha",
+        "shukriya",
+        "dhanyavad",
+        "\u0936\u0941\u0915\u094d\u0930\u093f\u092f\u093e",  # शुक्रिया
+        "\u0927\u0928\u094d\u092f\u0935\u093e\u0926",      # धन्यवाद
+        "\u0920\u0940\u0915 \u0939\u0948",                 # ठीक है
+        "\u0905\u091a\u094d\u091b\u093e"                  # अच्छा
+    ]
+    if any(kw in lower_query for kw in gratitude_keywords) and len(lower_query.split()) <= 6:
+        return "Gratitude_Intent"
+
     prompt = f"""You are an assistant for Haqdarshak. Classify the user's intent.
 
     **Input**:
@@ -380,9 +401,11 @@ def classify_intent(query, prev_response, conversation_history):
        - Out_of_Scope (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?')
        - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं')
        - Confirmation_New_RAG (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.')
+       - Gratitude_Intent (user expresses thanks or acknowledgement, e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद')
 
     **Tips**:
-       - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay'). 
+       - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
+       - Use rule-based checks for Gratitude_Intent (keywords: 'thanks', 'thank you', 'got it', 'ok thanks', 'theek hai', 'accha').
        - For Contextual_Follow_Up, prioritize the Previous Assistant Response for context. If the query refers to a specific part (e.g., 'the first scheme'), identify the referenced scheme or topic.
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
     """
@@ -401,6 +424,13 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         if language == "Hinglish":
             return "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
         return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+
+    if intent == "Gratitude_Intent":
+        if language == "Hindi":
+            return "मुझे खुशी है कि यह आपकी मदद कर सका। क्या मैं और कुछ सहायता कर सकता हूँ?"
+        if language == "Hinglish":
+            return "Khushi hai ki yeh madad mila. Kya main aapki kisi aur tarah madad kar sakta hoon?"
+        return "I'm glad this helped you. Let me know if you need any further assistance."
 
     tone_prompt = get_system_prompt(language, user_info.name)
 
