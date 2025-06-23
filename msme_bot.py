@@ -486,7 +486,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         )
     elif intent == "DFL_Intent":
         intent_prompt = (
-            "Use the **RAG Response** if available, adding your own knowledge "
+            "Use the **RAG Response** if available, augmenting with your own knowledge "
             "where relevant. If the RAG Response is empty, answer from your own "
             "knowledge in simple language (≤120 words) with helpful examples."
         )
@@ -509,12 +509,12 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
 
     output_prompt = """
     **Output**:
-       - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
+       - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed for schemes, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
        - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don't have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
        - Do not mention any other scheme when a specific scheme is being talked about.
        - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
        - No need to mention user profile details in every response, only include where contextually relevant.
-       - Scheme answers must come only from scheme data. For DFL answers, use the DFL document when possible, but rely on your own knowledge if nothing relevant is found.
+       - Scheme answers must come only from scheme data. For DFL answers, use the DFL document supplemented by your own knowledge when possible, but rely on your own knowledge if nothing relevant is found.
     """
 
     prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
