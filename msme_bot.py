@@ -671,15 +671,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     # Check user type and fetch recent conversations once
     conversations = data_manager.get_conversations(mobile_number, limit=8)
-    has_user_messages = False
-    for conv in conversations:
-        for msg in conv["messages"]:
-            if msg["role"] == "user" or (msg["role"] == "assistant" and "Welcome" not in msg["content"]):
-                has_user_messages = True
-                break
-        if has_user_messages:
-            break
-    user_type = "returning" if has_user_messages else "new"
+    user_type = "returning" if conversations else "new"
     logger.info(f"User type: {user_type}")
 
     conversation_history = build_conversation_history(st.session_state.messages)
