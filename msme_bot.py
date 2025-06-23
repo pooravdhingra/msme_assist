@@ -476,7 +476,11 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
             "फोनपे की तरह करें'). Use verified external info if needed."
         )
     elif intent == "DFL_Intent":
-        intent_prompt = "Respond using **RAG Response** in simple language (≤120 words) with relevant examples."
+        intent_prompt = (
+            "Use the **RAG Response** if available, adding your own knowledge "
+            "where relevant. If the RAG Response is empty, answer from your own "
+            "knowledge in simple language (≤120 words) with helpful examples."
+        )
     elif intent == "Contextual_Follow_Up":
         intent_prompt = (
             "Use the Previous Assistant Response and Conversation Context to identify the topic. "
@@ -501,7 +505,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
        - Do not mention any other scheme when a specific scheme is being talked about.
        - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
        - No need to mention user profile details in every response, only include where contextually relevant.
-       - Scheme answers must come only from scheme data, and DFL answers must come from the DFL document. All answers must be given from provided internal data sources.
+       - Scheme answers must come only from scheme data. For DFL answers, use the DFL document when possible, but rely on your own knowledge if nothing relevant is found.
     """
 
     prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
@@ -851,6 +855,10 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     rag_response = scheme_rag if intent in scheme_intents else dfl_rag
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
+    if intent == "DFL_Intent" and (
+        rag_text is None or "No relevant" in rag_text
+    ):
+        rag_text = ""
     scheme_guid = None
     if intent == "Specific_Scheme_Eligibility_Intent" and isinstance(rag_response, dict):
         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
