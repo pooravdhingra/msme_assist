@@ -8,6 +8,7 @@ from msme_bot import (
     process_query,
     welcome_user,
     summarize_conversation,
+    build_conversation_history,
 )
 from data import DataManager, STATE_MAPPING
 import numpy as np
@@ -42,6 +43,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "conversation_summary" not in st.session_state:
     st.session_state.conversation_summary = ""
+if "conversation_history" not in st.session_state:
+    st.session_state.conversation_history = ""
 
 if "otp_generated" not in st.session_state:
     st.session_state.otp_generated = False
@@ -109,6 +112,9 @@ def restore_session_from_url():
                             "timestamp": msg["timestamp"]
                         })
                 st.session_state.messages = all_messages
+                if all_messages:
+                    st.session_state.conversation_summary = summarize_conversation(all_messages)
+                    st.session_state.conversation_history = build_conversation_history(all_messages)
                 logger.info(f"Restored session {session_id} for user {mobile_number}")
                 return True
     return False
@@ -223,6 +229,8 @@ def login_page():
                     logger.debug(f"Calling start_session with mobile: {st.session_state.temp_mobile}, session_id: {st.session_state.session_id}, user_data: {st.session_state.user}")
                     data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, st.session_state.user)
                 st.session_state.messages = []
+                st.session_state.conversation_summary = ""
+                st.session_state.conversation_history = ""
                 st.session_state.page = "chat"
                 st.session_state.otp_generated = False
                 st.session_state.otp = None
@@ -285,6 +293,8 @@ def chat_page():
             st.session_state.otp = None
             st.session_state.session_id = None
             st.session_state.messages = []
+            st.session_state.conversation_summary = ""
+            st.session_state.conversation_history = ""
             st.session_state.otp_generated = False
             st.session_state.welcome_message_sent = False
             st.session_state.last_query_id = None
@@ -333,6 +343,7 @@ def chat_page():
                         st.session_state.messages,
                         current_query="welcome",
                     )
+                    st.session_state.conversation_history = build_conversation_history(st.session_state.messages)
 
                     logger.debug(f"Appended welcome message to session state: {welcome_response}")
                     logger.debug(
@@ -369,6 +380,11 @@ def chat_page():
 
     # Sort all messages by timestamp
     all_messages.sort(key=lambda x: x["timestamp"])
+
+    if all_messages:
+        st.session_state.conversation_history = build_conversation_history(all_messages)
+    if all_messages and not st.session_state.conversation_summary:
+        st.session_state.conversation_summary = summarize_conversation(all_messages)
 
     # Display all messages
     for msg in all_messages:
@@ -416,6 +432,7 @@ def chat_page():
                     st.session_state.messages,
                     current_query=query,
                 )
+                st.session_state.conversation_history = build_conversation_history(st.session_state.messages)
 
                 with st.chat_message("assistant", avatar="logo.jpeg"):
                     st.markdown(f"{response} *({datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')})*")

@@ -776,7 +776,10 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                     recent_query = st.session_state.messages[msg_index - 1]["content"]
                 break
 
-    conversation_history = build_conversation_history(st.session_state.messages)
+    conversation_history = st.session_state.get("conversation_history")
+    if not conversation_history:
+        conversation_history = build_conversation_history(st.session_state.messages)
+        st.session_state.conversation_history = conversation_history
     intent = classify_intent(query, recent_response or "", conversation_history)
     conversation_summary = st.session_state.get("conversation_summary", "")
     logger.info(f"Using conversation summary: {conversation_summary}")
