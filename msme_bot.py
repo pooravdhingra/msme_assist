@@ -155,7 +155,12 @@ def build_conversation_history(messages):
     return conversation_history
 
 # Summarize recent conversation for contextual RAG
-def summarize_conversation(messages, current_query: str | None = None, max_pairs: int = 3) -> str:
+def summarize_conversation(
+    messages,
+    current_query: str | None = None,
+    max_pairs: int = 3,
+    scheme_name: str | None = None,
+) -> str:
     """Summarize recent conversation, prioritizing the most recent pairs. Do not include information from older pairs if context has switched (user now talking about different scheme or switched from schemes intent to dfl or vice versa).
 
     The current query guides what context from previous responses to include. The purpose is to provide context for next response generation so summary should provide relevant information from user and assistant that has been exchanged.
@@ -168,16 +173,29 @@ def summarize_conversation(messages, current_query: str | None = None, max_pairs
         pair.append(msg)
         if len(pair) == 2:
             if pair[0]["role"] == "assistant" and pair[1]["role"] == "user":
-                history_pairs.append((pair[1]["content"], pair[0]["content"]))
+                user_text = pair[1]["content"]
+                assistant_text = pair[0]["content"]
             elif pair[0]["role"] == "user" and pair[1]["role"] == "assistant":
-                history_pairs.append((pair[0]["content"], pair[1]["content"]))
+                user_text = pair[0]["content"]
+                assistant_text = pair[1]["content"]
+            else:
+                pair = []
+                continue
+
+            if scheme_name and scheme_name.lower() not in assistant_text.lower():
+                assistant_text = ""
+
+            history_pairs.append((user_text, assistant_text))
             pair = []
             if len(history_pairs) >= max_pairs:
                 break
 
-    convo_text = "".join(
-        f"User: {u}\nAssistant: {a}\n" for u, a in history_pairs
-    )
+    convo_lines = []
+    for u, a in history_pairs:
+        convo_lines.append(f"User: {u}\n")
+        if a:
+            convo_lines.append(f"Assistant: {a}\n")
+    convo_text = "".join(convo_lines)
     if not convo_text:
         logger.debug("No complete message pairs to summarize")
         return ""
@@ -185,11 +203,14 @@ def summarize_conversation(messages, current_query: str | None = None, max_pairs
 
     base_prompt = (
         f"Summarize the last {max_pairs} query-response pairs below. "
+        "Keep all user messages. Include assistant messages only if they mention the same scheme as the current query. "
         "Include only the most recent scheme or DFL topic mentioned and any details already provided. "
         "If multiple schemes or DFL topics appear, keep only the most recent."
     )
     if current_query:
         base_prompt += f" Only include context relevant to the current query: {current_query}."
+    if scheme_name:
+        base_prompt += f" The relevant scheme is {scheme_name}."
     base_prompt += " Keep it under 100 words."
 
     prompt = f"{base_prompt}\n\n{convo_text}\n\nSummary:"
