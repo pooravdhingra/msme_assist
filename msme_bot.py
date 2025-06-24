@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from data_loader import load_rag_data, load_dfl_data
-from utils import get_embeddings, extract_scheme_guid
+from utils import get_embeddings, extract_scheme_guid, extract_scheme_name
 import streamlit as st
 from data import DataManager
 import re
