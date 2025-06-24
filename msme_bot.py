@@ -253,10 +253,14 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
         if gender:
             fallback_details.append(f"gender: {gender}")
 
+        # Initialize fallback_query with the base query to avoid undefined
+        # variable errors when no conversation summary is provided.
+        fallback_query = query
+
         full_query = query
         if conversation_summary:
             full_query = f"{full_query}. Context: {conversation_summary}"
-            fallback_query = f"{full_query}. Context: {conversation_summary}"
+            fallback_query = f"{fallback_query}. Context: {conversation_summary}"
         if details:
             full_query = f"{full_query}. {' '.join(details)}"
         if fallback_details:
@@ -849,14 +853,27 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         related_prev_query = recent_query
 
     if scheme_rag is None and intent in scheme_intents:
-        scheme_rag = get_scheme_response(
-            query,
-            scheme_vector_store,
-            context_summary,
-            state=state_id,
-            gender=gender,
-            business_category=business_category,
-        )
+        if intent == "Specific_Scheme_Know_Intent":
+            # For Specific_Scheme_Know_Intent we want to avoid using
+            # conversation summary or profile details so that the RAG search
+            # relies solely on the current query.
+            scheme_rag = get_scheme_response(
+                query,
+                scheme_vector_store,
+                None,
+                state=None,
+                gender=None,
+                business_category=None,
+            )
+        else:
+            scheme_rag = get_scheme_response(
+                query,
+                scheme_vector_store,
+                context_summary,
+                state=state_id,
+                gender=gender,
+                business_category=business_category,
+            )
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
         st.session_state.rag_cache[session_id][query] = scheme_rag
