@@ -334,20 +334,19 @@ def get_dfl_response(query, vector_store, conversation_summary=None, state="ALL_
     )
 
 # Check query similarity for context
-def is_query_related(query, prev_response):
-    prompt = f"""You are an assistant for Haqdarshak, helping small business owners in India with government schemes, digital/financial literacy, and business growth. Determine if the current query is a follow-up to the previous bot response.
+def is_query_related(query, prev_response, conversation_summary=""):
+    prompt = f"""You are an assistant for Haqdarshak, helping small business owners in India with government schemes, digital/financial literacy, and business growth. Determine if the current query is a follow-up to the previous conversation.
 
     **Input**:
     - Current Query: {query}
     - Previous Bot Response: {prev_response}
+    - Conversation Summary: {conversation_summary}
 
     **Instructions**:
-    - A query is a related follow-up if it is ambiguous (lacks specific scheme/document/bucket names like 'FSSAI', 'Udyam', 'PMFME', 'GST', 'UPI') and contextually refers to the topic or intent of the previous bot response.
+    - A query is a related follow-up if it is ambiguous (lacks specific scheme or document names like 'FSSAI', 'Udyam', 'PMFME', 'GST', 'UPI') and contextually refers to the same scheme or topic mentioned in the previous response or summary.
     - Examples of ambiguous queries: 'Tell me more', 'How to apply?', 'What next?', 'Can you help with it?', 'और बताएं', 'आगे क्या?'.
-    - The query is not a follow-up if it mentions a specific scheme, document, or topic (e.g., 'What is FSSAI?', 'How to use UPI?', 'एफएसएसएआई क्या है?') or is unrelated (e.g., 'What’s the weather?', 'मौसम कैसा है?').
-    - Focus only on the previous bot response for context, not the previous query or broader conversation history.
-    - Return 'True' if the query is a follow-up, 'False' otherwise.
-    - Do not consider rule-based checks like keyword matching or similarity scores.
+    - The query is not a follow-up if it introduces a new scheme or topic not mentioned above (e.g., 'What is FSSAI?', 'How to use UPI?', 'एफएसएसएआई क्या है?') or is unrelated (e.g., 'What’s the weather?', 'मौसम कैसा है?').
+    - Return 'True' if the query is a follow-up, 'False' otherwise. Focus on the previous response and summary only, ignoring rule-based keyword matching or similarity scores.
 
     **Output**:
     - Return only 'True' or 'False'.
@@ -356,7 +355,9 @@ def is_query_related(query, prev_response):
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
         result = response.content.strip()
-        logger.debug(f"LLM determined query '{query}' is {'related' if result == 'True' else 'not related'} to previous response: {prev_response[:500]}...")
+        logger.debug(
+            f"LLM determined query '{query}' is {'related' if result == 'True' else 'not related'} to previous context"
+        )
         return result == "True"
     except Exception as e:
         logger.error(f"Failed to determine query relation: {str(e)}")
@@ -788,9 +789,22 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     if not conversation_history:
         conversation_history = build_conversation_history(st.session_state.messages)
         st.session_state.conversation_history = conversation_history
-    intent = classify_intent(query, recent_response or "", conversation_history)
-    conversation_summary = st.session_state.get("conversation_summary", "")
-    logger.info(f"Using conversation summary: {conversation_summary}")
+
+    # Determine if the current query is a follow-up to the recent response
+    follow_up = False
+    if recent_response:
+        follow_up = is_query_related(
+            query,
+            recent_response,
+            conversation_summary,
+        )
+
+    # Use conversation context only when the query is a follow-up
+    context_history = conversation_history if follow_up else ""
+    context_summary = conversation_summary if follow_up else ""
+
+    intent = classify_intent(query, recent_response or "", context_history)
+    logger.info(f"Using conversation summary: {context_summary}")
     logger.info(f"Classified intent: {intent}")
 
     maintain_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
@@ -827,7 +841,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     elif intent in dfl_intents:
         dfl_rag = dfl_session_cache.get(query)
 
-    if recent_query and recent_response and is_query_related(query, recent_response):
+    if follow_up and recent_query and recent_response:
         if intent in scheme_intents:
             scheme_rag = session_cache.get(recent_query, scheme_rag)
         elif intent in dfl_intents:
@@ -838,7 +852,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         scheme_rag = get_scheme_response(
             query,
             scheme_vector_store,
-            conversation_summary,
+            context_summary,
             state=state_id,
             gender=gender,
             business_category=business_category,
@@ -851,7 +865,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         dfl_rag = get_dfl_response(
             query,
             dfl_vector_store,
-            conversation_summary,
+            context_summary,
             state=state_id,
             gender=gender,
             business_category=business_category,
@@ -874,7 +888,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         rag_text or "",
         user_info,
         query_language,
-        conversation_history,
+        context_history,
         scheme_guid=scheme_guid,
         scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
     )
