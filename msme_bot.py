@@ -808,6 +808,15 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     context_summary = conversation_summary if follow_up else ""
 
     intent = classify_intent(query, recent_response or "", context_history)
+    augmented_query = query
+    last_scheme = st.session_state.get("last_scheme_name")
+    if follow_up and last_scheme and intent in {
+        "Specific_Scheme_Apply_Intent",
+        "Specific_Scheme_Eligibility_Intent",
+        "Contextual_Follow_Up",
+        "Confirmation_New_RAG",
+    }:
+        augmented_query = f"{last_scheme} {query}"
     logger.info(f"Using conversation summary: {context_summary}")
     logger.info(f"Classified intent: {intent}")
 
@@ -867,7 +876,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     if scheme_rag is None and intent in scheme_intents:
         scheme_rag = get_scheme_response(
-            query,
+            augmented_query,
             scheme_vector_store,
             context_summary,
             state=state_id,
@@ -898,8 +907,12 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     ):
         rag_text = ""
     scheme_guid = None
-    if intent == "Specific_Scheme_Eligibility_Intent" and isinstance(rag_response, dict):
-        scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
+    if isinstance(rag_response, dict):
+        if intent == "Specific_Scheme_Eligibility_Intent":
+            scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
+        scheme_name = extract_scheme_name(rag_response.get("sources", []))
+        if scheme_name:
+            st.session_state.last_scheme_name = scheme_name
     generated_response = generate_response(
         intent,
         rag_text or "",
