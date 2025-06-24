@@ -7,7 +7,12 @@ from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from data_loader import load_rag_data, load_dfl_data
-from utils import get_embeddings, extract_scheme_guid, extract_scheme_name
+from utils import (
+    get_embeddings,
+    extract_scheme_guid,
+    extract_scheme_name,
+    extract_all_scheme_names,
+)
 import streamlit as st
 from data import DataManager
 import re
@@ -739,7 +744,17 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         business_category=user_info.business_category,
         include_mudra=details.get("path") == "credit",
     )
-    rag_text = rag.get("text") if isinstance(rag, dict) else rag
+    if isinstance(rag, dict):
+        st.session_state.recommended_schemes = extract_all_scheme_names(
+            rag.get("sources", [])
+        )
+        if not st.session_state.get("last_scheme_name"):
+            scheme_name = extract_scheme_name(rag.get("sources", []))
+            if scheme_name:
+                st.session_state.last_scheme_name = scheme_name
+        rag_text = rag.get("text")
+    else:
+        rag_text = rag
     response = generate_response(
         "Schemes_Know_Intent",
         rag_text or "",
@@ -884,6 +899,14 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         conversation_history = build_conversation_history(st.session_state.messages)
         st.session_state.conversation_history = conversation_history
 
+    # Check if user mentioned a previously recommended scheme
+    recommended = st.session_state.get("recommended_schemes", [])
+    q_lower = query.lower()
+    for name in recommended:
+        if name and name.lower() in q_lower:
+            st.session_state.last_scheme_name = name
+            break
+
     # Determine if the current query is a follow-up to the recent response
     follow_up = False
     if recent_response:
@@ -1002,6 +1025,10 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         st.session_state.dfl_rag_cache[session_id][query] = dfl_rag
 
     rag_response = scheme_rag if intent in scheme_intents else dfl_rag
+    if intent == "Schemes_Know_Intent" and isinstance(rag_response, dict):
+        st.session_state.recommended_schemes = extract_all_scheme_names(
+            rag_response.get("sources", [])
+        )
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
     if intent == "DFL_Intent" and (
         rag_text is None or "No relevant" in rag_text
@@ -1011,11 +1038,12 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     if isinstance(rag_response, dict):
         if intent == "Specific_Scheme_Eligibility_Intent":
             scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
-        scheme_name = extract_scheme_name(
-            rag_response.get("sources", []), scheme_guid
-        )
-        if scheme_name:
-            st.session_state.last_scheme_name = scheme_name
+        if not st.session_state.get("last_scheme_name"):
+            scheme_name = extract_scheme_name(
+                rag_response.get("sources", []), scheme_guid
+            )
+            if scheme_name:
+                st.session_state.last_scheme_name = scheme_name
     generated_response = generate_response(
         intent,
         rag_text or "",
