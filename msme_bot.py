@@ -658,27 +658,6 @@ def monthly_to_annual_llm(amount_str: str) -> str:
     return amount_str
 
 
-def monthly_to_annual(amount_str: str) -> str:
-    """Convert a monthly amount description to an approximate annual value."""
-    try:
-        text = amount_str.lower().replace(",", "").strip()
-        match = re.search(r"([0-9]+(?:\.[0-9]+)?)", text)
-        if match:
-            value = float(match.group(1))
-            if "k" in text or "thousand" in text:
-                value *= 1000
-            elif any(unit in text for unit in ["lakh", "lac", "lakhs", "lacs"]):
-                value *= 100000
-            elif any(unit in text for unit in ["crore", "cr"]):
-                value *= 10000000
-            annual = value * 12
-            annual = int(annual) if annual.is_integer() else round(annual, 2)
-            return str(annual)
-    except Exception:
-        pass
-    return monthly_to_annual_llm(amount_str)
-
-
 def classify_scheme_type(query: str) -> str:
     """Return 'credit' if query refers to loans/credit, else 'non_credit'."""
     credit_keywords = [
@@ -740,7 +719,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
             st.session_state.scheme_flow_step = 3
             return ask_scheme_question("turnover", language), False
         if step == 3:
-            details["turnover"] = monthly_to_annual(answer)
+            details["turnover"] = monthly_to_annual_llm(answer)
             st.session_state.scheme_flow_step = 4
             return ask_scheme_question("business_type", language), False
         if step == 4:
@@ -753,7 +732,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
             st.session_state.scheme_flow_step = None
     else:
         if step == 1:
-            details["turnover"] = monthly_to_annual(answer)
+            details["turnover"] = monthly_to_annual_llm(answer)
             st.session_state.scheme_flow_step = 2
             return ask_scheme_question("business_type", language), False
         if step == 2:
