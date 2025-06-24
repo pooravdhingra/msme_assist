@@ -316,10 +316,18 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
         return {"text": "Error retrieving scheme information.", "sources": []}
 
 
-def get_scheme_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None):
-    """Wrapper for scheme dataset retrieval with clearer logging."""
+def get_scheme_response(
+    query,
+    vector_store,
+    conversation_summary=None,
+    state="ALL_STATES",
+    gender=None,
+    business_category=None,
+    include_mudra=False,
+):
+    """Wrapper for scheme dataset retrieval with optional Mudra scheme info."""
     logger.info("Querying scheme dataset")
-    return get_rag_response(
+    rag = get_rag_response(
         query,
         vector_store,
         conversation_summary,
@@ -327,6 +335,27 @@ def get_scheme_response(query, vector_store, conversation_summary=None, state="A
         gender=gender,
         business_category=business_category,
     )
+
+    if include_mudra:
+        logger.info("Fetching Pradhan Mantri Mudra Yojana details")
+        mudra_rag = get_rag_response(
+            "Pradhan Mantri Mudra Yojana",
+            vector_store,
+            conversation_summary,
+            state=state,
+            gender=gender,
+            business_category=business_category,
+        )
+
+        if not isinstance(rag, dict):
+            rag = {"text": str(rag), "sources": []}
+        if not isinstance(mudra_rag, dict):
+            mudra_rag = {"text": str(mudra_rag), "sources": []}
+
+        rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
+        rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
+
+    return rag
 
 
 def get_dfl_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None):
@@ -508,6 +537,10 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
             f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
             f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
         )
+        if scheme_details and scheme_details.get("path") == "credit":
+            intent_prompt += (
+                " Always include 'Pradhan Mantri Mudra Yojana' in the same format as the other schemes."
+            )
     elif intent == "Non_Scheme_Know_Intent":
         intent_prompt = (
             "Answer using **RAG Response** in simple language (≤120 words). Use examples "
@@ -704,6 +737,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         state=user_info.state_id,
         gender=user_info.gender,
         business_category=user_info.business_category,
+        include_mudra=details.get("path") == "credit",
     )
     rag_text = rag.get("text") if isinstance(rag, dict) else rag
     response = generate_response(
@@ -926,6 +960,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 state=None,
                 gender=None,
                 business_category=None,
+                include_mudra=classify_scheme_type(query) == "credit",
             )
         else:
             scheme_rag = session_cache.get(query)
@@ -947,6 +982,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             state=state_id,
             gender=gender,
             business_category=business_category,
+            include_mudra=classify_scheme_type(augmented_query) == "credit",
         )
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
