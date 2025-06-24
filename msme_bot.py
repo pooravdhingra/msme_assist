@@ -841,18 +841,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
 
     if intent in scheme_intents:
-        scheme_rag = session_cache.get(query)
-    elif intent in dfl_intents:
-        dfl_rag = dfl_session_cache.get(query)
-
-    if follow_up and recent_query and recent_response:
-        if intent in scheme_intents:
-            scheme_rag = session_cache.get(recent_query, scheme_rag)
-        elif intent in dfl_intents:
-            dfl_rag = dfl_session_cache.get(recent_query, dfl_rag)
-        related_prev_query = recent_query
-
-    if scheme_rag is None and intent in scheme_intents:
         if intent == "Specific_Scheme_Know_Intent":
             # For Specific_Scheme_Know_Intent we want to avoid using
             # conversation summary or profile details so that the RAG search
@@ -866,14 +854,26 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 business_category=None,
             )
         else:
-            scheme_rag = get_scheme_response(
-                query,
-                scheme_vector_store,
-                context_summary,
-                state=state_id,
-                gender=gender,
-                business_category=business_category,
-            )
+            scheme_rag = session_cache.get(query)
+    elif intent in dfl_intents:
+        dfl_rag = dfl_session_cache.get(query)
+
+    if follow_up and recent_query and recent_response:
+        if intent in scheme_intents:
+            scheme_rag = session_cache.get(recent_query, scheme_rag)
+        elif intent in dfl_intents:
+            dfl_rag = dfl_session_cache.get(recent_query, dfl_rag)
+        related_prev_query = recent_query
+
+    if scheme_rag is None and intent in scheme_intents:
+        scheme_rag = get_scheme_response(
+            query,
+            scheme_vector_store,
+            context_summary,
+            state=state_id,
+            gender=gender,
+            business_category=business_category,
+        )
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
         st.session_state.rag_cache[session_id][query] = scheme_rag
