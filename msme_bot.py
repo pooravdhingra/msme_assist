@@ -606,6 +606,49 @@ def ask_scheme_question(key, language):
     return questions_en.get(key, "")
 
 
+def classify_scheme_type(query: str) -> str:
+    """Return 'credit' if query refers to loans/credit, else 'non_credit'."""
+    credit_keywords = [
+        "loan",
+        "credit",
+        "udhaar",
+        "udhar",
+        "borrow",
+        "capital",
+        "finance",
+        "fund",
+        "money",
+        "purchase",
+        "buy",
+        "\u0932\u094b\u0928",  # लोन (loan)
+        "\u0915\u0930\u094d\u091c",  # कर्ज (karz)
+        "\u0909\u0927\u093e\u0930",  # उधार (udhaar)
+        "\u090b\u0923",  # ऋण (riN)
+    ]
+    non_credit_keywords = [
+        "document",
+        "registration",
+        "legal",
+        "mentorship",
+        "training",
+        "license",
+        "certificate",
+        "\u0926\u0938\u094d\u0924\u093e\u0935\u0947\u091c",  # document in Hindi
+        "\u0930\u091c\u093f\u0938\u094d\u091f\u094d\u0930\u0947\u0936\u0928",  # registration
+        "\u0915\u093e\u0928\u0942\u0928\u0940",  # legal
+        "\u092e\u0947\u0902\u091f\u094b\u0930\u0936\u093f\u092a",  # mentorship
+        "\u092a\u094d\u0930\u0936\u093f\u0915\u094d\u0937\u0923",  # training
+        "\u0932\u093e\u0907\u0938\u0947\u0902\u0938",  # license
+        "\u092a\u094d\u0930\u092e\u093e\u0923\u092a\u0924\u094d\u0930",  # certificate
+    ]
+    q_lower = query.lower()
+    if any(kw in q_lower for kw in credit_keywords):
+        return "credit"
+    if any(kw in q_lower for kw in non_credit_keywords):
+        return "non_credit"
+    return "credit"
+
+
 def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, user_info, conversation_history, conversation_summary):
     language = st.session_state.scheme_flow_data.get("language", detect_language(answer))
     step = st.session_state.scheme_flow_step
@@ -613,15 +656,6 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
     path = details.get("path")
 
     # Determine next step based on current state
-    if step == 0:
-        if re.search(r"loan|credit|\u0930\u094d?\u0923|\u0915\u0930\u094d?\u091c", answer, re.IGNORECASE):
-            details["path"] = "credit"
-            st.session_state.scheme_flow_step = 1
-            return ask_scheme_question("loan_amount", language), False
-        else:
-            details["path"] = "non_credit"
-            st.session_state.scheme_flow_step = 1
-            return ask_scheme_question("turnover", language), False
 
     if details.get("path") == "credit":
         if step == 1:
@@ -851,9 +885,17 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     if intent == "Schemes_Know_Intent" and not st.session_state.scheme_flow_active:
         st.session_state.scheme_flow_active = True
-        st.session_state.scheme_flow_step = 0
-        st.session_state.scheme_flow_data = {"initial_query": query, "language": query_language}
-        first_q = ask_scheme_question("credit_or_subsidy", query_language)
+        scheme_type = classify_scheme_type(query)
+        st.session_state.scheme_flow_step = 1
+        st.session_state.scheme_flow_data = {
+            "initial_query": query,
+            "language": query_language,
+            "path": scheme_type,
+        }
+        if scheme_type == "credit":
+            first_q = ask_scheme_question("loan_amount", query_language)
+        else:
+            first_q = ask_scheme_question("turnover", query_language)
         try:
             interaction_id = generate_interaction_id(query, datetime.utcnow())
             messages_to_save = [
