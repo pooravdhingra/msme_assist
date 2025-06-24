@@ -46,3 +46,16 @@ def extract_scheme_guid(sources):
     if not guid_counter:
         return None
     return guid_counter.most_common(1)[0][0]
+
+
+def extract_scheme_name(sources):
+    """Return the most frequent non-empty scheme name from a list of documents."""
+    name_counter = Counter()
+    for doc in sources:
+        if doc and getattr(doc, "metadata", None):
+            name = doc.metadata.get("name")
+            if name:
+                name_counter[str(name).strip()] += 1
+    if not name_counter:
+        return None
+    return name_counter.most_common(1)[0][0]
