@@ -463,6 +463,12 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
             "(English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' "
             "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
         )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
+            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
+            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+        )
     elif intent == "Specific_Scheme_Apply_Intent":
         intent_prompt = (
             "Share application process from **RAG Response** (≤120 words). Filter for schemes "
@@ -481,6 +487,12 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
             f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
             "Ask the user to verify their eligibility there."
         )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
+            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
+            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+        )
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
             "List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes "
@@ -489,6 +501,12 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
             "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. Finally Ask: 'Want more details on any scheme?' "
             "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
+        )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
+            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
+            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
         )
     elif intent == "Non_Scheme_Know_Intent":
         intent_prompt = (
