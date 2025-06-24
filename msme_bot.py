@@ -576,7 +576,7 @@ def ask_scheme_question(key, language):
         "credit_or_subsidy": "Are you looking for loans/credit or other subsidies?",
         "loan_amount": "How much loan are you looking for?",
         "loan_purpose": "What is the purpose of taking this loan?",
-        "turnover": "What is your approximate annual turnover?",
+        "turnover": "How much business do you do in a month approximately?",
         "business_type": "What business do you do?",
         "sc_st": "Are you SC/ST?",
     }
@@ -585,7 +585,7 @@ def ask_scheme_question(key, language):
         "credit_or_subsidy": "क्या आप लोन/क्रेडिट लेना चाहते हैं या कोई सब्सिडी?",
         "loan_amount": "आप कितने रुपये का लोन चाहते हैं?",
         "loan_purpose": "यह लोन किस काम के लिए है?",
-        "turnover": "आपका वार्षिक टर्नओवर लगभग कितना है?",
+        "turnover": "आप महीने में लगभग कितना व्यापार करते हैं?",
         "business_type": "आप कौन सा व्यापार करते हैं?",
         "sc_st": "क्या आप SC/ST हैं?",
     }
@@ -594,7 +594,7 @@ def ask_scheme_question(key, language):
         "credit_or_subsidy": "Kya aap loan/credit chahte hain ya koi subsidy?",
         "loan_amount": "Kitna loan chahiye?",
         "loan_purpose": "Yeh loan kis kaam ke liye hai?",
-        "turnover": "Aapka yearly turnover lagbhag kitna hai?",
+        "turnover": "Aap mahine mein lagbhag kitna business karte hain?",
         "business_type": "Aap kaunsa business karte hain?",
         "sc_st": "Kya aap SC/ST hain?",
     }
@@ -604,6 +604,46 @@ def ask_scheme_question(key, language):
     if language == "Hinglish":
         return questions_hinglish.get(key, "")
     return questions_en.get(key, "")
+
+
+def monthly_to_annual_llm(amount_str: str) -> str:
+    """Use the LLM to convert a monthly amount description to an annual value."""
+    prompt = (
+        "You will be given a description of how much business a user does in a month. "
+        "Convert it to an approximate annual amount in Indian rupees. "
+        "Return only the number without commas, units, or any additional text.\n\n"
+        f"Text: {amount_str}"
+    )
+    try:
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        normalized = response.content.strip().replace(",", "")
+        match = re.search(r"([0-9]+(?:\.[0-9]+)?)", normalized)
+        if match:
+            return match.group(1)
+    except Exception as e:
+        logger.error(f"LLM amount normalisation failed: {e}")
+    return amount_str
+
+
+def monthly_to_annual(amount_str: str) -> str:
+    """Convert a monthly amount description to an approximate annual value."""
+    try:
+        text = amount_str.lower().replace(",", "").strip()
+        match = re.search(r"([0-9]+(?:\.[0-9]+)?)", text)
+        if match:
+            value = float(match.group(1))
+            if "k" in text or "thousand" in text:
+                value *= 1000
+            elif any(unit in text for unit in ["lakh", "lac", "lakhs", "lacs"]):
+                value *= 100000
+            elif any(unit in text for unit in ["crore", "cr"]):
+                value *= 10000000
+            annual = value * 12
+            annual = int(annual) if annual.is_integer() else round(annual, 2)
+            return str(annual)
+    except Exception:
+        pass
+    return monthly_to_annual_llm(amount_str)
 
 
 def classify_scheme_type(query: str) -> str:
@@ -667,7 +707,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
             st.session_state.scheme_flow_step = 3
             return ask_scheme_question("turnover", language), False
         if step == 3:
-            details["turnover"] = answer
+            details["turnover"] = monthly_to_annual(answer)
             st.session_state.scheme_flow_step = 4
             return ask_scheme_question("business_type", language), False
         if step == 4:
@@ -680,7 +720,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
             st.session_state.scheme_flow_step = None
     else:
         if step == 1:
-            details["turnover"] = answer
+            details["turnover"] = monthly_to_annual(answer)
             st.session_state.scheme_flow_step = 2
             return ask_scheme_question("business_type", language), False
         if step == 2:
