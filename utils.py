@@ -65,3 +65,16 @@ def extract_scheme_name(sources, scheme_guid=None):
     if not name_counter:
         return None
     return name_counter.most_common(1)[0][0]
+
+
+def extract_all_scheme_names(sources):
+    """Return a list of distinct scheme names from the documents."""
+    names = []
+    for doc in sources:
+        if doc and getattr(doc, "metadata", None):
+            name = doc.metadata.get("name")
+            if name:
+                name = str(name).strip()
+                if name and name not in names:
+                    names.append(name)
+    return names
