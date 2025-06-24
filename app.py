@@ -425,6 +425,7 @@ def chat_page():
                 st.session_state.conversation_summary = summarize_conversation(
                     st.session_state.messages,
                     current_query=query,
+                    scheme_name=st.session_state.get("last_scheme_name"),
                 )
                 st.session_state.conversation_history = build_conversation_history(st.session_state.messages)
 
