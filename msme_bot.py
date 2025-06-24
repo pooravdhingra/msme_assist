@@ -821,6 +821,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         "Confirmation_New_RAG",
     }:
         augmented_query = f"{last_scheme} {query}"
+        context_summary = f"Previous scheme mentioned: {last_scheme}"
     logger.info(f"Using conversation summary: {context_summary}")
     logger.info(f"Classified intent: {intent}")
 
@@ -914,7 +915,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     if isinstance(rag_response, dict):
         if intent == "Specific_Scheme_Eligibility_Intent":
             scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
-        scheme_name = extract_scheme_name(rag_response.get("sources", []))
+        scheme_name = extract_scheme_name(
+            rag_response.get("sources", []), scheme_guid
+        )
         if scheme_name:
             st.session_state.last_scheme_name = scheme_name
     generated_response = generate_response(
