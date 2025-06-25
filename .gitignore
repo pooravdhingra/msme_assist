@@ -3,6 +3,7 @@
 
 # Sensitive environment files
 .env
+secrets/
 
 # Ignore FAISS index files and related metadata
 faiss_index/
@@ -23,6 +24,7 @@ __pycache__/
 *.swo
 .vscode/
 .idea/
+
 
 
 
