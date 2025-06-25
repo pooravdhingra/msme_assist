@@ -1,6 +1,19 @@
 import base64
+import json
+import os
 import streamlit as st
 from google.cloud import texttospeech
+from google.oauth2 import service_account
+
+
+def _create_client() -> texttospeech.TextToSpeechClient:
+    """Create a TextToSpeechClient from environment credentials."""
+    creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if creds_json:
+        info = json.loads(creds_json)
+        credentials = service_account.Credentials.from_service_account_info(info)
+        return texttospeech.TextToSpeechClient(credentials=credentials)
+    return texttospeech.TextToSpeechClient()
 
 
 def synthesize(text: str, language: str) -> bytes:
@@ -11,7 +24,7 @@ def synthesize(text: str, language: str) -> bytes:
         "Hinglish": "hi-IN",
     }.get(language, "en-US")
 
-    client = texttospeech.TextToSpeechClient()
+    client = _create_client()
     input_text = texttospeech.SynthesisInput(text=text)
     voice = texttospeech.VoiceSelectionParams(
         language_code=language_code,
