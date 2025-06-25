@@ -9,10 +9,12 @@ from msme_bot import (
     welcome_user,
     summarize_conversation,
     build_conversation_history,
+    detect_language,
 )
 from data import DataManager, STATE_MAPPING
 import numpy as np
 import logging
+from tts import synthesize, autoplay
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -65,6 +67,8 @@ if "scheme_flow_step" not in st.session_state:
     st.session_state.scheme_flow_step = None
 if "scheme_flow_data" not in st.session_state:
     st.session_state.scheme_flow_data = {}
+if "audio_played_until" not in st.session_state:
+    st.session_state.audio_played_until = None
 
 # Generate session ID
 def generate_session_id():
@@ -385,6 +389,21 @@ def chat_page():
         with st.chat_message(msg["role"], avatar="logo.jpeg" if msg["role"] == "assistant" else None):
             st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
 
+    # Play audio for the latest assistant message if not already played
+    last_msg = st.session_state.messages[-1] if st.session_state.messages else None
+    if (
+        last_msg
+        and last_msg["role"] == "assistant"
+        and last_msg["timestamp"] != st.session_state.audio_played_until
+    ):
+        if len(st.session_state.messages) >= 2 and st.session_state.messages[-2]["role"] == "user":
+            detected_language = detect_language(st.session_state.messages[-2]["content"])
+        else:
+            detected_language = st.session_state.user["language"]
+        audio_bytes = synthesize(last_msg["content"], detected_language)
+        autoplay(audio_bytes)
+        st.session_state.audio_played_until = last_msg["timestamp"]
+
     # Chat input
     query = st.chat_input("Type your query here...")
     if query:
@@ -430,6 +449,9 @@ def chat_page():
 
                 with st.chat_message("assistant", avatar="logo.jpeg"):
                     st.markdown(f"{response} *({datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')})*")
+                    detected_language = detect_language(query)
+                    audio_bytes = synthesize(response, detected_language)
+                    autoplay(audio_bytes)
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
                 logger.debug(
                     f"Updated conversation summary: {st.session_state.conversation_summary}"
