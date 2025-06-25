@@ -120,7 +120,7 @@ def detect_language(query):
     total_words = len(query_lower.split())
     
     # If more than 30% of words are Hindi or mixed with English
-    if total_words > 0 and hindi_word_count / total_words > 0.25:
+    if total_words > 0 and hindi_word_count / total_words > 0.15:
         return "Hinglish"
 
     return "English"
