@@ -396,10 +396,7 @@ def chat_page():
         and last_msg["role"] == "assistant"
         and last_msg["timestamp"] != st.session_state.audio_played_until
     ):
-        if len(st.session_state.messages) >= 2 and st.session_state.messages[-2]["role"] == "user":
-            detected_language = detect_language(st.session_state.messages[-2]["content"])
-        else:
-            detected_language = st.session_state.user["language"]
+        detected_language = detect_language(last_msg["content"])
         audio_bytes = synthesize(last_msg["content"], detected_language)
         autoplay(audio_bytes)
         st.session_state.audio_played_until = last_msg["timestamp"]
@@ -435,10 +432,11 @@ def chat_page():
             )
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):
+                response_timestamp = datetime.utcnow()
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response,
-                    "timestamp": datetime.utcnow()
+                    "timestamp": response_timestamp
                 })
 
                 st.session_state.conversation_summary = summarize_conversation(
@@ -448,10 +446,11 @@ def chat_page():
                 st.session_state.conversation_history = build_conversation_history(st.session_state.messages)
 
                 with st.chat_message("assistant", avatar="logo.jpeg"):
-                    st.markdown(f"{response} *({datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')})*")
-                    detected_language = detect_language(query)
+                    st.markdown(f"{response} *({response_timestamp.strftime('%Y-%m-%d %H:%M:%S')})*")
+                    detected_language = detect_language(response)
                     audio_bytes = synthesize(response, detected_language)
                     autoplay(audio_bytes)
+                st.session_state.audio_played_until = response_timestamp
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
                 logger.debug(
                     f"Updated conversation summary: {st.session_state.conversation_summary}"
