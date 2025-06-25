@@ -4,7 +4,7 @@ This application provides a Streamlit interface for interacting with the MSME as
 
 ## Text-to-Speech
 
-Responses from the assistant are now synthesized using Google Cloud Text-to-Speech. To enable this feature you must provide a Google service account JSON file and set the environment variable `GOOGLE_APPLICATION_CREDENTIALS` to its path (see `.env.example`).
+Responses from the assistant are now synthesized using Google Cloud Text-to-Speech. You can either set `GOOGLE_APPLICATION_CREDENTIALS` to the path of a service account JSON file or provide the JSON directly in the environment variable `GOOGLE_APPLICATION_CREDENTIALS_JSON` (useful with Streamlit secrets). See `.env.example` for both options.
 
 The language passed to the TTS service is determined from the user's query:
 
