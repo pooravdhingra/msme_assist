@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 __all__ = ["load_rag_data", "load_dfl_data"]
 
 def load_rag_data(
-    google_drive_file_id="1MQFFB-TEmKD8ToAyiQk49lQPQDTfedEp",
+    google_drive_file_id="13OKwV3G_j4OJdm1Cxt7FAlO6qzrxBMW6",
     faiss_index_path="faiss_index",
     version_file="faiss_version.txt",
     cached_file_path="scheme_db_latest.xlsx",
+    chunk_size=100,
 ):
     """
     Load scheme_db.xlsx, check for precomputed FAISS index, and return a FAISS vector store.
@@ -117,101 +118,64 @@ def load_rag_data(
         
     try:
         original_count = len(df)
-        df = df[df["status"].astype(str) == "5"]
+        df = df[df["Scheme_Status"].astype(str).str.lower() == "published"]
         logger.info(
-            f"Filtered dataframe from {original_count} to {len(df)} rows where status == '5'"
+            f"Filtered dataframe from {original_count} to {len(df)} rows where Scheme_Status == 'Published'"
         )
     except KeyError:
-        logger.error("Column 'status' not found in Excel file")
-        raise
+        logger.warning("Column 'Scheme_Status' not found in Excel file; proceeding without filtering")
 
-    # Split data into two chunks
-    total_rows = len(df)
-    midpoint = total_rows // 2  # ~500 rows per chunk
-    chunk1 = df.iloc[:midpoint]  # First chunk
-    chunk2 = df.iloc[midpoint:]  # Second chunk
-    logger.info(f"Split data into two chunks: Chunk 1 ({len(chunk1)} rows), Chunk 2 ({len(chunk2)} rows)")
-    
-    # Relevant columns to include in the document
     relevant_columns = [
-        "program_name",
-        "guid",
-        "applicability",
-        "type- SCH/DOC",
-        "service type",
-        "scheme type",
-        "description",
-        "objective(Eligibility)",
-        "application method",
-        "process",
-        "benefit amount (description)",
-        "status",
-        "tags",
-        "scheme_support",
-        "scheme_sector",
-        "scheme_cohort"
+        "Scheme GUID",
+        "Scheme Name",
+        "parent_scheme_name",
+        "Applicability (State)",
+        "Central Department Name",
+        "State department name",
+        "Type (Sch/Doc)",
+        "Service Type Name",
+        "Scheme description",
+        "Scheme Eligibility",
+        "Application Process",
+        "Benefit"
     ]
-    
-    # Function to process a chunk into LangChain Documents
-    def process_chunk(chunk):
-        documents = []
-        for _, row in chunk.iterrows():
-            # Create text content from relevant columns
-            content_parts = []
+
+    embeddings = get_embeddings()
+    vector_store = None
+
+    def process_rows(rows):
+        docs = []
+        for _, row in rows.iterrows():
+            parts = []
             for col in relevant_columns:
                 if col in row and pd.notna(row[col]):
-                    # Clean column name for display (remove parentheses, etc.)
                     clean_col = col.replace('(', ' ').replace(')', '')
-                    content_parts.append(f"{clean_col}: {row[col]}")
-            content = "\n".join(content_parts)
-            
-            # Create metadata with scheme details
+                    parts.append(f"{clean_col}: {row[col]}")
+            content = "\n".join(parts)
             metadata = {
-                "guid": row["guid"] if pd.notna(row["guid"]) else "",
-                "name": row["name"] if pd.notna(row["name"]) else ""
+                "guid": row.get("Scheme GUID", ""),
+                "name": row.get("Scheme Name", ""),
+                "applicability": row.get("Applicability (State)", ""),
+                "type": row.get("Type (Sch/Doc)", "")
             }
-            
-            # Create LangChain Document
-            doc = Document(page_content=content, metadata=metadata)
-            documents.append(doc)
-        return documents
-    
-    # Process Chunk 1
-    logger.info("Processing Chunk 1...")
-    documents1 = process_chunk(chunk1)
-    logger.info(f"Created {len(documents1)} documents from Chunk 1")
-    
-    # Create FAISS vector store for Chunk 1
-    try:
-        embeddings = get_embeddings()
-        vector_store1 = FAISS.from_documents(documents1, embeddings)
-        logger.info(f"FAISS vector store for Chunk 1 created with {vector_store1.index.ntotal} documents")
-    except Exception as e:
-        logger.error(f"Failed to create FAISS vector store for Chunk 1: {str(e)}")
-        raise
-    
-    # Process Chunk 2
-    logger.info("Processing Chunk 2...")
-    documents2 = process_chunk(chunk2)
-    logger.info(f"Created {len(documents2)} documents from Chunk 2")
-    
-    # Create FAISS vector store for Chunk 2
-    try:
-        vector_store2 = FAISS.from_documents(documents2, embeddings)
-        logger.info(f"FAISS vector store for Chunk 2 created with {vector_store2.index.ntotal} documents")
-    except Exception as e:
-        logger.error(f"Failed to create FAISS vector store for Chunk 2: {str(e)}")
-        raise
-    
-    # Merge the two vector stores
-    logger.info("Merging vector stores...")
-    vector_store1.merge_from(vector_store2)
-    logger.info(f"Combined FAISS vector store created with {vector_store1.index.ntotal} documents")
+            docs.append(Document(page_content=content, metadata=metadata))
+        return docs
+
+    logger.info(f"Processing {len(df)} rows in chunks of {chunk_size}")
+    for start in range(0, len(df), chunk_size):
+        chunk = df.iloc[start : start + chunk_size]
+        documents = process_rows(chunk)
+        if vector_store is None:
+            vector_store = FAISS.from_documents(documents, embeddings)
+        else:
+            temp_store = FAISS.from_documents(documents, embeddings)
+            vector_store.merge_from(temp_store)
+    logger.info(f"FAISS vector store created with {vector_store.index.ntotal} documents")
     
     # Save the FAISS index and version file
     try:
         os.makedirs(faiss_index_path, exist_ok=True)
-        vector_store1.save_local(faiss_index_path)
+        vector_store.save_local(faiss_index_path)
         logger.info(f"Saved FAISS vector store to {faiss_index_path}")
         with open(version_file, "w") as f:
             f.write(file_hash)
@@ -219,8 +183,8 @@ def load_rag_data(
     except Exception as e:
         logger.error(f"Failed to save FAISS vector store or version: {str(e)}")
         raise
-    
-    return vector_store1
+
+    return vector_store
 
 
 def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE", faiss_index_path="dfl_faiss_index", version_file="dfl_version.txt"):
