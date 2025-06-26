@@ -661,7 +661,7 @@ def extract_scheme_names(text: str) -> list:
         "Extract the scheme names mentioned in the following text. "
         "Return the names exactly as written, separated by semicolons if there are multiple. "
         "If no scheme is present, reply with 'none'.\n\n"
-        f"Text: {text}"
+        f"{text}"
     )
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
@@ -684,9 +684,9 @@ def resolve_scheme_reference(query: str, scheme_names: list) -> str | None:
     list_str = "; ".join(scheme_names)
     prompt = (
         "You will be given a user query and a list of scheme names. "
-        "If the query refers to any of these schemes, either by name or by order (first scheme, second scheme, etc.), "
+        "If the query refers to any of these schemes, either by name or even by order (first scheme, second scheme, pehli vaali, doosri vaali etc.), "
         "return the matching scheme name exactly as provided. If none match, return an empty string.\n\n"
-        f"Query: {query}\nSchemes: {list_str}"
+        f"Query: {query}\nScheme_Names: {list_str}"
     )
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
@@ -934,8 +934,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         logger.info(f"Scheme names detected in query: {query_scheme_names}")
     stored_names = st.session_state.scheme_names
     referenced_scheme = None
-    if intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent"}:
-        if query_scheme_names:
+    if intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}:
+        if query_scheme_names != "":
             match = None
             lower_stored = [n.lower() for n in stored_names]
             for nm in query_scheme_names:
@@ -952,7 +952,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             if not referenced_scheme and stored_names:
                 referenced_scheme = stored_names[0]
         if referenced_scheme:
-            augmented_query = f"{referenced_scheme}. {query}"
+            augmented_query = f"Referenced Scheme: {referenced_scheme}. {query}"
             st.session_state.scheme_names = stored_names if referenced_scheme in stored_names else [referenced_scheme]
             st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
             logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
@@ -1060,7 +1060,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             st.session_state.scheme_names = [n for n in names]
             st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
             logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
-    elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent"} and referenced_scheme:
+    elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
         if referenced_scheme not in st.session_state.scheme_names:
             st.session_state.scheme_names = [referenced_scheme]
             st.session_state.scheme_names_str = f"1. {referenced_scheme}"
