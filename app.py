@@ -63,6 +63,10 @@ if "scheme_flow_data" not in st.session_state:
     st.session_state.scheme_flow_data = {}
 if "audio_played_until" not in st.session_state:
     st.session_state.audio_played_until = None
+if "scheme_names" not in st.session_state:
+    st.session_state.scheme_names = []
+if "scheme_names_str" not in st.session_state:
+    st.session_state.scheme_names_str = ""
 
 # Generate session ID
 def generate_session_id():
