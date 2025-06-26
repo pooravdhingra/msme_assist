@@ -395,7 +395,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         **Instructions**:
         - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help.
         - Use Devanagari script for Hindi and a natural mix of Hindi and English words in Roman script for Hinglish.
-        - Keep the message under 25 words.
+        - Keep the message under 30 words.
 
         **Output**:
         - Only the acknowledgement message in the user's language."""
