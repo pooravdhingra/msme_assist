@@ -111,7 +111,8 @@ def detect_language(query):
         "toh", "ab", "phir", "kuch", "thoda", "zyada", "sab", "koi", "kuchh", "aap", "tum", "main",
         "hum", "unhe", "unko", "unse", "yeh", "woh", "aisa", "aisi", "aise", "bataiye", "achha", "acha", "accha", "theek", "theekh", 
         "thik", "thikk", "idhar", "udhar", "yahan", "wahan", "waha", "bhai", "bhaiya", "bhaiyya", 
-        "bhiya", "bahut", "bahot", "bohot", "bahuut", "zara", "jara", "mat", "maat", "matlab", "matlb", "fir", "phirr", "phhir", "phir"
+        "bhiya", "bahut", "bahot", "bohot", "bahuut", "zara", "jara", "mat", "maat", "matlab", "matlb", "fir", "phirr", "phhir", "phir", 
+        "main", "aap", "aapke", "yojanaen", "liye", "kar", "sakte", "hain", "tak"
     ]
     query_lower = query.lower()
     hindi_word_count = sum(1 for word in hindi_words if word in query_lower)
@@ -321,8 +322,9 @@ def is_query_related(query, prev_query, prev_response):
     - Previous Bot Response: {prev_response}
 
     **Instructions**:
-    - A query is a related follow-up if it is ambiguous (lacks specific scheme or document names like 'FSSAI', 'Udyam', 'PMFME', 'GST', 'UPI') and contextually refers to the same scheme or topic mentioned in the previous interaction.
+    - A query is a related follow-up if it is ambiguous and contextually refers to one of the schemes or topics mentioned in the previous interaction.
     - Examples of ambiguous queries: 'Tell me more', 'How to apply?', 'What next?', 'Can you help with it?', 'और बताएं', 'आगे क्या?'.
+    - The query is a follow-up if it seeks clarification or additional information about a previously discussed scheme or topic.
     - The query is not a follow-up if it introduces a new scheme or topic not mentioned above (e.g., 'What is FSSAI?', 'How to use UPI?', 'एफएसएसएआई क्या है?') or is unrelated (e.g., 'What’s the weather?', 'मौसम कैसा है?').
     - Return 'True' if the query is a follow-up, 'False' otherwise. Focus on the previous interaction only, ignoring rule-based keyword matching or similarity scores.
 
@@ -354,20 +356,20 @@ def classify_intent(query, prev_response, conversation_history=""):
 
     **Instructions**:
     Return only one label from the following:
-       - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?')
+       - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana')
        - Specific_Scheme_Apply_Intent (e.g., 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
        - Specific_Scheme_Eligibility_Intent (e.g., 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
-       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?')
-       - Non_Scheme_Know_Intent (e.g., 'How to use UPI?', 'GST kya hai?', 'यूपीआई का उपयोग कैसे करें?')
+       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
        - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'How can going digital help grow business', etc.)
        - Out_of_Scope (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?')
-       - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं')
+       - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye')
        - Confirmation_New_RAG (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.')
        - Gratitude_Intent (user expresses thanks or acknowledgement, e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद')
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
        - For Contextual_Follow_Up, prioritize the Previous Assistant Response for context to check if the query is a follow-up.
+       - Only use conversation history for context, intent should be determined solely by current query.
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
     """
     try:
@@ -482,12 +484,6 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
             intent_prompt += (
                 " Always include 'Pradhan Mantri Mudra Yojana' in the same format as the other schemes."
             )
-    elif intent == "Non_Scheme_Know_Intent":
-        intent_prompt = (
-            "Answer using **RAG Response** in simple language (≤120 words). Use examples "
-            "(e.g., 'Use UPI like PhonePe' or 'UPI ka istemal PhonePe jaise karo' or 'यूपीआई का उपयोग "
-            "फोनपे की तरह करें'). Use verified external info if needed."
-        )
     elif intent == "DFL_Intent":
         intent_prompt = (
             "Use the **RAG Response** if available, augmenting with your own knowledge "
@@ -901,7 +897,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 state=None,
                 gender=None,
                 business_category=None,
-                include_mudra=classify_scheme_type(query) == "credit",
+                include_mudra=False,
             )
         else:
             scheme_rag = session_cache.get(query)
