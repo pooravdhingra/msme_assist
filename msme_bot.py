@@ -390,11 +390,25 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
 
     if intent == "Gratitude_Intent":
-        if language == "Hindi":
-            return "मुझे खुशी है कि यह आपकी मदद कर सका। क्या मैं और कुछ सहायता कर सकता हूँ?"
-        if language == "Hinglish":
-            return "Khushi hai ki aapki madad kar saka. Kya main aapki kuch aur sahayta kar sakta hoon?"
-        return "I'm glad this helped you. Let me know if you need any further assistance."
+        gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
+
+        **Instructions**:
+        - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help.
+        - Use Devanagari script for Hindi and a natural mix of Hindi and English words in Roman script for Hinglish.
+        - Keep the message under 25 words.
+
+        **Output**:
+        - Only the acknowledgement message in the user's language."""
+        try:
+            response = llm.invoke([{"role": "user", "content": gratitude_prompt}])
+            return response.content.strip()
+        except Exception as e:
+            logger.error(f"Failed to generate gratitude response: {str(e)}")
+            if language == "Hindi":
+                return "धन्यवाद! क्या मैं और मदद कर सकता हूँ?"
+            if language == "Hinglish":
+                return "Thanks! Kya main aur madad kar sakta hoon?"
+            return "You're welcome! Let me know if you need anything else."
 
     tone_prompt = get_system_prompt(language, user_info.name)
 
