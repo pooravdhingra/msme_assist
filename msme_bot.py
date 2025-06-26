@@ -770,7 +770,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
     names = extract_scheme_names(response)
     if names:
         st.session_state.scheme_names = names
-        st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
+        st.session_state.scheme_names_str = " ".join([f"{i}. {n}" for i, n in enumerate(names, 1)])
         logger.info(f"Stored scheme names after flow: {st.session_state.scheme_names_str}")
     return response, True
 
@@ -935,7 +935,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     stored_names = st.session_state.scheme_names
     referenced_scheme = None
     if intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}:
-        if query_scheme_names != "":
+        if query_scheme_names:
             match = None
             lower_stored = [n.lower() for n in stored_names]
             for nm in query_scheme_names:
@@ -954,7 +954,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         if referenced_scheme:
             augmented_query = f"Referenced Scheme: {referenced_scheme}. {query}"
             st.session_state.scheme_names = stored_names if referenced_scheme in stored_names else [referenced_scheme]
-            st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
+            st.session_state.scheme_names_str = " ".join([f"{i}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
             logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
 
     if intent == "Schemes_Know_Intent" and not st.session_state.scheme_flow_active:
