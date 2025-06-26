@@ -131,7 +131,7 @@ def get_system_prompt(language, user_name="User"):
     system_rules = f"""1. **Language Handling**:
        - The query language is provided as {language} (English, Hindi, or Hinglish).
        - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
-       - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script.
+       - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script, prioritizing hindi words in the mix.
        - For English queries, respond in simple English.
        
        2. **Response Guidelines**:
