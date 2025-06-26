@@ -653,8 +653,10 @@ def extract_scheme_names(text: str) -> list:
         response = llm.invoke([{"role": "user", "content": prompt}])
         content = response.content.strip()
         if not content or "none" in content.lower():
+            logger.info("No scheme names extracted")
             return []
         names = [n.strip().replace("_", " ") for n in content.split(";") if n.strip()]
+        logger.info(f"Extracted scheme names: {names}")
         return names
     except Exception as e:
         logger.error(f"Failed to extract scheme names: {e}")
@@ -675,7 +677,9 @@ def resolve_scheme_reference(query: str, scheme_names: list) -> str | None:
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
         name = response.content.strip().replace("_", " ")
-        return name or None
+        resolved = name or None
+        logger.info(f"Resolved scheme reference '{query}' -> {resolved}")
+        return resolved
     except Exception as e:
         logger.error(f"Failed to resolve scheme reference: {e}")
         return None
@@ -749,6 +753,11 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         "",
         scheme_details=details,
     )
+    names = extract_scheme_names(response)
+    if names:
+        st.session_state.scheme_names = names
+        st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
+        logger.info(f"Stored scheme names after flow: {st.session_state.scheme_names_str}")
     return response, True
 
 
@@ -907,6 +916,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         st.session_state.scheme_flow_step = None
 
     query_scheme_names = extract_scheme_names(query)
+    if query_scheme_names:
+        logger.info(f"Scheme names detected in query: {query_scheme_names}")
     stored_names = st.session_state.scheme_names
     referenced_scheme = None
     if intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent"}:
@@ -930,6 +941,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             augmented_query = f"{referenced_scheme}. {query}"
             st.session_state.scheme_names = stored_names if referenced_scheme in stored_names else [referenced_scheme]
             st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
+            logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
 
     if intent == "Schemes_Know_Intent" and not st.session_state.scheme_flow_active:
         st.session_state.scheme_flow_active = True
@@ -1033,10 +1045,12 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         if names:
             st.session_state.scheme_names = [n for n in names]
             st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
+            logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
     elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent"} and referenced_scheme:
         if referenced_scheme not in st.session_state.scheme_names:
             st.session_state.scheme_names = [referenced_scheme]
             st.session_state.scheme_names_str = f"1. {referenced_scheme}"
+        logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
 
     # Save conversation to MongoDB
     try:
