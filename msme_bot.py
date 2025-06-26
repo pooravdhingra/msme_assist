@@ -139,6 +139,7 @@ def get_system_prompt(language, user_name="User"):
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
        - Response must be ≤120 words.
        - Never mention agent fees unless specified in RAG Response for scheme queries.
+       - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
        - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
 
     system_prompt = system_rules.format(language=language, user_name=user_name)

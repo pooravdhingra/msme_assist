@@ -115,15 +115,6 @@ def load_rag_data(
     finally:
         # Keep the downloaded file for future reuse
         logger.info(f"Cached file available at {temp_file_path}")
-        
-    try:
-        original_count = len(df)
-        df = df[df["Scheme_Status"].astype(str).str.lower() == "published"]
-        logger.info(
-            f"Filtered dataframe from {original_count} to {len(df)} rows where Scheme_Status == 'Published'"
-        )
-    except KeyError:
-        logger.warning("Column 'Scheme_Status' not found in Excel file; proceeding without filtering")
 
     relevant_columns = [
         "Scheme GUID",
