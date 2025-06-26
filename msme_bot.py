@@ -640,15 +640,21 @@ def classify_scheme_type(query: str) -> str:
 
 
 def extract_scheme_names(text: str) -> list:
-    """Use the LLM to extract scheme names from a text block."""
+    """Use the LLM to extract scheme names from a text block.
+
+    Returns a list of names or an empty list when no schemes are mentioned."""
     prompt = (
         "Extract the scheme names mentioned in the following text. "
-        "Return the names exactly as written, separated by semicolons if there are multiple.\n\n"
+        "Return the names exactly as written, separated by semicolons if there are multiple. "
+        "If no scheme is present, reply with 'none'.\n\n"
         f"Text: {text}"
     )
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
-        names = [n.strip().replace("_", " ") for n in response.content.split(";") if n.strip()]
+        content = response.content.strip()
+        if not content or "none" in content.lower():
+            return []
+        names = [n.strip().replace("_", " ") for n in content.split(";") if n.strip()]
         return names
     except Exception as e:
         logger.error(f"Failed to extract scheme names: {e}")
@@ -921,7 +927,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             if not referenced_scheme and stored_names:
                 referenced_scheme = stored_names[0]
         if referenced_scheme:
-            augmented_query = referenced_scheme
+            augmented_query = f"{referenced_scheme}. {query}"
             st.session_state.scheme_names = stored_names if referenced_scheme in stored_names else [referenced_scheme]
             st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
 
