@@ -453,8 +453,8 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         )
     elif intent == "Specific_Scheme_Eligibility_Intent":
         intent_prompt = (
-            "Summarize eligibility rules from **RAG Response** (≤120 words) and "
-            "provide a link to check eligibility: https://customer.haqdarshak.com/check-eligibility. "
+            "Summarize eligibility rules from **RAG Response** (≤120 words) and provide a link "
+            f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
             "Ask the user to verify their eligibility there."
         )
         intent_prompt += (
