@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from collections import Counter
 
+
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -48,33 +49,3 @@ def extract_scheme_guid(sources):
     return guid_counter.most_common(1)[0][0]
 
 
-def extract_scheme_name(sources, scheme_guid=None):
-    """Return the scheme name matching scheme_guid or the most frequent name."""
-    guid_to_name = {}
-    name_counter = Counter()
-    for doc in sources:
-        if doc and getattr(doc, "metadata", None):
-            guid = doc.metadata.get("guid")
-            name = doc.metadata.get("name")
-            if guid and name:
-                guid_to_name[str(guid).strip()] = str(name).strip()
-            if name:
-                name_counter[str(name).strip()] += 1
-    if scheme_guid and guid_to_name.get(str(scheme_guid).strip()):
-        return guid_to_name[str(scheme_guid).strip()]
-    if not name_counter:
-        return None
-    return name_counter.most_common(1)[0][0]
-
-
-def extract_all_scheme_names(sources):
-    """Return a list of distinct scheme names from the documents."""
-    names = []
-    for doc in sources:
-        if doc and getattr(doc, "metadata", None):
-            name = doc.metadata.get("name")
-            if name:
-                name = str(name).strip()
-                if name and name not in names:
-                    names.append(name)
-    return names

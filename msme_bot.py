@@ -10,8 +10,6 @@ from data_loader import load_rag_data, load_dfl_data
 from utils import (
     get_embeddings,
     extract_scheme_guid,
-    extract_scheme_name,
-    extract_all_scheme_names,
 )
 import streamlit as st
 from data import DataManager
@@ -140,13 +138,13 @@ def get_system_prompt(language, user_name="User"):
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
        - Response must be ≤120 words.
        - Never mention agent fees unless specified in RAG Response for scheme queries.
-       - For returning users, use conversation history to maintain context.
        - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
 
     system_prompt = system_rules.format(language=language, user_name=user_name)
     return system_prompt
 
-# Build conversation history string from stored messages
+
+# Build conversation history from stored messages for intent classification
 def build_conversation_history(messages):
     conversation_history = ""
     session_messages = []
@@ -159,58 +157,6 @@ def build_conversation_history(messages):
         conversation_history += f"{role.capitalize()}: {content}\n"
     return conversation_history
 
-# Summarize recent conversation for contextual RAG
-def summarize_conversation(
-    messages,
-    current_query: str | None = None,
-    max_pairs: int = 3
-) -> str:
-    """Summarize recent conversation, prioritizing the most recent pairs. Do not include information from older pairs if context has switched (user now talking about different scheme or switched from schemes intent to dfl or vice versa).
-
-    The current query guides what context from previous responses to include. The purpose is to provide context for next response generation so summary should provide relevant information from user and assistant that has been exchanged.
-    """
-    history_pairs = []
-    pair = []
-    for msg in reversed(messages):
-        if msg["role"] == "assistant" and "Welcome" in msg["content"]:
-            continue
-        pair.append(msg)
-        if len(pair) == 2:
-            if pair[0]["role"] == "assistant" and pair[1]["role"] == "user":
-                history_pairs.append((pair[1]["content"], pair[0]["content"]))
-            elif pair[0]["role"] == "user" and pair[1]["role"] == "assistant":
-                history_pairs.append((pair[0]["content"], pair[1]["content"]))
-            pair = []
-            if len(history_pairs) >= max_pairs:
-                break
-
-    convo_text = "".join(
-        f"User: {u}\nAssistant: {a}\n" for u, a in history_pairs
-    )
-    if not convo_text:
-        logger.debug("No complete message pairs to summarize")
-        return ""
-    logger.debug(f"Summarizing {len(history_pairs)} conversation pairs with query: {current_query}")
-
-    base_prompt = (
-        f"Summarize the last {max_pairs} query-response pairs below. "
-        "Include only the most recent scheme or DFL topic mentioned and any details already provided. "
-        "If multiple schemes or DFL topics appear, keep only the most recent."
-    )
-    if current_query:
-        base_prompt += f" Only include context relevant to the current query: {current_query}."
-    base_prompt += " Keep it under 100 words."
-
-    prompt = f"{base_prompt}\n\n{convo_text}\n\nSummary:"
-
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        summary = response.content.strip()
-        logger.debug(f"Conversation summary: {summary}")
-        return summary
-    except Exception as e:
-        logger.error(f"Failed to summarize conversation: {str(e)}")
-        return convo_text[:500]
 
 # Welcome user
 def welcome_user(state_name, user_name, query_language):
@@ -245,7 +191,7 @@ def welcome_user(state_name, user_name, query_language):
         return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 # Step 1: Process user query with RAG
-def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None):
+def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, business_category=None):
     start_time = time.time()
     try:
         details = []
@@ -262,14 +208,8 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
         if gender:
             fallback_details.append(f"gender: {gender}")
 
-        # Initialize fallback_query with the base query to avoid undefined
-        # variable errors when no conversation summary is provided.
         fallback_query = query
-
         full_query = query
-        if conversation_summary:
-            full_query = f"{full_query}. Context: {conversation_summary}"
-            fallback_query = f"{fallback_query}. Context: {conversation_summary}"
         if details:
             full_query = f"{full_query}. {' '.join(details)}"
         if fallback_details:
@@ -324,7 +264,6 @@ def get_rag_response(query, vector_store, conversation_summary=None, state="ALL_
 def get_scheme_response(
     query,
     vector_store,
-    conversation_summary=None,
     state="ALL_STATES",
     gender=None,
     business_category=None,
@@ -335,7 +274,6 @@ def get_scheme_response(
     rag = get_rag_response(
         query,
         vector_store,
-        conversation_summary,
         state=state,
         gender=gender,
         business_category=business_category,
@@ -346,7 +284,6 @@ def get_scheme_response(
         mudra_rag = get_rag_response(
             "Pradhan Mantri Mudra Yojana",
             vector_store,
-            conversation_summary,
             state=state,
             gender=gender,
             business_category=business_category,
@@ -363,32 +300,31 @@ def get_scheme_response(
     return rag
 
 
-def get_dfl_response(query, vector_store, conversation_summary=None, state="ALL_STATES", gender=None, business_category=None):
+def get_dfl_response(query, vector_store, state="ALL_STATES", gender=None, business_category=None):
     """Wrapper for DFL dataset retrieval with clearer logging."""
     logger.info("Querying DFL dataset")
     return get_rag_response(
         query,
         vector_store,
-        conversation_summary,
         state=state,
         gender=gender,
         business_category=business_category,
     )
 
 # Check query similarity for context
-def is_query_related(query, prev_response, conversation_summary=""):
+def is_query_related(query, prev_query, prev_response):
     prompt = f"""You are an assistant for Haqdarshak, helping small business owners in India with government schemes, digital/financial literacy, and business growth. Determine if the current query is a follow-up to the previous conversation.
 
     **Input**:
     - Current Query: {query}
+    - Previous User Query: {prev_query}
     - Previous Bot Response: {prev_response}
-    - Conversation Summary: {conversation_summary}
 
     **Instructions**:
-    - A query is a related follow-up if it is ambiguous (lacks specific scheme or document names like 'FSSAI', 'Udyam', 'PMFME', 'GST', 'UPI') and contextually refers to the same scheme or topic mentioned in the previous response or summary.
+    - A query is a related follow-up if it is ambiguous (lacks specific scheme or document names like 'FSSAI', 'Udyam', 'PMFME', 'GST', 'UPI') and contextually refers to the same scheme or topic mentioned in the previous interaction.
     - Examples of ambiguous queries: 'Tell me more', 'How to apply?', 'What next?', 'Can you help with it?', 'और बताएं', 'आगे क्या?'.
     - The query is not a follow-up if it introduces a new scheme or topic not mentioned above (e.g., 'What is FSSAI?', 'How to use UPI?', 'एफएसएसएआई क्या है?') or is unrelated (e.g., 'What’s the weather?', 'मौसम कैसा है?').
-    - Return 'True' if the query is a follow-up, 'False' otherwise. Focus on the previous response and summary only, ignoring rule-based keyword matching or similarity scores.
+    - Return 'True' if the query is a follow-up, 'False' otherwise. Focus on the previous interaction only, ignoring rule-based keyword matching or similarity scores.
 
     **Output**:
     - Return only 'True' or 'False'.
@@ -406,7 +342,7 @@ def is_query_related(query, prev_response, conversation_summary=""):
         return False
 
 # Classify the intent of the user's query
-def classify_intent(query, prev_response, conversation_history):
+def classify_intent(query, prev_response, conversation_history=""):
     """Return one of the predefined intent labels."""
 
     prompt = f"""You are an assistant for Haqdarshak. Classify the user's intent.
@@ -517,8 +453,8 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         )
     elif intent == "Specific_Scheme_Eligibility_Intent":
         intent_prompt = (
-            "Summarize eligibility rules from **RAG Response** (≤120 words) and provide a link "
-            f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
+            "Summarize eligibility rules from **RAG Response** (≤120 words) and "
+            "provide a link to check eligibility: https://customer.haqdarshak.com/check-eligibility. "
             "Ask the user to verify their eligibility there."
         )
         intent_prompt += (
@@ -706,7 +642,7 @@ def classify_scheme_type(query: str) -> str:
     return "credit"
 
 
-def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, user_info, conversation_history, conversation_summary):
+def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, user_info):
     language = st.session_state.scheme_flow_data.get("language", detect_language(answer))
     step = st.session_state.scheme_flow_step
     details = st.session_state.scheme_flow_data
@@ -757,20 +693,12 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
     rag = get_scheme_response(
         query,
         scheme_vector_store,
-        conversation_summary,
         state=user_info.state_id,
         gender=user_info.gender,
         business_category=user_info.business_category,
         include_mudra=details.get("path") == "credit",
     )
     if isinstance(rag, dict):
-        st.session_state.recommended_schemes = extract_all_scheme_names(
-            rag.get("sources", [])
-        )
-        if not st.session_state.get("last_scheme_name"):
-            scheme_name = extract_scheme_name(rag.get("sources", []))
-            if scheme_name:
-                st.session_state.last_scheme_name = scheme_name
         rag_text = rag.get("text")
     else:
         rag_text = rag
@@ -779,7 +707,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         rag_text or "",
         user_info,
         language,
-        conversation_history,
+        "",
         scheme_details=details,
     )
     return response, True
@@ -810,9 +738,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     user_type = "returning" if conversations else "new"
     logger.info(f"User type: {user_type}")
 
-    conversation_history = build_conversation_history(st.session_state.messages)
-    conversation_summary = st.session_state.get("conversation_summary", "")
-
     if st.session_state.get("scheme_flow_active"):
         resp, _ = handle_scheme_flow(
             query,
@@ -820,8 +745,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             session_id,
             mobile_number,
             user_info,
-            conversation_history,
-            conversation_summary,
         )
         generated_response = resp
         try:
@@ -913,44 +836,24 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                     recent_query = st.session_state.messages[msg_index - 1]["content"]
                 break
 
-    conversation_history = st.session_state.get("conversation_history")
-    if not conversation_history:
-        conversation_history = build_conversation_history(st.session_state.messages)
-        st.session_state.conversation_history = conversation_history
 
-    # Check if user mentioned a previously recommended scheme
-    recommended = st.session_state.get("recommended_schemes", [])
-    q_lower = query.lower()
-    for name in recommended:
-        if name and name.lower() in q_lower:
-            st.session_state.last_scheme_name = name
-            break
 
     # Determine if the current query is a follow-up to the recent response
     follow_up = False
-    if recent_response:
+    if recent_query and recent_response:
         follow_up = is_query_related(
             query,
+            recent_query,
             recent_response,
-            conversation_summary,
         )
 
     # Use conversation context only when the query is a follow-up
-    context_history = conversation_history if follow_up else ""
-    context_summary = conversation_summary if follow_up else ""
+    context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
 
-    intent = classify_intent(query, recent_response or "", context_history)
+    conversation_history = build_conversation_history(st.session_state.messages)
+    intent = classify_intent(query, recent_response or "", conversation_history)
     augmented_query = query
-    last_scheme = st.session_state.get("last_scheme_name")
-    if follow_up and last_scheme and intent in {
-        "Specific_Scheme_Apply_Intent",
-        "Specific_Scheme_Eligibility_Intent",
-        "Contextual_Follow_Up",
-        "Confirmation_New_RAG",
-    }:
-        augmented_query = f"{last_scheme} {query}"
-        context_summary = f"Previous scheme mentioned: {last_scheme}"
-    logger.info(f"Using conversation summary: {context_summary}")
+    logger.info(f"Using conversation context: {context_pair}")
     logger.info(f"Classified intent: {intent}")
 
     maintain_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
@@ -992,13 +895,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     if intent in scheme_intents:
         if intent == "Specific_Scheme_Know_Intent":
-            # For Specific_Scheme_Know_Intent we want to avoid using
-            # conversation summary or profile details so that the RAG search
-            # relies solely on the current query.
             scheme_rag = get_scheme_response(
                 query,
                 scheme_vector_store,
-                None,
                 state=None,
                 gender=None,
                 business_category=None,
@@ -1020,7 +919,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         scheme_rag = get_scheme_response(
             augmented_query,
             scheme_vector_store,
-            context_summary,
             state=state_id,
             gender=gender,
             business_category=business_category,
@@ -1034,7 +932,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         dfl_rag = get_dfl_response(
             query,
             dfl_vector_store,
-            context_summary,
             state=state_id,
             gender=gender,
             business_category=business_category,
@@ -1044,31 +941,20 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         st.session_state.dfl_rag_cache[session_id][query] = dfl_rag
 
     rag_response = scheme_rag if intent in scheme_intents else dfl_rag
-    if intent == "Schemes_Know_Intent" and isinstance(rag_response, dict):
-        st.session_state.recommended_schemes = extract_all_scheme_names(
-            rag_response.get("sources", [])
-        )
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
     if intent == "DFL_Intent" and (
         rag_text is None or "No relevant" in rag_text
     ):
         rag_text = ""
     scheme_guid = None
-    if isinstance(rag_response, dict):
-        if intent == "Specific_Scheme_Eligibility_Intent":
-            scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
-        if not st.session_state.get("last_scheme_name"):
-            scheme_name = extract_scheme_name(
-                rag_response.get("sources", []), scheme_guid
-            )
-            if scheme_name:
-                st.session_state.last_scheme_name = scheme_name
+    if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
+        scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
     generated_response = generate_response(
         intent,
         rag_text or "",
         user_info,
         query_language,
-        context_history,
+        context_pair,
         scheme_guid=scheme_guid,
         scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
     )
