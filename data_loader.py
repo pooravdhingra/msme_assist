@@ -19,7 +19,7 @@ def load_rag_data(
     faiss_index_path="faiss_index",
     version_file="faiss_version.txt",
     cached_file_path="scheme_db_latest.xlsx",
-    chunk_size=100,
+    chunk_size=300,
 ):
     """
     Load scheme_db.xlsx, check for precomputed FAISS index, and return a FAISS vector store.
@@ -214,7 +214,7 @@ def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eI
             logger.error(f"Failed to load precomputed DFL index: {str(e)}. Recomputing.")
 
     logger.info("Creating new DFL FAISS index")
-    chunk_size = 4000
+    chunk_size = 400
     documents = []
     for i in range(0, len(text), chunk_size):
         chunk = text[i : i + chunk_size].strip()
