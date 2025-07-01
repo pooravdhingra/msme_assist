@@ -44,9 +44,16 @@ def synthesize(text: str, language: str) -> bytes:
 
 def autoplay(audio_bytes: bytes) -> None:
     """Autoplay MP3 audio in Streamlit."""
+    audio_player(audio_bytes, autoplay=True)
+
+
+def audio_player(audio_bytes: bytes, autoplay: bool = False) -> None:
+    """Render an HTML audio player with optional autoplay."""
     b64 = base64.b64encode(audio_bytes).decode("utf-8")
+    autoplay_attr = "autoplay" if autoplay else ""
     audio_html = (
-        f'<audio autoplay="true" style="display:none">'
+        f'<audio {autoplay_attr} controls '
+        f'controlsList="nodownload noplaybackrate" style="width: 100%;">'
         f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
         '</audio>'
     )
