@@ -502,8 +502,9 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     elif intent == "DFL_Intent":
         intent_prompt = (
             "Use the **RAG Response** if available, augmenting with your own knowledge "
-            "where relevant. If the RAG Response is empty, answer from your own "
-            "knowledge in simple language (≤120 words) with helpful examples."
+            "where relevant. If the RAG Response is empty, do not mention its absence; "
+            "answer smoothly from your own knowledge in simple language (≤120 words) "
+            "with helpful examples."
         )
     elif intent == "Contextual_Follow_Up":
         intent_prompt = (
@@ -874,10 +875,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         dfl_count = dfl_vector_store.index.ntotal
         logger.info(f"DFL vector store contains {dfl_count} documents")
         if dfl_count == 0:
-            logger.error("DFL vector store is empty")
-            if query_language == "Hindi":
-                return "कोई DFL डेटा उपलब्ध नहीं है। कृपया डेटा स्रोत की जाँच करें।"
-            return "No DFL data available. Please check the data source."
+            logger.error(
+                "DFL vector store is empty, will rely solely on LLM knowledge"
+            )
     except Exception as e:
         logger.error(f"Vector store check failed: {str(e)}")
         if query_language == "Hindi":
