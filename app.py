@@ -397,29 +397,29 @@ def chat_page():
                     st.markdown(f"{query} *({query_timestamp.strftime('%Y-%m-%d %H:%M:%S')})*")
                 logger.debug(f"Appended user query to session state: {query} (ID: {query_id})")
 
-            # Get and append bot response
-            response = process_query(
-                query,
-                st.session_state.scheme_vector_store,
-                st.session_state.dfl_vector_store,
-                st.session_state.session_id,
-                st.session_state.user["mobile_number"],
-                user_language=st.session_state.user["language"]
-            )
+            # Display typing indicator while generating response
+            with st.chat_message("assistant", avatar="logo.jpeg"):
+                with st.spinner("Assistant is typing..."):
+                    response = process_query(
+                        query,
+                        st.session_state.scheme_vector_store,
+                        st.session_state.dfl_vector_store,
+                        st.session_state.session_id,
+                        st.session_state.user["mobile_number"],
+                        user_language=st.session_state.user["language"]
+                    )
+                response_timestamp = datetime.utcnow()
+                st.markdown(f"{response} *({response_timestamp.strftime('%Y-%m-%d %H:%M:%S')})*")
+                detected_language = detect_language(response)
+                audio_bytes = synthesize(response, detected_language)
+                audio_player(audio_bytes, autoplay=True)
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):
-                response_timestamp = datetime.utcnow()
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response,
                     "timestamp": response_timestamp
                 })
-
-                with st.chat_message("assistant", avatar="logo.jpeg"):
-                    st.markdown(f"{response} *({response_timestamp.strftime('%Y-%m-%d %H:%M:%S')})*")
-                    detected_language = detect_language(response)
-                    audio_bytes = synthesize(response, detected_language)
-                    audio_player(audio_bytes, autoplay=True)
                 st.session_state.audio_played_until = response_timestamp
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
                 logger.debug("Bot response appended")
