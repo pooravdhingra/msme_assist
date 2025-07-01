@@ -12,7 +12,7 @@ from msme_bot import (
 from data import DataManager, STATE_MAPPING
 import numpy as np
 import logging
-from tts import synthesize, autoplay
+from tts import synthesize, audio_player
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -361,22 +361,21 @@ def chat_page():
     # Sort all messages by timestamp
     all_messages.sort(key=lambda x: x["timestamp"])
 
-    # Display all messages
+    # Display all messages and add an audio player for the latest assistant response
+    last_msg = st.session_state.messages[-1] if st.session_state.messages else None
     for msg in all_messages:
         with st.chat_message(msg["role"], avatar="logo.jpeg" if msg["role"] == "assistant" else None):
             st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
-
-    # Play audio for the latest assistant message if not already played
-    last_msg = st.session_state.messages[-1] if st.session_state.messages else None
-    if (
-        last_msg
-        and last_msg["role"] == "assistant"
-        and last_msg["timestamp"] != st.session_state.audio_played_until
-    ):
-        detected_language = detect_language(last_msg["content"])
-        audio_bytes = synthesize(last_msg["content"], detected_language)
-        autoplay(audio_bytes)
-        st.session_state.audio_played_until = last_msg["timestamp"]
+            if (
+                last_msg
+                and msg["role"] == "assistant"
+                and msg["timestamp"] == last_msg["timestamp"]
+                and msg["timestamp"] != st.session_state.audio_played_until
+            ):
+                detected_language = detect_language(msg["content"])
+                audio_bytes = synthesize(msg["content"], detected_language)
+                audio_player(audio_bytes, autoplay=True)
+                st.session_state.audio_played_until = msg["timestamp"]
 
     # Chat input
     query = st.chat_input("Type your query here...")
@@ -420,7 +419,7 @@ def chat_page():
                     st.markdown(f"{response} *({response_timestamp.strftime('%Y-%m-%d %H:%M:%S')})*")
                     detected_language = detect_language(response)
                     audio_bytes = synthesize(response, detected_language)
-                    autoplay(audio_bytes)
+                    audio_player(audio_bytes, autoplay=True)
                 st.session_state.audio_played_until = response_timestamp
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
                 logger.debug("Bot response appended")
