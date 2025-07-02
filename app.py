@@ -329,46 +329,11 @@ def chat_page():
     # Combine past conversations from MongoDB and current session messages
     st.subheader("Conversation History")
     # Global CSS for collapsible assistant responses
-    st.markdown(
-        """
-        <style>
-        .custom-details {
-            position: relative;
-            border: 1px solid rgba(0,0,0,0.12);
-            padding: 0.9rem;
-            border-radius: 4px;
-            margin: 0.75rem 0;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-        }
-        .custom-details > summary {
-            cursor: pointer;
-            list-style: none;
-            font-weight: bold;
-            display: flex;
-            align-items: flex-end;
-            padding: 0 1.5rem 0.25rem 0;
-            min-height: 1.75rem;
-        }
-        .custom-details > summary::-webkit-details-marker {
-            display: none;
-        }
-        .custom-details::after {
-            content: "\\25BC";
-            position: absolute;
-            right: 0.25rem;
-            bottom: 0.25rem;
-            font-size: 1.2rem;
-        }
-        .custom-details[open]::after {
-            content: "\\25B2";
-        }
-        .custom-details[open] > summary span.preview {
-            display: none;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    try:
+        with open("styles.css") as css:
+            st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
     all_messages = []
 
     # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
