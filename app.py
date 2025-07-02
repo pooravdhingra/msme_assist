@@ -328,15 +328,31 @@ def chat_page():
 
     # Combine past conversations from MongoDB and current session messages
     st.subheader("Conversation History")
-    # Global CSS to hide dropdown preview when expanded
+    # Global CSS for collapsible assistant responses
     st.markdown(
         """
         <style>
-        details > summary {
+        .custom-details {
+            border: 1px solid #ccc;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin: 0.5rem 0;
+        }
+        .custom-details > summary {
             cursor: pointer;
             list-style: none;
+            position: relative;
+            font-weight: bold;
         }
-        details[open] > summary {
+        .custom-details > summary::after {
+            content: "\25BC"; /* Down arrow */
+            position: absolute;
+            right: 0;
+        }
+        .custom-details[open] > summary::after {
+            content: "\25B2"; /* Up arrow */
+        }
+        .custom-details[open] > summary span.preview {
             display: none;
         }
         </style>
@@ -386,8 +402,8 @@ def chat_page():
                     concise_preview = full_content[:expand_threshold].rsplit(' ', 1)[0] + "..."
                     st.markdown(
                         f"""
-<details>
-<summary>{concise_preview} <em>({display_timestamp})</em></summary>
+<details class="custom-details">
+<summary><span class="preview">{concise_preview}</span> <em>({display_timestamp})</em></summary>
 {full_content}
 </details>
 """,
@@ -443,8 +459,8 @@ def chat_page():
                     concise_preview_response = full_content_response[:expand_threshold_response].rsplit(' ', 1)[0] + "..."
                     st.markdown(
                         f"""
-<details>
-<summary>{concise_preview_response} <em>({display_timestamp_response})</em></summary>
+<details class="custom-details">
+<summary><span class="preview">{concise_preview_response}</span> <em>({display_timestamp_response})</em></summary>
 {full_content_response}
 </details>
 """,
