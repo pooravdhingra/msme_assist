@@ -61,8 +61,6 @@ if "scheme_flow_step" not in st.session_state:
     st.session_state.scheme_flow_step = None
 if "scheme_flow_data" not in st.session_state:
     st.session_state.scheme_flow_data = {}
-if "audio_played_until" not in st.session_state:
-    st.session_state.audio_played_until = None
 if "scheme_names" not in st.session_state:
     st.session_state.scheme_names = []
 if "scheme_names_str" not in st.session_state:
@@ -100,7 +98,7 @@ def restore_session_from_url():
                     "gender": user.get("gender"),
                 }
                 st.session_state.page = "chat"
-                # Restore messages from MongoDB
+                # Restore messages from MongoDB, but do NOT include audio_script
                 conversations = data_manager.get_conversations(mobile_number, limit=10)
                 all_messages = []
                 for conv in conversations:
@@ -111,7 +109,8 @@ def restore_session_from_url():
                         all_messages.append({
                             "role": msg["role"],
                             "content": msg["content"],
-                            "timestamp": msg["timestamp"]
+                            "timestamp": msg["timestamp"],
+                            # Do NOT retrieve audio_script
                         })
                 st.session_state.messages = all_messages
                 logger.info(f"Restored session {session_id} for user {mobile_number}")
@@ -227,11 +226,12 @@ def login_page():
                     # Always pass user_data, as it's optional in start_session
                     logger.debug(f"Calling start_session with mobile: {st.session_state.temp_mobile}, session_id: {st.session_state.session_id}, user_data: {st.session_state.user}")
                     data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, st.session_state.user)
-                st.session_state.messages = []
+                st.session_state.messages = [] # Clear messages on successful login
                 st.session_state.page = "chat"
                 st.session_state.otp_generated = False
                 st.session_state.otp = None
                 st.session_state.last_query_id = None
+                st.session_state.welcome_message_sent = False # Ensure welcome message is sent on fresh login
                 # Add session_id to URL
                 st.query_params["session_id"] = st.session_state.session_id
                 st.success("Login successful!")
@@ -303,7 +303,7 @@ def chat_page():
     if "session_id" not in st.query_params or st.query_params["session_id"] != st.session_state.session_id:
         st.query_params["session_id"] = st.session_state.session_id
 
-    # Trigger welcome message only for new users
+    # Trigger welcome message only for new users or on fresh login
     if not st.session_state.welcome_message_sent:
         conversations = data_manager.get_conversations(
             st.session_state.user["mobile_number"], limit=10
@@ -311,7 +311,7 @@ def chat_page():
         user_type = "returning" if conversations else "new"
 
         if user_type == "new":
-            welcome_response = process_query(
+            welcome_response, welcome_audio_script = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
                 st.session_state.dfl_vector_store,
@@ -320,22 +320,17 @@ def chat_page():
                 user_language=st.session_state.user["language"]
             )
             if welcome_response:  # Only append if a welcome message was generated
-                last_msg = st.session_state.messages[-1] if st.session_state.messages else None
-                if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == welcome_response):
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": welcome_response,
-                        "timestamp": datetime.utcnow()
-                    })
+                if welcome_audio_script:
+                    audio_bytes = synthesize(welcome_audio_script, "Hindi")
+                    audio_player(audio_bytes, autoplay=True)
+                st.session_state.welcome_message_sent = True
 
-                    logger.debug(f"Appended welcome message to session state: {welcome_response}")
-            st.session_state.welcome_message_sent = True
 
     # Combine past conversations from MongoDB and current session messages
     st.subheader("Conversation History")
     all_messages = []
 
-    # Fetch past conversations from MongoDB
+    # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
     conversations = data_manager.get_conversations(st.session_state.user["mobile_number"], limit=10)
     for conv in conversations:
         for msg in conv["messages"]:
@@ -345,37 +340,47 @@ def chat_page():
             all_messages.append({
                 "role": msg["role"],
                 "content": msg["content"],
-                "timestamp": msg["timestamp"]
+                "timestamp": msg["timestamp"],
             })
 
-    # Add current session messages
+    # Add current session messages - DO NOT include audio_script when adding to all_messages
     for msg in st.session_state.messages:
+        # Check for content, role, and timestamp for uniqueness
         if not any(m["role"] == msg["role"] and m["content"] == msg["content"] for m in all_messages):
             all_messages.append({
                 "role": msg["role"],
                 "content": msg["content"],
-                "timestamp": msg["timestamp"]
+                "timestamp": msg["timestamp"],
             })
             logger.debug(f"Added session message to all_messages: {msg['role']} - {msg['content']} ({msg['timestamp']})")
 
     # Sort all messages by timestamp
     all_messages.sort(key=lambda x: x["timestamp"])
 
-    # Display all messages and add an audio player for the latest assistant response
-    last_msg = st.session_state.messages[-1] if st.session_state.messages else None
+    # Display all messages. Audio player is only for the latest response in the chat input.
     for msg in all_messages:
         with st.chat_message(msg["role"], avatar="logo.jpeg" if msg["role"] == "assistant" else None):
-            st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
-            if (
-                last_msg
-                and msg["role"] == "assistant"
-                and msg["timestamp"] == last_msg["timestamp"]
-                and msg["timestamp"] != st.session_state.audio_played_until
-            ):
-                detected_language = detect_language(msg["content"])
-                audio_bytes = synthesize(msg["content"], detected_language)
-                audio_player(audio_bytes, autoplay=True)
-                st.session_state.audio_played_until = msg["timestamp"]
+            if msg["role"] == "user":
+                st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
+            else: # Assistant messages
+                # --- MODIFICATION START ---
+                full_content = msg["content"]
+                display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
+                expand_threshold = 200 
+
+                if len(full_content) > expand_threshold:
+                    # Create the expander label including the timestamp
+                    concise_preview = full_content[:expand_threshold].rsplit(' ', 1)[0] + "..."
+                    expander_label = f"{concise_preview} *({display_timestamp})*"
+                    
+                    # Place the expander. The full content goes inside the expander.
+                    with st.expander(expander_label):
+                        st.markdown(full_content)
+                else:
+                    # If content is short, display it directly with timestamp.
+                    st.markdown(f"{full_content} *({display_timestamp})*")
+                # --- MODIFICATION END ---
+
 
     # Chat input
     query = st.chat_input("Type your query here...")
@@ -400,7 +405,7 @@ def chat_page():
             # Display typing indicator while generating response
             with st.chat_message("assistant", avatar="logo.jpeg"):
                 with st.spinner("Assistant is typing..."):
-                    response = process_query(
+                    response, audio_script_for_tts = process_query(
                         query,
                         st.session_state.scheme_vector_store,
                         st.session_state.dfl_vector_store,
@@ -409,18 +414,34 @@ def chat_page():
                         user_language=st.session_state.user["language"]
                     )
                 response_timestamp = datetime.utcnow()
-                st.markdown(f"{response} *({response_timestamp.strftime('%Y-%m-%d %H:%M:%S')})*")
-                detected_language = detect_language(response)
-                audio_bytes = synthesize(response, detected_language)
-                audio_player(audio_bytes, autoplay=True)
+
+                # Play audio only for the NEW response
+                if audio_script_for_tts:
+                    audio_bytes = synthesize(audio_script_for_tts, "Hindi")
+                    audio_player(audio_bytes, autoplay=True)
+                
+                # --- MODIFICATION START ---
+                full_content_response = response
+                display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                expand_threshold_response = 200 
+
+                if len(full_content_response) > expand_threshold_response:
+                    concise_preview_response = full_content_response[:expand_threshold_response].rsplit(' ', 1)[0] + "..."
+                    expander_label_response = f"{concise_preview_response} *({display_timestamp_response})*"
+                    
+                    with st.expander(expander_label_response):
+                        st.markdown(full_content_response)
+                else:
+                    st.markdown(f"{full_content_response} *({display_timestamp_response})*")
+                # --- MODIFICATION END ---
+
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response,
-                    "timestamp": response_timestamp
+                    "timestamp": response_timestamp,
                 })
-                st.session_state.audio_played_until = response_timestamp
                 logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
                 logger.debug("Bot response appended")
 
