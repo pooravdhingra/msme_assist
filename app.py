@@ -333,19 +333,21 @@ def chat_page():
         """
         <style>
         .custom-details {
-            border: 1px solid #ddd;
-            padding: 0.5rem;
+            border: 1px solid rgba(0,0,0,0.18);
+            padding: 0.75rem;
             border-radius: 4px;
-            margin: 0.5rem 0;
+            margin: 0.75rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         .custom-details > summary {
             cursor: pointer;
             list-style: none;
             position: relative;
             font-weight: bold;
-            display: block;
-            padding: 0 1.2rem 1rem 0;
-            min-height: 1.5rem;
+            display: flex;
+            align-items: flex-end;
+            padding-right: 1.5rem;
+            min-height: 1.75rem;
         }
         .custom-details > summary::-webkit-details-marker {
             display: none;
@@ -353,8 +355,9 @@ def chat_page():
         .custom-details > summary::after {
             content: "\25BC";
             position: absolute;
-            right: 0;
-            bottom: 0;
+            right: 0.25rem;
+            bottom: 0.25rem;
+            font-size: 1.1rem;
         }
         .custom-details[open] > summary::after {
             content: "\25B2";
