@@ -333,34 +333,34 @@ def chat_page():
         """
         <style>
         .custom-details {
-            border: 1px solid rgba(0,0,0,0.18);
-            padding: 0.75rem;
+            position: relative;
+            border: 1px solid rgba(0,0,0,0.12);
+            padding: 0.9rem;
             border-radius: 4px;
             margin: 0.75rem 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
         }
         .custom-details > summary {
             cursor: pointer;
             list-style: none;
-            position: relative;
             font-weight: bold;
             display: flex;
             align-items: flex-end;
-            padding-right: 1.5rem;
+            padding: 0 1.5rem 0.25rem 0;
             min-height: 1.75rem;
         }
         .custom-details > summary::-webkit-details-marker {
             display: none;
         }
-        .custom-details > summary::after {
-            content: "\25BC";
+        .custom-details::after {
+            content: "\\25BC";
             position: absolute;
             right: 0.25rem;
             bottom: 0.25rem;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
         }
-        .custom-details[open] > summary::after {
-            content: "\25B2";
+        .custom-details[open]::after {
+            content: "\\25B2";
         }
         .custom-details[open] > summary span.preview {
             display: none;
