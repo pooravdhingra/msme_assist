@@ -820,12 +820,26 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
 # Main function to process query
 def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
     start_time = time.time()
+    timings = {}
+
+    def record(step_name, start):
+        timings[step_name] = time.time() - start
+
+    def log_timings():
+        total = time.time() - start_time
+        summary = "\n".join(f"{k}: {v:.2f}s" for k, v in timings.items())
+        summary += f"\nTotal: {total:.2f}s"
+        logger.info("Query processing timings:\n" + summary)
+
     logger.info(f"Starting query processing for: {query}")
 
     # Retrieve user data from session state using helper
+    step = time.time()
     user_info = get_user_context(st.session_state)
+    record("user_context", step)
     if not user_info:
-        return "Error: User not logged in.", None # Return tuple
+        log_timings()
+        return "Error: User not logged in.", None  # Return tuple
     user_name = user_info.name
     state_id = user_info.state_id
     state_name = user_info.state_name
@@ -839,15 +853,20 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         st.session_state.scheme_names_str = ""
 
     # Use user_language for welcome message, otherwise detect query language
+    step = time.time()
     query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
+    record("language_detection", step)
     logger.info(f"Using query language: {query_language}")
 
     # Check user type and fetch recent conversations once
+    step = time.time()
     conversations = data_manager.get_conversations(mobile_number, limit=8)
     user_type = "returning" if conversations else "new"
+    record("fetch_conversations", step)
     logger.info(f"User type: {user_type}")
 
     if st.session_state.get("scheme_flow_active"):
+        step = time.time()
         resp, _ = handle_scheme_flow(
             query,
             scheme_vector_store,
@@ -855,6 +874,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             mobile_number,
             user_info,
         )
+        record("scheme_flow", step)
         generated_response = resp
         hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
         try:
@@ -874,6 +894,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 )
         except Exception as e:
             logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+        log_timings()
         return generated_response, hindi_audio_script
 
 
@@ -901,12 +922,15 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             except Exception as e:
                 logger.error(f"Failed to save welcome message for new user in session {session_id}: {str(e)}")
             logger.info(f"Generated welcome response for new user in {time.time() - start_time:.2f} seconds: {response}")
+            log_timings()
             return response, hindi_audio_script
         else:
             logger.info(f"No welcome message for returning user")
+            log_timings()
             return None, None
 
     # Check if vector stores are valid
+    step = time.time()
     try:
         doc_count = scheme_vector_store.index.ntotal
         logger.info(f"Scheme vector store contains {doc_count} documents")
@@ -916,6 +940,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             if query_language == "Hindi":
                 error_message = "कोई योजना डेटा उपलब्ध नहीं है। कृपया डेटा स्रोत की जाँच करें।"
             hindi_audio_script = generate_hindi_audio_script(error_message, user_info)
+            record("vector_store_check", step)
+            log_timings()
             return error_message, hindi_audio_script
         dfl_count = dfl_vector_store.index.ntotal
         logger.info(f"DFL vector store contains {dfl_count} documents")
@@ -923,12 +949,15 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             logger.error(
                 "DFL vector store is empty, will rely solely on LLM knowledge"
             )
+        record("vector_store_check", step)
     except Exception as e:
         logger.error(f"Vector store check failed: {str(e)}")
         error_message = "Error accessing scheme data."
         if query_language == "Hindi":
             error_message = "योजना डेटा तक पहुँचने में त्रुटि।"
         hindi_audio_script = generate_hindi_audio_script(error_message, user_info)
+        record("vector_store_check", step)
+        log_timings()
         return error_message, hindi_audio_script
 
     # Check if query is related to any previous query in the session
@@ -955,17 +984,21 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Determine if the current query is a follow-up to the recent response
     follow_up = False
     if recent_query and recent_response:
+        step = time.time()
         follow_up = is_query_related(
             query,
             recent_query,
             recent_response,
         )
+        record("follow_up_check", step)
 
     # Use conversation context only when the query is a follow-up
     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
 
+    step = time.time()
     conversation_history = build_conversation_history(st.session_state.messages)
     intent = classify_intent(query, recent_response or "", conversation_history)
+    record("intent_classification", step)
     augmented_query = query
     logger.info(f"Using conversation context: {context_pair}")
     logger.info(f"Classified intent: {intent}")
@@ -1017,7 +1050,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             first_q = ask_scheme_question("loan_amount", query_language)
         else:
             first_q = ask_scheme_question("turnover", query_language)
+        step = time.time()
         hindi_audio_script = generate_hindi_audio_script(first_q, user_info)
+        record("scheme_flow", step)
         try:
             interaction_id = generate_interaction_id(query, datetime.utcnow())
             messages_to_save = [
@@ -1031,6 +1066,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 data_manager.save_conversation(session_id, mobile_number, messages_to_save)
         except Exception as e:
             logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+        log_timings()
         return first_q, hindi_audio_script
 
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
@@ -1038,6 +1074,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     if intent in scheme_intents:
         if intent == "Specific_Scheme_Know_Intent":
+            step = time.time()
             scheme_rag = get_scheme_response(
                 query,
                 scheme_vector_store,
@@ -1046,6 +1083,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 business_category=None,
                 include_mudra=False,
             )
+            record("rag_retrieval", step)
         else:
             scheme_rag = session_cache.get(query)
     elif intent in dfl_intents:
@@ -1059,6 +1097,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         related_prev_query = recent_query
 
     if scheme_rag is None and intent in scheme_intents:
+        step = time.time()
         scheme_rag = get_scheme_response(
             augmented_query,
             scheme_vector_store,
@@ -1067,11 +1106,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             business_category=business_category,
             include_mudra=classify_scheme_type(augmented_query) == "credit",
         )
+        record("rag_retrieval", step)
         if session_id not in st.session_state.rag_cache:
             st.session_state.rag_cache[session_id] = {}
         st.session_state.rag_cache[session_id][query] = scheme_rag
 
     if dfl_rag is None and intent in dfl_intents:
+        step = time.time()
         dfl_rag = get_dfl_response(
             query,
             dfl_vector_store,
@@ -1079,6 +1120,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             gender=gender,
             business_category=business_category,
         )
+        record("rag_retrieval", step)
         if session_id not in st.session_state.dfl_rag_cache:
             st.session_state.dfl_rag_cache[session_id] = {}
         st.session_state.dfl_rag_cache[session_id][query] = dfl_rag
@@ -1092,6 +1134,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     scheme_guid = None
     if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
+    step = time.time()
     generated_response = generate_response(
         intent,
         rag_text or "",
@@ -1101,6 +1144,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         scheme_guid=scheme_guid,
         scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
     )
+    record("generate_response", step)
 
     if intent == "Schemes_Know_Intent":
         names = extract_scheme_names(generated_response)
@@ -1114,7 +1158,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             st.session_state.scheme_names_str = f"1. {referenced_scheme}"
         logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
 
+    step = time.time()
     hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
+    record("audio_script", step)
 
     # Save conversation to MongoDB
     try:
@@ -1127,7 +1173,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
             for conv in conversations
         ):
+            step = time.time()
             data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+            record("save_conversation", step)
             logger.info(
                 f"Saved conversation for session {session_id}: {query} -> {generated_response} (Interaction ID: {interaction_id})"
             )
@@ -1138,4 +1186,5 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     except Exception as e:
         logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
 
+    log_timings()
     return generated_response, hindi_audio_script
