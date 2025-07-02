@@ -333,7 +333,7 @@ def chat_page():
         """
         <style>
         .custom-details {
-            border: 1px solid #ccc;
+            border: 1px solid #ddd;
             padding: 0.5rem;
             border-radius: 4px;
             margin: 0.5rem 0;
@@ -343,14 +343,21 @@ def chat_page():
             list-style: none;
             position: relative;
             font-weight: bold;
+            display: block;
+            padding: 0 1.2rem 1rem 0;
+            min-height: 1.5rem;
+        }
+        .custom-details > summary::-webkit-details-marker {
+            display: none;
         }
         .custom-details > summary::after {
-            content: "\25BC"; /* Down arrow */
+            content: "\25BC";
             position: absolute;
             right: 0;
+            bottom: 0;
         }
         .custom-details[open] > summary::after {
-            content: "\25B2"; /* Up arrow */
+            content: "\25B2";
         }
         .custom-details[open] > summary span.preview {
             display: none;
