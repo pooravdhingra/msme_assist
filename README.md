@@ -5,6 +5,7 @@ This application provides a Streamlit interface for interacting with the MSME as
 *Create Virtual Environment*
 
 python3 -m venv .venv
+
 source .venv/bin/activate
 
 *Install Dependencies*
