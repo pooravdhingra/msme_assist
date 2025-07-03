@@ -2,15 +2,15 @@
 
 This application provides a Streamlit interface for interacting with the MSME assistant bot.
 
-Create Virtual Environment
+*Create Virtual Environment*
 
 python3 -m venv .venv
 source .venv/bin/activate
 
-Install Dependencies
+*Install Dependencies*
 
 pip install -r requirements.txt
 
-Run the app
+*Run the app*
 
 streamlit run app.py
