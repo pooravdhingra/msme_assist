@@ -59,7 +59,7 @@ def synthesize(text: str, language: str) -> bytes:
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.8,  # Slightly slower rate to improve clarity
+        speaking_rate=0.9,  # Slightly slower rate to improve clarity
     )
     response = client.synthesize_speech(
         input=input_text,

@@ -36,7 +36,6 @@ def init_llm():
         raise ValueError("XAI_API_KEY environment variable not set")
     llm = ChatOpenAI(
         model="grok-3-mini-fast",
-        reasoning_effort="low",
         api_key=api_key,
         base_url="https://api.x.ai/v1",
         temperature=0
@@ -137,8 +136,9 @@ def get_system_prompt(language, user_name="User"):
        2. **Response Guidelines**:
        - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
-       - Response must be at least 200 words and ≤500 words.
+       - Response must be at least 200 words and ≤350 words.
        - Never mention agent fees unless specified in RAG Response for scheme queries.
+       - Never mention technical terms like RAG, LLM, Database etc. to the user.
        - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
        - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
 
@@ -357,11 +357,11 @@ def classify_intent(query, prev_response, conversation_history=""):
 
     **Instructions**:
     Return only one label from the following:
+       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
+       - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'How can going digital help grow business', etc.)
        - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana')
        - Specific_Scheme_Apply_Intent (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
        - Specific_Scheme_Eligibility_Intent (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
-       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
-       - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'How can going digital help grow business', etc.)
        - Out_of_Scope (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?')
        - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye')
        - Confirmation_New_RAG (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.')
@@ -443,7 +443,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
 
     if intent == "Specific_Scheme_Know_Intent":
         intent_prompt = (
-            "Share scheme name, purpose, benefits from **RAG Response** (≤120 words). "
+            "Share scheme name, purpose, benefits and other fetched relevant details in a structured format from **RAG Response**. "
             "Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' "
             "or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, "
             "then state-specific. Ask: 'Want details on eligibility or how to apply?' "
@@ -458,7 +458,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         )
     elif intent == "Specific_Scheme_Apply_Intent":
         intent_prompt = (
-            "Share application process from **RAG Response** (≤120 words). Filter for schemes "
+            "Share application process from **RAG Response**. Filter for schemes "
             "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
             "'Centrally Sponsored Scheme' (CSS)."
         )
@@ -470,7 +470,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         )
     elif intent == "Specific_Scheme_Eligibility_Intent":
         intent_prompt = (
-            "Summarize eligibility rules from **RAG Response** (≤120 words) and provide a link "
+            "Summarize eligibility rules from **RAG Response** and provide a link "
             f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
             "Ask the user to verify their eligibility there."
         )
@@ -482,7 +482,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
         )
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
-            "List schemes from **RAG Response** (2-3 lines each, ≤120 words). Filter for schemes "
+            "List schemes from **RAG Response** (few lines each). Filter for schemes "
             "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
             "'Centrally Sponsored Scheme' (CSS). Use any user provided scheme details to choose the most relevant schemes. "
             "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. Finally Ask: 'Want more details on any scheme?' "
@@ -502,15 +502,15 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     elif intent == "DFL_Intent":
         intent_prompt = (
             "Use the **RAG Response** if available, augmenting with your own knowledge "
-            "where relevant. If the RAG Response is empty, do not mention its absence; "
-            "answer smoothly from your own knowledge in simple language (≤120 words) "
+            "where relevant. If the RAG Response is empty or not relevant, do not mention that to user and provide a helpful answer "
+            "smoothly from your own knowledge in simple language "
             "with helpful examples."
         )
     elif intent == "Contextual_Follow_Up":
         intent_prompt = (
             "Use the Previous Assistant Response and Conversation Context to identify the topic. "
             "If the RAG Response does not match the referenced scheme, indicate a new RAG search "
-            "is needed. Provide a relevant follow-up response (≤120 words) using the RAG Response, "
+            "is needed. Provide a relevant follow-up response using the RAG Response, "
             "filtering for schemes where 'applicability' includes state_id or 'scheme type' is "
             "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., "
             "'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?')."
@@ -787,7 +787,7 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
     - Summarize the core information from the provided 'Original Response'.
     - Ensure the summary flows naturally as if spoken by a human.
     - Translate the summary into clear and simple Hindi (Devanagari script) using simple hindi words.
-    - Focus on the main points and keep the summary concise, ideally under 150 words, to ensure a smooth audio experience.
+    - Focus on the main points and keep the summary concise, between 100-150 words, to ensure a smooth audio experience.
     - The response should be purely the Hindi script, with no introductory or concluding remarks.
     - Do NOT use any english words. 
     - Do NOT translate Smileys or emoticons.
