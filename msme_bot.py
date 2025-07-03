@@ -381,7 +381,7 @@ def classify_intent(query, prev_response, conversation_history=""):
         return "Out_of_Scope"
 
 # Generate final response based on intent and RAG output
-def generate_response(intent, rag_response, user_info, language, context, scheme_guid=None, scheme_details=None):
+def generate_response(intent, rag_response, user_info, language, context, query, scheme_guid=None, scheme_details=None):
     if intent == "Out_of_Scope":
         if language == "Hindi":
             return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
@@ -417,6 +417,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
     **Input**:
     - Intent: {intent}
     - RAG Response: {rag_response}
+    - Current Query: {query}
     - User Name: {user_info.name}
     - State: {user_info.state_name} ({user_info.state_id})
     - Gender: {user_info.gender}
@@ -436,6 +437,7 @@ def generate_response(intent, rag_response, user_info, language, context, scheme
 
     **Task**:
     Use any user-provided scheme details to pick relevant schemes from retrieved data and personalise the scheme information wherever applicable.
+    Always prioritise the **Current Query** over the **Conversation Context** when determining the response.
     """
 
     special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST"]
@@ -766,6 +768,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         user_info,
         language,
         "",
+        query,
         scheme_details=details,
     )
     names = extract_scheme_names(response)
@@ -1141,6 +1144,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         user_info,
         query_language,
         context_pair,
+        query,
         scheme_guid=scheme_guid,
         scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
     )
