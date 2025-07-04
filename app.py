@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import random
 import string
@@ -98,7 +99,6 @@ def restore_session_from_url():
                     "language": user.get("language", "English"),
                     "gender": user.get("gender"),
                 }
-                print(st.session_state.user)
                 st.session_state.page = "chat"
                 # Restore messages from MongoDB, but do NOT include audio_script
                 conversations = data_manager.get_conversations(mobile_number, limit=10)
@@ -126,8 +126,10 @@ def token_authentication():
     query_params = st.query_params
     token = query_params.get("token", [None])
     if token:
-        API_URL = "http://localhost:3000/v1/person/get/citizen-details"
-
+        BASE_URL = os.getenv("HQ_API_URL", "https://customer-admin-test.haqdarshak.com")
+        ENDPOINT = "/person/get/citizen-details"
+        API_URL = f"{BASE_URL}{ENDPOINT}"
+        
         try:
             response = requests.get(API_URL, headers={"Authorization": f"Bearer {token}"})
             if response.status_code == 200:
@@ -429,7 +431,6 @@ restore_session_from_url()
 
 if not st.session_state.get("user"):
     token_authentication()
-print(f"Current page: {st.session_state.page}")
 
 # if st.session_state.page == "login":
 #     token_authentication()
