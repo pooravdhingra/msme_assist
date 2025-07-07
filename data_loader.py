@@ -1,7 +1,7 @@
 import pandas as pd
-from langchain_pinecone import Pinecone as PineconeVectorStore
 from pinecone import Pinecone as PineconeClient
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
 import os
 import logging
 import gdown  # For downloading from Google Drive
@@ -31,25 +31,60 @@ if PINECONE_API_KEY:
 
 __all__ = ["load_rag_data", "load_dfl_data"]
 
+
+class PineconeRecordRetriever(BaseRetriever):
+    """Simple retriever that queries a Pinecone index using text search."""
+
+    def __init__(self, index, state: str | None = None, gender: str | None = None, k: int = 5):
+        super().__init__()
+        self.index = index
+        self.state = state
+        self.gender = gender
+        self.k = k
+
+    def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
+        flt = {}
+        states = []
+        if self.state:
+            states.append(self.state)
+        states.append("all_states")
+        if states:
+            flt["Applicability (State)"] = {"$in": states}
+        if self.gender:
+            flt["gender"] = {"$in": [self.gender, "all_genders"]}
+
+        try:
+            res = self.index.search(
+                namespace="",
+                query={"top_k": self.k, "inputs": {"chunk_text": query}, "filter": flt},
+                fields=["*"]
+            )
+        except Exception as e:
+            logger.error(f"Pinecone search failed: {e}")
+            return []
+
+        docs = []
+        hits = getattr(getattr(res, "result", None), "hits", [])
+        for hit in hits:
+            fields = hit.fields or {}
+            text = fields.get("chunk_text", "")
+            metadata = {
+                "scheme_guid": fields.get("scheme_guid"),
+                "scheme_name": fields.get("scheme_name"),
+                "Applicability (State)": fields.get("Applicability (State)"),
+                "Type (Sch/Doc)": fields.get("Type (Sch/Doc)")
+            }
+            docs.append(Document(page_content=text, metadata=metadata))
+        return docs
+
 def load_rag_data(
-    google_drive_file_id="13OKwV3G_j4OJdm1Cxt7FAlO6qzrxBMW6",
+    google_drive_file_id: str = "13OKwV3G_j4OJdm1Cxt7FAlO6qzrxBMW6",
     index_name: str | None = None,
-    version_file="faiss_version.txt",
-    cached_file_path="scheme_db_latest.xlsx",
-    chunk_size=400,
+    version_file: str = "faiss_version.txt",
+    cached_file_path: str = "scheme_db_latest.xlsx",
+    chunk_size: int = 100,
 ):
-    """
-    Load scheme_db.xlsx and store documents in a Pinecone index.
-    If a valid precomputed index exists, load it; otherwise, process in chunks and create a new index.
-    
-    Args:
-        google_drive_file_id (str): The file ID from the Google Drive shareable link.
-        index_name (str): Pinecone index name. Defaults to PINECONE_INDEX_NAME env var.
-        version_file (str): File containing the hash of the Excel file used for the index.
-    
-    Returns:
-        Pinecone: Vector store backed by Pinecone index.
-    """
+    """Download scheme data and upsert it into a Pinecone index."""
     if index_name is None:
         index_name = PINECONE_INDEX_NAME
 
@@ -68,8 +103,7 @@ def load_rag_data(
                     logger.info(
                         f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
                     )
-                    embeddings = get_embeddings()
-                    return PineconeVectorStore.from_existing_index(index_name, embeddings)
+                    return pc.Index(index_name)
         except Exception as e:
             logger.error(f"Failed to load existing Pinecone index: {str(e)}. Will attempt download.")
 
@@ -100,14 +134,12 @@ def load_rag_data(
                 logger.info(
                     f"Using existing Pinecone index {index_name} with matching hash"
                 )
-                embeddings = get_embeddings()
-                return PineconeVectorStore.from_existing_index(index_name, embeddings)
+                return pc.Index(index_name)
             else:
                 logger.info(
                     f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
                 )
-                if pc:
-                    pc.delete_index(index_name)
+                pc.delete_index(index_name)
         except Exception as e:
             logger.error(
                 f"Failed to load existing Pinecone index: {str(e)}. Recreating."
@@ -142,31 +174,29 @@ def load_rag_data(
         "Benefit"
     ]
 
-    embeddings = get_embeddings()
-    all_documents = []
-
-    def process_rows(rows):
-        docs = []
-        for _, row in rows.iterrows():
-            parts = []
-            for col in relevant_columns:
-                if col in row and pd.notna(row[col]):
-                    clean_col = col.replace('(', ' ').replace(')', '')
-                    parts.append(f"{clean_col}: {row[col]}")
-            content = "\n".join(parts)
-            metadata = {
-                "guid": row.get("scheme_guid", ""),
-                "name": row.get("scheme_name", ""),
-                "applicability": row.get("Applicability (State)", ""),
-                "type": row.get("Type (Sch/Doc)", "")
-            }
-            docs.append(Document(page_content=content, metadata=metadata))
-        return docs
-
+    records = []
     logger.info(f"Processing {len(df)} rows in chunks of {chunk_size}")
+
     for start in range(0, len(df), chunk_size):
         chunk = df.iloc[start : start + chunk_size]
-        all_documents.extend(process_rows(chunk))
+        for _, row in chunk.iterrows():
+            parts = []
+            for col in df.columns:
+                if pd.notna(row.get(col)):
+                    parts.append(str(row[col]))
+            content = " ".join(parts)
+            record = {
+                "_id": str(row.get("_id", row.name)),
+                "inputs": {"chunk_text": content},
+                "metadata": {
+                    "scheme_guid": row.get("Scheme GUID", ""),
+                    "scheme_name": row.get("Scheme Name", ""),
+                    "Applicability (State)": row.get("Applicability (State)", ""),
+                    "Type (Sch/Doc)": row.get("Type (Sch/Doc)", ""),
+                    "gender": row.get("gender", "")
+                },
+            }
+            records.append(record)
 
     if pc and not pc.has_index(index_name):
         pc.create_index_for_model(
@@ -176,7 +206,10 @@ def load_rag_data(
             embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
         )
 
-    vector_store = PineconeVectorStore.from_documents(all_documents, embeddings, index_name=index_name)
+    index = pc.Index(index_name)
+    for start in range(0, len(records), chunk_size):
+        batch = records[start : start + chunk_size]
+        index.upsert_records(namespace="", records=batch)
 
     try:
         with open(version_file, "w") as f:
@@ -187,13 +220,14 @@ def load_rag_data(
         raise
 
     logger.info("Pinecone index updated")
-    return vector_store
+    return index
 
 
 def load_dfl_data(
-    google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
+    google_drive_file_id: str = "1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
     index_name: str | None = None,
-    version_file="dfl_version.txt",
+    version_file: str = "dfl_version.txt",
+    chunk_tokens: int = 350,
 ):
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
@@ -222,27 +256,16 @@ def load_dfl_data(
                 logger.info(
                     f"Using existing Pinecone index {index_name} for DFL with matching hash"
                 )
-                embeddings = get_embeddings()
-                return PineconeVectorStore.from_existing_index(index_name, embeddings)
+                return pc.Index(index_name)
             else:
                 logger.info(
                     f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
                 )
-                if pc:
-                    pc.delete_index(index_name)
+                pc.delete_index(index_name)
         except Exception as e:
             logger.error(f"Failed to load existing DFL index: {str(e)}. Recreating.")
 
     logger.info("Creating new DFL Pinecone index")
-    chunk_size = 300
-    documents = []
-    for i in range(0, len(text), chunk_size):
-        chunk = text[i : i + chunk_size].strip()
-        if chunk:
-            documents.append(Document(page_content=chunk, metadata={"chunk": i // chunk_size}))
-
-    embeddings = get_embeddings()
-
     if pc and not pc.has_index(index_name):
         pc.create_index_for_model(
             name=index_name,
@@ -251,7 +274,16 @@ def load_dfl_data(
             embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
         )
 
-    vector_store = PineconeVectorStore.from_documents(documents, embeddings, index_name=index_name)
+    index = pc.Index(index_name)
+    import tiktoken
+    enc = tiktoken.get_encoding("cl100k_base")
+    tokens = enc.encode(text)
+    records = []
+    for i in range(0, len(tokens), chunk_tokens):
+        chunk = enc.decode(tokens[i : i + chunk_tokens])
+        records.append({"_id": str(i // chunk_tokens), "inputs": {"chunk_text": chunk}})
+    for start in range(0, len(records), 100):
+        index.upsert_records(namespace="", records=records[start : start + 100])
 
     try:
         with open(version_file, "w") as vf:
@@ -262,4 +294,4 @@ def load_dfl_data(
         raise
 
     logger.info("DFL Pinecone index updated")
-    return vector_store
+    return index
