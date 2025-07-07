@@ -437,7 +437,7 @@ def generate_response(intent, rag_response, user_info, language, context, query,
 
     **Task**:
     Use any user-provided scheme details to pick relevant schemes from retrieved data and personalise the scheme information wherever applicable.
-    Always prioritise the **Current Query** over the **Conversation Context** when determining the response.
+    Prioritise the **Current Query** over the **Conversation Context** when determining the response.
     """
 
     special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST"]
