@@ -4,13 +4,9 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
-from data_loader import load_rag_data, load_dfl_data
-from utils import (
-    get_embeddings,
-    extract_scheme_guid,
-)
+from data_loader import load_rag_data, load_dfl_data, PineconeRecordRetriever
+from utils import extract_scheme_guid
 import streamlit as st
 from data import DataManager
 import re
@@ -47,8 +43,9 @@ def init_llm():
 def init_vector_store():
     logger.info("Loading vector store")
     start_time = time.time()
-    vector_store = load_rag_data(faiss_index_path="faiss_index", version_file="faiss_version.txt")
-    logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents")
+    index_name = os.getenv("PINECONE_INDEX_NAME")
+    vector_store = load_rag_data(index_name=index_name, version_file="faiss_version.txt")
+    logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds")
     return vector_store
 
 @st.cache_resource
@@ -58,16 +55,16 @@ def init_dfl_vector_store():
     google_drive_file_id = os.getenv("DFL_GOOGLE_DOC_ID")
     if not google_drive_file_id:
         raise ValueError("DFL_GOOGLE_DOC_ID environment variable not set")
-    vector_store = load_dfl_data(google_drive_file_id)
+    index_name = os.getenv("PINECONE_DFL_INDEX_NAME")
+    vector_store = load_dfl_data(google_drive_file_id, index_name=index_name)
     logger.info(
-        f"DFL vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents"
+        f"DFL vector store loaded in {time.time() - start_time:.2f} seconds"
     )
     return vector_store
 
 llm = init_llm()
 scheme_vector_store = init_vector_store()
 dfl_vector_store = init_dfl_vector_store()
-embeddings = get_embeddings()
 
 # Dataclass to hold user context information
 @dataclass
@@ -218,11 +215,8 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
             fallback_query = f"{fallback_query}. {' '.join(fallback_details)}"
 
         logger.debug(f"Processing query: {full_query}")
-        embed_start = time.time()
-        query_embedding = embeddings.embed_query(full_query)
-        logger.debug(f"Query embedding generated in {time.time() - embed_start:.2f} seconds (first 10 values): {query_embedding[:10]}")
         retrieve_start = time.time()
-        retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+        retriever = PineconeRecordRetriever(vector_store, state=state, gender=gender, k=5)
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
@@ -935,7 +929,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Check if vector stores are valid
     step = time.time()
     try:
-        doc_count = scheme_vector_store.index.ntotal
+        doc_count = scheme_vector_store.describe_index_stats().total_vector_count
         logger.info(f"Scheme vector store contains {doc_count} documents")
         if doc_count == 0:
             logger.error("Vector store is empty")
@@ -946,7 +940,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             record("vector_store_check", step)
             log_timings()
             return error_message, hindi_audio_script
-        dfl_count = dfl_vector_store.index.ntotal
+        dfl_count = dfl_vector_store.describe_index_stats().total_vector_count
         logger.info(f"DFL vector store contains {dfl_count} documents")
         if dfl_count == 0:
             logger.error(
