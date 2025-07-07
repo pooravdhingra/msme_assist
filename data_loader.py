@@ -127,8 +127,9 @@ def load_rag_data(
         logger.info(f"Cached file available at {temp_file_path}")
 
     relevant_columns = [
-        "Scheme GUID",
-        "Scheme Name",
+        "_id",
+        "scheme_guid",
+        "scheme_name",
         "parent_scheme_name",
         "Applicability (State)",
         "Central Department Name",
@@ -154,8 +155,8 @@ def load_rag_data(
                     parts.append(f"{clean_col}: {row[col]}")
             content = "\n".join(parts)
             metadata = {
-                "guid": row.get("Scheme GUID", ""),
-                "name": row.get("Scheme Name", ""),
+                "guid": row.get("scheme_guid", ""),
+                "name": row.get("scheme_name", ""),
                 "applicability": row.get("Applicability (State)", ""),
                 "type": row.get("Type (Sch/Doc)", "")
             }
