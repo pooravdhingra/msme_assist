@@ -1,5 +1,6 @@
 import pandas as pd
-from langchain_community.vectorstores import FAISS
+from langchain_pinecone import Pinecone as PineconeVectorStore
+from pinecone import Pinecone as PineconeClient
 from langchain_core.documents import Document
 import os
 import logging
@@ -7,34 +8,56 @@ import gdown  # For downloading from Google Drive
 import hashlib
 import requests
 from utils import get_embeddings
+from dotenv import load_dotenv
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+load_dotenv()
+
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+
+if not PINECONE_API_KEY:
+    logger.warning("PINECONE_API_KEY not set; vector storage will not work")
+
+pc = None
+if PINECONE_API_KEY:
+    try:
+        pc = PineconeClient(api_key=PINECONE_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Pinecone client: {e}")
+
 __all__ = ["load_rag_data", "load_dfl_data"]
 
 def load_rag_data(
     google_drive_file_id="13OKwV3G_j4OJdm1Cxt7FAlO6qzrxBMW6",
-    faiss_index_path="faiss_index",
+    index_name: str | None = None,
     version_file="faiss_version.txt",
     cached_file_path="scheme_db_latest.xlsx",
     chunk_size=400,
 ):
     """
-    Load scheme_db.xlsx, check for precomputed FAISS index, and return a FAISS vector store.
+    Load scheme_db.xlsx and store documents in a Pinecone index.
     If a valid precomputed index exists, load it; otherwise, process in chunks and create a new index.
     
     Args:
         google_drive_file_id (str): The file ID from the Google Drive shareable link.
-        faiss_index_path (str): Directory containing the precomputed FAISS index.
+        index_name (str): Pinecone index name. Defaults to PINECONE_INDEX_NAME env var.
         version_file (str): File containing the hash of the Excel file used for the index.
     
     Returns:
-        FAISS: FAISS vector store with indexed scheme documents.
+        Pinecone: Vector store backed by Pinecone index.
     """
-    # Check if index and version hash exist and cached file matches
-    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+    if index_name is None:
+        index_name = PINECONE_INDEX_NAME
+
+    if index_name is None:
+        raise ValueError("Pinecone index name not provided")
+
+    # Check if index and cached file hash exist
+    if pc and pc.has_index(index_name) and os.path.exists(version_file):
         try:
             with open(version_file, "r") as vf:
                 stored_hash = vf.read().strip()
@@ -43,18 +66,12 @@ def load_rag_data(
                     cached_hash = hashlib.md5(cf.read()).hexdigest()
                 if cached_hash == stored_hash:
                     logger.info(
-                        f"Using existing FAISS index and cached file with hash {stored_hash}"
+                        f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
                     )
                     embeddings = get_embeddings()
-                    return FAISS.load_local(
-                        faiss_index_path,
-                        embeddings,
-                        allow_dangerous_deserialization=True,
-                    )
+                    return PineconeVectorStore.from_existing_index(index_name, embeddings)
         except Exception as e:
-            logger.error(
-                f"Failed to load precomputed FAISS index: {str(e)}. Will attempt download."
-            )
+            logger.error(f"Failed to load existing Pinecone index: {str(e)}. Will attempt download.")
 
     # Download the Google Sheet as an Excel file
     download_url = f"https://docs.google.com/spreadsheets/d/{google_drive_file_id}/export?format=xlsx"
@@ -75,33 +92,26 @@ def load_rag_data(
     logger.info(f"Computed file hash: {file_hash}")
 
     # If index exists and hash matches, skip processing
-    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+    if pc and pc.has_index(index_name) and os.path.exists(version_file):
         try:
             with open(version_file, "r") as vf:
                 stored_hash = vf.read().strip()
             if stored_hash == file_hash:
                 logger.info(
-                    f"Precomputed FAISS index found with matching hash at {faiss_index_path}"
+                    f"Using existing Pinecone index {index_name} with matching hash"
                 )
                 embeddings = get_embeddings()
-                return FAISS.load_local(
-                    faiss_index_path,
-                    embeddings,
-                    allow_dangerous_deserialization=True,
-                )
+                return PineconeVectorStore.from_existing_index(index_name, embeddings)
             else:
                 logger.info(
-                    f"Hash mismatch: stored hash {stored_hash}, current hash {file_hash}. Recomputing FAISS index."
+                    f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
                 )
+                if pc:
+                    pc.delete_index(index_name)
         except Exception as e:
             logger.error(
-                f"Failed to load precomputed FAISS index: {str(e)}. Recomputing FAISS index."
+                f"Failed to load existing Pinecone index: {str(e)}. Recreating."
             )
-
-    else:
-        logger.info(
-            f"No precomputed FAISS index found at {faiss_index_path} or version file missing. Computing new index."
-        )
 
 
 
@@ -132,7 +142,7 @@ def load_rag_data(
     ]
 
     embeddings = get_embeddings()
-    vector_store = None
+    all_documents = []
 
     def process_rows(rows):
         docs = []
@@ -155,30 +165,35 @@ def load_rag_data(
     logger.info(f"Processing {len(df)} rows in chunks of {chunk_size}")
     for start in range(0, len(df), chunk_size):
         chunk = df.iloc[start : start + chunk_size]
-        documents = process_rows(chunk)
-        if vector_store is None:
-            vector_store = FAISS.from_documents(documents, embeddings)
-        else:
-            temp_store = FAISS.from_documents(documents, embeddings)
-            vector_store.merge_from(temp_store)
-    logger.info(f"FAISS vector store created with {vector_store.index.ntotal} documents")
-    
-    # Save the FAISS index and version file
+        all_documents.extend(process_rows(chunk))
+
+    if pc and not pc.has_index(index_name):
+        pc.create_index_for_model(
+            name=index_name,
+            cloud="aws",
+            region="us-east-1",
+            embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
+        )
+
+    vector_store = PineconeVectorStore.from_documents(all_documents, embeddings, index_name=index_name)
+
     try:
-        os.makedirs(faiss_index_path, exist_ok=True)
-        vector_store.save_local(faiss_index_path)
-        logger.info(f"Saved FAISS vector store to {faiss_index_path}")
         with open(version_file, "w") as f:
             f.write(file_hash)
         logger.info(f"Saved file hash to {version_file}")
     except Exception as e:
-        logger.error(f"Failed to save FAISS vector store or version: {str(e)}")
+        logger.error(f"Failed to save version file: {str(e)}")
         raise
 
+    logger.info("Pinecone index updated")
     return vector_store
 
 
-def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE", faiss_index_path="dfl_faiss_index", version_file="dfl_version.txt"):
+def load_dfl_data(
+    google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
+    index_name: str | None = None,
+    version_file="dfl_version.txt",
+):
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
     logger.info(f"Downloading Google Doc from {download_url}")
@@ -192,28 +207,32 @@ def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eI
         logger.error(f"Failed to download Google Doc: {str(e)}")
         raise
 
-    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+    if index_name is None:
+        index_name = PINECONE_INDEX_NAME
+
+    if index_name is None:
+        raise ValueError("Pinecone index name not provided")
+
+    if pc and pc.has_index(index_name) and os.path.exists(version_file):
         try:
             with open(version_file, "r") as vf:
                 stored_hash = vf.read().strip()
             if stored_hash == file_hash:
                 logger.info(
-                    f"Precomputed DFL FAISS index found with matching hash at {faiss_index_path}"
+                    f"Using existing Pinecone index {index_name} for DFL with matching hash"
                 )
                 embeddings = get_embeddings()
-                return FAISS.load_local(
-                    faiss_index_path,
-                    embeddings,
-                    allow_dangerous_deserialization=True,
-                )
+                return PineconeVectorStore.from_existing_index(index_name, embeddings)
             else:
                 logger.info(
-                    f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recomputing index."
+                    f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
                 )
+                if pc:
+                    pc.delete_index(index_name)
         except Exception as e:
-            logger.error(f"Failed to load precomputed DFL index: {str(e)}. Recomputing.")
+            logger.error(f"Failed to load existing DFL index: {str(e)}. Recreating.")
 
-    logger.info("Creating new DFL FAISS index")
+    logger.info("Creating new DFL Pinecone index")
     chunk_size = 300
     documents = []
     for i in range(0, len(text), chunk_size):
@@ -222,16 +241,24 @@ def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eI
             documents.append(Document(page_content=chunk, metadata={"chunk": i // chunk_size}))
 
     embeddings = get_embeddings()
-    vector_store = FAISS.from_documents(documents, embeddings)
+
+    if pc and not pc.has_index(index_name):
+        pc.create_index_for_model(
+            name=index_name,
+            cloud="aws",
+            region="us-east-1",
+            embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
+        )
+
+    vector_store = PineconeVectorStore.from_documents(documents, embeddings, index_name=index_name)
 
     try:
-        os.makedirs(faiss_index_path, exist_ok=True)
-        vector_store.save_local(faiss_index_path)
         with open(version_file, "w") as vf:
             vf.write(file_hash)
-        logger.info(f"Saved DFL FAISS index to {faiss_index_path} and hash to {version_file}")
+        logger.info(f"Saved file hash to {version_file}")
     except Exception as e:
-        logger.error(f"Failed to save DFL FAISS index: {str(e)}")
+        logger.error(f"Failed to save DFL version file: {str(e)}")
         raise
 
+    logger.info("DFL Pinecone index updated")
     return vector_store

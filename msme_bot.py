@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from data_loader import load_rag_data, load_dfl_data
 from utils import (
@@ -47,8 +46,9 @@ def init_llm():
 def init_vector_store():
     logger.info("Loading vector store")
     start_time = time.time()
-    vector_store = load_rag_data(faiss_index_path="faiss_index", version_file="faiss_version.txt")
-    logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents")
+    index_name = os.getenv("PINECONE_INDEX_NAME")
+    vector_store = load_rag_data(index_name=index_name, version_file="faiss_version.txt")
+    logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds")
     return vector_store
 
 @st.cache_resource
@@ -58,9 +58,10 @@ def init_dfl_vector_store():
     google_drive_file_id = os.getenv("DFL_GOOGLE_DOC_ID")
     if not google_drive_file_id:
         raise ValueError("DFL_GOOGLE_DOC_ID environment variable not set")
-    vector_store = load_dfl_data(google_drive_file_id)
+    index_name = os.getenv("PINECONE_INDEX_NAME")
+    vector_store = load_dfl_data(google_drive_file_id, index_name=index_name)
     logger.info(
-        f"DFL vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents"
+        f"DFL vector store loaded in {time.time() - start_time:.2f} seconds"
     )
     return vector_store
 
@@ -935,8 +936,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Check if vector stores are valid
     step = time.time()
     try:
-        doc_count = scheme_vector_store.index.ntotal
-        logger.info(f"Scheme vector store contains {doc_count} documents")
+        doc_count = getattr(getattr(scheme_vector_store, "index", None), "ntotal", None)
+        if doc_count is not None:
+            logger.info(f"Scheme vector store contains {doc_count} documents")
         if doc_count == 0:
             logger.error("Vector store is empty")
             error_message = "No scheme data available. Please check the data source."
@@ -946,8 +948,9 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             record("vector_store_check", step)
             log_timings()
             return error_message, hindi_audio_script
-        dfl_count = dfl_vector_store.index.ntotal
-        logger.info(f"DFL vector store contains {dfl_count} documents")
+        dfl_count = getattr(getattr(dfl_vector_store, "index", None), "ntotal", None)
+        if dfl_count is not None:
+            logger.info(f"DFL vector store contains {dfl_count} documents")
         if dfl_count == 0:
             logger.error(
                 "DFL vector store is empty, will rely solely on LLM knowledge"
