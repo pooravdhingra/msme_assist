@@ -55,7 +55,7 @@ class PineconeRecordRetriever(BaseRetriever):
 
         try:
             res = self.index.search(
-                namespace="",
+                namespace="__default__",
                 query={"top_k": self.k, "inputs": {"chunk_text": query}, "filter": flt},
                 fields=["*"]
             )
@@ -209,7 +209,7 @@ def load_rag_data(
     index = pc.Index(index_name)
     for start in range(0, len(records), chunk_size):
         batch = records[start : start + chunk_size]
-        index.upsert_records(namespace="", records=batch)
+        index.upsert_records(namespace="__default__", records=batch)
 
     try:
         with open(version_file, "w") as f:
@@ -227,7 +227,7 @@ def load_dfl_data(
     google_drive_file_id: str = "1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
     index_name: str | None = None,
     version_file: str = "dfl_version.txt",
-    chunk_tokens: int = 350,
+    chunk_tokens: int = 400,
 ):
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
@@ -283,7 +283,7 @@ def load_dfl_data(
         chunk = enc.decode(tokens[i : i + chunk_tokens])
         records.append({"_id": str(i // chunk_tokens), "inputs": {"chunk_text": chunk}})
     for start in range(0, len(records), 100):
-        index.upsert_records(namespace="", records=records[start : start + 100])
+        index.upsert_records(namespace="__default__", records=records[start : start + 100])
 
     try:
         with open(version_file, "w") as vf:
