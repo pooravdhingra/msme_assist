@@ -1,5 +1,5 @@
 import pandas as pd
-from pinecone import Pinecone
+from pinecone import Pinecone, SearchQuery
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 import os
@@ -7,7 +7,6 @@ import logging
 import gdown  # For downloading from Google Drive
 import hashlib
 import requests
-from utils import get_embeddings
 from dotenv import load_dotenv
 
 # Set up logging
@@ -18,6 +17,7 @@ load_dotenv()
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+PINECONE_DFL_INDEX_NAME = os.getenv("PINECONE_DFL_INDEX_NAME")
 
 if not PINECONE_API_KEY:
     logger.warning("PINECONE_API_KEY not set; vector storage will not work")
@@ -63,22 +63,18 @@ class PineconeRecordRetriever(BaseRetriever):
             flt["gender"] = {"$in": [self.gender, "all_genders"]}
 
         try:
-            res = self.index.query(
-                vector={"chunk_text": query},
-                top_k=self.k,
-                namespace="",
-                filter=flt,
-                include_metadata=True,
-            )
+            search_query = SearchQuery(inputs={"text": query}, top_k=self.k, filter=flt)
+            res = self.index.search_records("__default__", search_query)
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
             return []
 
-        hits = getattr(res, "matches", []) or getattr(res, "results", [])
+        hits = getattr(res.result, "hits", [])
         docs = []
         for hit in hits:
-            metadata = getattr(hit, "metadata", {}) or hit.get("metadata", {})
-            text = metadata.get("chunk_text", "")
+            fields = getattr(hit, "fields", {}) or hit.get("fields", {})
+            text = fields.get("chunk_text", "")
+            metadata = fields
             docs.append(Document(page_content=text, metadata=metadata))
         return docs
 
@@ -91,7 +87,7 @@ def load_rag_data(
 ):
     """Download scheme data and upsert it into a Pinecone index."""
     if index_name is None:
-        index_name = PINECONE_INDEX_NAME
+        index_name = PINECONE_DFL_INDEX_NAME or PINECONE_INDEX_NAME
 
     if index_name is None:
         raise ValueError("Pinecone index name not provided")
@@ -213,7 +209,7 @@ def load_rag_data(
     index = pc.Index(index_name)
     for start in range(0, len(records), chunk_size):
         batch = records[start : start + chunk_size]
-        index.upsert(vectors=batch, namespace="")
+        index.upsert_records("__default__", batch)
 
     try:
         with open(version_file, "w") as f:
@@ -288,7 +284,7 @@ def load_dfl_data(
         records.append({"id": str(i // chunk_tokens), "values": {"chunk_text": chunk}})
     for start in range(0, len(records), 100):
         batch = records[start : start + 100]
-        index.upsert(vectors=batch, namespace="")
+        index.upsert_records("__default__", batch)
 
     try:
         with open(version_file, "w") as vf:
