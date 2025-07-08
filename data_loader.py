@@ -204,14 +204,18 @@ def load_rag_data(
                 if pd.notna(row.get(col)):
                     parts.append(str(row[col]))
             content = " ".join(parts)
+
+            def _get_str(value):
+                return str(value) if pd.notna(value) else ""
+
             record = {
-                "id": str(row.get("scheme_guid", row.name)),
+                "id": _get_str(row.get("scheme_guid", row.name)),
                 "chunk_text": content,
-                "scheme_guid": row.get("scheme_guid", ""),
-                "scheme_name": row.get("scheme_name", ""),
-                "applicability_state": row.get("applicability_state", ""),
-                "type_sch_doc": row.get("type_sch_doc", ""),
-                }
+                "scheme_guid": _get_str(row.get("scheme_guid")),
+                "scheme_name": _get_str(row.get("scheme_name")),
+                "applicability_state": _get_str(row.get("applicability_state")),
+                "type_sch_doc": _get_str(row.get("type_sch_doc")),
+            }
             records.append(record)
 
     if pc and not pinecone_has_index(index_name):
