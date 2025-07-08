@@ -83,7 +83,6 @@ class PineconeRecordRetriever(BaseRetriever):
                 namespace="__default__",
                 include_metadata=True,
             )
-            logger.debug(f"Raw Pinecone response: {res}")
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
             return []
@@ -184,14 +183,14 @@ def load_rag_data(
         "scheme_name",
         "parent_scheme_name",
         "applicability_state",
-        "Central Department Name",
-        "State department name",
+        "central_department_name",
+        "state_department_name",
         "type_sch_doc",
-        "Service Type Name",
-        "Scheme description",
-        "Scheme Eligibility",
-        "Application Process",
-        "Benefit"
+        "service_type_name",
+        "scheme_description",
+        "scheme_eligibility",
+        "application_process",
+        "benefit"
     ]
 
     records = []
@@ -206,7 +205,7 @@ def load_rag_data(
                     parts.append(str(row[col]))
             content = " ".join(parts)
             record = {
-                "id": str(row.get("_id", row.name)),
+                "id": str(row.get("scheme_guid", row.name)),
                 "chunk_text": content,
                 "scheme_guid": row.get("scheme_guid", ""),
                 "scheme_name": row.get("scheme_name", ""),

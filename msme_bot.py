@@ -938,37 +938,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             log_timings()
             return None, None
 
-    # Check if vector stores are valid
-    step = time.time()
-    try:
-        doc_count = scheme_vector_store.describe_index_stats().total_vector_count
-        logger.info(f"Scheme vector store contains {doc_count} documents")
-        if doc_count == 0:
-            logger.error("Vector store is empty")
-            error_message = "No scheme data available. Please check the data source."
-            if query_language == "Hindi":
-                error_message = "कोई योजना डेटा उपलब्ध नहीं है। कृपया डेटा स्रोत की जाँच करें।"
-            hindi_audio_script = generate_hindi_audio_script(error_message, user_info)
-            record("vector_store_check", step)
-            log_timings()
-            return error_message, hindi_audio_script
-        dfl_count = dfl_vector_store.describe_index_stats().total_vector_count
-        logger.info(f"DFL vector store contains {dfl_count} documents")
-        if dfl_count == 0:
-            logger.error(
-                "DFL vector store is empty, will rely solely on LLM knowledge"
-            )
-        record("vector_store_check", step)
-    except Exception as e:
-        logger.error(f"Vector store check failed: {str(e)}")
-        error_message = "Error accessing scheme data."
-        if query_language == "Hindi":
-            error_message = "योजना डेटा तक पहुँचने में त्रुटि।"
-        hindi_audio_script = generate_hindi_audio_script(error_message, user_info)
-        record("vector_store_check", step)
-        log_timings()
-        return error_message, hindi_audio_script
-
     # Check if query is related to any previous query in the session
     scheme_rag = None
     dfl_rag = None
