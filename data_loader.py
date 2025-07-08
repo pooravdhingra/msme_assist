@@ -84,11 +84,17 @@ class PineconeRecordRetriever(BaseRetriever):
                 parameters={"input_type": "query"},
             ).data[0]["values"]
             logger.debug(f"Query embedding sample: {embedding[:5]}")
+            filter_arg = None
+            if self.state:
+                filter_arg = {
+                    "applicability_state": {"$in": [self.state, "ALL_STATES"]}
+                }
             res = self.index.query(
                 vector=embedding,
                 top_k=self.k,
                 namespace="__default__",
                 include_metadata=True,
+                filter=filter_arg,
             )
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
