@@ -243,7 +243,7 @@ def load_dfl_data(
     google_drive_file_id: str = "1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
     index_name: str | None = None,
     version_file: str = "dfl_version.txt",
-    chunk_tokens: int = 300,
+    chunk_tokens: int = 350,
 ):
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
