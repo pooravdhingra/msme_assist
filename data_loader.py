@@ -82,7 +82,7 @@ class PineconeRecordRetriever(BaseRetriever):
             embedding = pc.inference.embed(
                 model="llama-text-embed-v2",
                 inputs=query,
-                parameters={"input_type": "search_query"},
+                parameters={"input_type": "query"},
             ).data[0]["values"]
             logger.debug(f"Query embedding sample: {embedding[:5]}")
             res = self.index.query(
@@ -97,9 +97,7 @@ class PineconeRecordRetriever(BaseRetriever):
             logger.error(f"Pinecone search failed: {e}")
             return []
 
-        # `index.query` returns a dictionary, not an object, so use `.get`
-        # to access the matches list. Using `getattr` would always return the
-        # default value and ignore actual matches.
+  
         hits = res.get("matches", [])
         logger.debug(f"Number of matches returned: {len(hits)}")
         docs = []
