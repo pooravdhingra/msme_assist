@@ -15,6 +15,7 @@ from data import DataManager, STATE_MAPPING
 import numpy as np
 import logging
 from tts import synthesize, audio_player
+from typing import Optional
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -77,13 +78,17 @@ def generate_query_id(query, timestamp):
     return f"{query[:50]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
 # Animate text typing effect
-def type_text(text, placeholder, delay: float = 0.02):
+
+
+def type_text(text, placeholder, timestamp: Optional[str] = None, delay: float = 0.02):
+    """Display text with a typing animation followed by an optional timestamp."""
     typed = ""
     for char in text:
         typed += char
         placeholder.markdown(typed + "▌")
         time.sleep(delay)
-    placeholder.markdown(typed)
+    final_text = typed if timestamp is None else f"{typed} *({timestamp})*"
+    placeholder.markdown(final_text)
 
 # Restore session from URL query parameters
 def restore_session_from_url():
@@ -346,7 +351,8 @@ def chat_page():
                     else:
                         audio_thread = None
 
-                    type_text(welcome_response, message_placeholder)
+                    welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                    type_text(welcome_response, message_placeholder, welcome_timestamp)
 
                     if audio_thread:
                         audio_thread.join()
@@ -390,24 +396,10 @@ def chat_page():
         with st.chat_message(msg["role"], avatar="logo.jpeg" if msg["role"] == "assistant" else None):
             if msg["role"] == "user":
                 st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
-            else: # Assistant messages
-                # --- MODIFICATION START ---
+            else:  # Assistant messages
                 full_content = msg["content"]
                 display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
-                expand_threshold = 200 
-
-                if len(full_content) > expand_threshold:
-                    # Create the expander label including the timestamp
-                    concise_preview = full_content[:expand_threshold].rsplit(' ', 1)[0] + "..."
-                    expander_label = f"{concise_preview} *({display_timestamp})*"
-                    
-                    # Place the expander. The full content goes inside the expander.
-                    with st.expander(expander_label):
-                        st.markdown(full_content)
-                else:
-                    # If content is short, display it directly with timestamp.
-                    st.markdown(f"{full_content} *({display_timestamp})*")
-                # --- MODIFICATION END ---
+                st.markdown(f"{full_content} *({display_timestamp})*")
 
 
     # Chat input
@@ -459,16 +451,8 @@ def chat_page():
 
                 full_content_response = response
                 display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                expand_threshold_response = 200
 
-                if len(full_content_response) > expand_threshold_response:
-                    concise_preview_response = full_content_response[:expand_threshold_response].rsplit(' ', 1)[0] + "..."
-                    expander_label_response = f"{concise_preview_response} *({display_timestamp_response})*"
-                    with st.expander(expander_label_response):
-                        st.markdown(full_content_response)
-                else:
-                    type_text(full_content_response, message_placeholder)
-                    message_placeholder.markdown(f"{full_content_response} *({display_timestamp_response})*")
+                type_text(full_content_response, message_placeholder, display_timestamp_response)
 
                 if audio_thread:
                     audio_thread.join()
