@@ -328,6 +328,12 @@ def chat_page():
 
     # Combine past conversations from MongoDB and current session messages
     st.subheader("Conversation History")
+    # Global CSS for collapsible assistant responses
+    try:
+        with open("styles.css") as css:
+            st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
     all_messages = []
 
     # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
@@ -362,24 +368,24 @@ def chat_page():
         with st.chat_message(msg["role"], avatar="logo.jpeg" if msg["role"] == "assistant" else None):
             if msg["role"] == "user":
                 st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
-            else: # Assistant messages
-                # --- MODIFICATION START ---
+            else:  # Assistant messages
                 full_content = msg["content"]
                 display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
-                expand_threshold = 200 
+                expand_threshold = 200
 
                 if len(full_content) > expand_threshold:
-                    # Create the expander label including the timestamp
                     concise_preview = full_content[:expand_threshold].rsplit(' ', 1)[0] + "..."
-                    expander_label = f"{concise_preview} *({display_timestamp})*"
-                    
-                    # Place the expander. The full content goes inside the expander.
-                    with st.expander(expander_label):
-                        st.markdown(full_content)
+                    st.markdown(
+                        f"""
+<details class="custom-details">
+<summary><span class="preview">{concise_preview}</span> <em>({display_timestamp})</em></summary>
+{full_content}
+</details>
+""",
+                        unsafe_allow_html=True,
+                    )
                 else:
-                    # If content is short, display it directly with timestamp.
                     st.markdown(f"{full_content} *({display_timestamp})*")
-                # --- MODIFICATION END ---
 
 
     # Chat input
@@ -420,20 +426,23 @@ def chat_page():
                     audio_bytes = synthesize(audio_script_for_tts, "Hindi")
                     audio_player(audio_bytes, autoplay=True)
                 
-                # --- MODIFICATION START ---
                 full_content_response = response
                 display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                expand_threshold_response = 200 
+                expand_threshold_response = 200
 
                 if len(full_content_response) > expand_threshold_response:
                     concise_preview_response = full_content_response[:expand_threshold_response].rsplit(' ', 1)[0] + "..."
-                    expander_label_response = f"{concise_preview_response} *({display_timestamp_response})*"
-                    
-                    with st.expander(expander_label_response):
-                        st.markdown(full_content_response)
+                    st.markdown(
+                        f"""
+<details class="custom-details">
+<summary><span class="preview">{concise_preview_response}</span> <em>({display_timestamp_response})</em></summary>
+{full_content_response}
+</details>
+""",
+                        unsafe_allow_html=True,
+                    )
                 else:
                     st.markdown(f"{full_content_response} *({display_timestamp_response})*")
-                # --- MODIFICATION END ---
 
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):
