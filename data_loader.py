@@ -3,6 +3,7 @@ from pinecone import Pinecone
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from typing import Any
+from functools import lru_cache
 import os
 import logging
 import gdown  # For downloading from Google Drive
@@ -19,6 +20,8 @@ load_dotenv()
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 PINECONE_DFL_INDEX_NAME = os.getenv("PINECONE_DFL_INDEX_NAME")
+PINECONE_SCHEME_HOST = os.getenv("PINECONE_SCHEME_HOST")
+PINECONE_DFL_HOST = os.getenv("PINECONE_DFL_HOST")
 
 if not PINECONE_API_KEY:
     logger.warning("PINECONE_API_KEY not set; vector storage will not work")
@@ -29,6 +32,20 @@ if PINECONE_API_KEY:
         pc = Pinecone(api_key=PINECONE_API_KEY)
     except Exception as e:
         logger.error(f"Failed to initialize Pinecone client: {e}")
+
+_index_cache: dict[str, Any] = {}
+
+
+def get_index_by_host(host: str):
+    """Return a cached Pinecone index connection for the given host."""
+    if host in _index_cache:
+        return _index_cache[host]
+    if not pc:
+        raise ValueError("Pinecone client not initialized")
+    logger.info(f"Connecting to Pinecone index at {host}")
+    index = pc.Index(host=host)
+    _index_cache[host] = index
+    return index
 
 def pinecone_has_index(name: str) -> bool:
     if not pc:
@@ -112,17 +129,21 @@ class PineconeRecordRetriever(BaseRetriever):
 
 def load_rag_data(
     google_drive_file_id: str = "13OKwV3G_j4OJdm1Cxt7FAlO6qzrxBMW6",
+    host: str | None = None,
     index_name: str | None = None,
     version_file: str = "faiss_version.txt",
     cached_file_path: str = "scheme_db_latest.xlsx",
     chunk_size: int = 50,
 ):
     """Download scheme data and upsert it into a Pinecone index."""
-    if index_name is None:
-        index_name = PINECONE_INDEX_NAME
+    if host is None:
+        host = PINECONE_SCHEME_HOST
+
+    if host is None:
+        raise ValueError("Pinecone host not provided")
 
     if index_name is None:
-        raise ValueError("Pinecone index name not provided")
+        index_name = PINECONE_INDEX_NAME
 
     # Check if index and cached file hash exist
     if pc and pinecone_has_index(index_name) and os.path.exists(version_file):
@@ -136,7 +157,7 @@ def load_rag_data(
                     logger.info(
                         f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
                     )
-                    return pc.Index(index_name)
+                    return get_index_by_host(host)
         except Exception as e:
             logger.error(f"Failed to load existing Pinecone index: {str(e)}. Will attempt download.")
 
@@ -167,7 +188,7 @@ def load_rag_data(
                 logger.info(
                     f"Using existing Pinecone index {index_name} with matching hash"
                 )
-                return pc.Index(index_name)
+                return get_index_by_host(host)
             else:
                 logger.info(
                     f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
@@ -246,7 +267,7 @@ def load_rag_data(
             }
             records.append(record)
 
-    if pc and not pinecone_has_index(index_name):
+    if pc and index_name and not pinecone_has_index(index_name):
         pc.create_index_for_model(
             name=index_name,
             cloud="aws",
@@ -254,7 +275,7 @@ def load_rag_data(
             embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
         )
 
-    index = pc.Index(index_name)
+    index = get_index_by_host(host)
     for start in range(0, len(records), chunk_size):
         batch = records[start : start + chunk_size]
         index.upsert_records("__default__", batch)
@@ -273,6 +294,7 @@ def load_rag_data(
 
 def load_dfl_data(
     google_drive_file_id: str = "1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
+    host: str | None = None,
     index_name: str | None = None,
     version_file: str = "dfl_version.txt",
     chunk_tokens: int = 350,
@@ -290,11 +312,14 @@ def load_dfl_data(
         logger.error(f"Failed to download Google Doc: {str(e)}")
         raise
 
-    if index_name is None:
-        index_name = PINECONE_DFL_INDEX_NAME
+    if host is None:
+        host = PINECONE_DFL_HOST
+
+    if host is None:
+        raise ValueError("Pinecone host not provided")
 
     if index_name is None:
-        raise ValueError("Pinecone index name not provided")
+        index_name = PINECONE_DFL_INDEX_NAME
 
     if pc and pinecone_has_index(index_name) and os.path.exists(version_file):
         try:
@@ -304,7 +329,7 @@ def load_dfl_data(
                 logger.info(
                     f"Using existing Pinecone index {index_name} for DFL with matching hash"
                 )
-                return pc.Index(index_name)
+                return get_index_by_host(host)
             else:
                 logger.info(
                     f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
@@ -322,7 +347,7 @@ def load_dfl_data(
             embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
         )
 
-    index = pc.Index(index_name)
+    index = get_index_by_host(host)
     import tiktoken
     enc = tiktoken.get_encoding("cl100k_base")
     tokens = enc.encode(text)
