@@ -167,17 +167,6 @@ def load_rag_data(
 
 
 
-    # Read Excel file
-    try:
-        df = pd.read_excel(temp_file_path)
-        logger.info(f"Excel file loaded successfully. Rows: {len(df)}")
-    except Exception as e:
-        logger.error(f"Failed to read Excel file: {str(e)}")
-        raise
-    finally:
-        # Keep the downloaded file for future reuse
-        logger.info(f"Cached file available at {temp_file_path}")
-
     relevant_columns = [
         "scheme_guid",
         "scheme_name",
@@ -190,7 +179,24 @@ def load_rag_data(
         "scheme_description",
         "scheme_eligibility",
         "application_process",
-        "benefit"
+        "benefit",
+    ]
+
+    # Read Excel file with only relevant columns
+    try:
+        df = pd.read_excel(temp_file_path, usecols=relevant_columns)
+        logger.info(f"Excel file loaded successfully. Rows: {len(df)}")
+    except Exception as e:
+        logger.error(f"Failed to read Excel file: {str(e)}")
+        raise
+    finally:
+        # Keep the downloaded file for future reuse
+        logger.info(f"Cached file available at {temp_file_path}")
+
+    metadata_only_columns = [
+        "scheme_eligibility",
+        "application_process",
+        "benefit",
     ]
 
     records = []
@@ -200,9 +206,12 @@ def load_rag_data(
         chunk = df.iloc[start : start + chunk_size]
         for _, row in chunk.iterrows():
             parts = []
-            for col in df.columns:
-                if pd.notna(row.get(col)):
-                    parts.append(str(row[col]))
+            for col in relevant_columns:
+                if col in metadata_only_columns:
+                    continue
+                value = row.get(col)
+                if pd.notna(value):
+                    parts.append(str(value))
             content = " ".join(parts)
             record = {
                 "id": str(row.get("scheme_guid", row.name)),
@@ -211,7 +220,10 @@ def load_rag_data(
                 "scheme_name": row.get("scheme_name", ""),
                 "applicability_state": row.get("applicability_state", ""),
                 "type_sch_doc": row.get("type_sch_doc", ""),
-                }
+                "scheme_eligibility": row.get("scheme_eligibility", ""),
+                "application_process": row.get("application_process", ""),
+                "benefit": row.get("benefit", ""),
+            }
             records.append(record)
 
     if pc and not pinecone_has_index(index_name):
