@@ -852,7 +852,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     user_name = user_info.name
     state_id = user_info.state_id
     state_name = user_info.state_name
-    business_name = user_info.business_name
     business_category = user_info.business_category
     gender = user_info.gender
 
