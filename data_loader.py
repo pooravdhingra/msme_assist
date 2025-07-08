@@ -39,6 +39,13 @@ def pinecone_has_index(name: str) -> bool:
         logger.error(f"Failed to list Pinecone indexes: {exc}")
         return False
 
+def safe_get(row: pd.Series, column: str, default: str = ""):
+    """Return a value from the row, replacing NaN with a default."""
+    value = row.get(column, default)
+    if pd.isna(value):
+        return default
+    return value
+
 __all__ = ["load_rag_data", "load_dfl_data", "PineconeRecordRetriever"]
 
 
@@ -209,20 +216,21 @@ def load_rag_data(
             for col in relevant_columns:
                 if col in metadata_only_columns:
                     continue
-                value = row.get(col)
-                if pd.notna(value):
+                value = safe_get(row, col)
+                if value:
                     parts.append(str(value))
             content = " ".join(parts)
+            scheme_guid = safe_get(row, "scheme_guid", row.name)
             record = {
-                "id": str(row.get("scheme_guid", row.name)),
+                "id": str(scheme_guid),
                 "chunk_text": content,
-                "scheme_guid": row.get("scheme_guid", ""),
-                "scheme_name": row.get("scheme_name", ""),
-                "applicability_state": row.get("applicability_state", ""),
-                "type_sch_doc": row.get("type_sch_doc", ""),
-                "scheme_eligibility": row.get("scheme_eligibility", ""),
-                "application_process": row.get("application_process", ""),
-                "benefit": row.get("benefit", ""),
+                "scheme_guid": safe_get(row, "scheme_guid"),
+                "scheme_name": safe_get(row, "scheme_name"),
+                "applicability_state": safe_get(row, "applicability_state"),
+                "type_sch_doc": safe_get(row, "type_sch_doc"),
+                "scheme_eligibility": safe_get(row, "scheme_eligibility"),
+                "application_process": safe_get(row, "application_process"),
+                "benefit": safe_get(row, "benefit"),
             }
             records.append(record)
 
