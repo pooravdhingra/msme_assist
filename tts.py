@@ -4,6 +4,7 @@ import os
 import streamlit as st
 from google.cloud import texttospeech
 from google.oauth2 import service_account
+from typing import Optional
 
 
 def _create_client() -> texttospeech.TextToSpeechClient:
@@ -74,7 +75,9 @@ def autoplay(audio_bytes: bytes) -> None:
     audio_player(audio_bytes, autoplay=True)
 
 
-def audio_player(audio_bytes: bytes, autoplay: bool = False) -> None:
+def audio_player(
+    audio_bytes: bytes, autoplay: bool = False, placeholder: Optional[st.delta_generator.DeltaGenerator] = None
+) -> None:
     """Render an HTML audio player with optional autoplay."""
     b64 = base64.b64encode(audio_bytes).decode("utf-8")
     autoplay_attr = "autoplay" if autoplay else ""
@@ -82,6 +85,9 @@ def audio_player(audio_bytes: bytes, autoplay: bool = False) -> None:
         f'<audio {autoplay_attr} controls '
         f'controlsList="nodownload noplaybackrate" style="width: 100%;">'
         f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
-        '</audio>'
+        "</audio>"
     )
-    st.markdown(audio_html, unsafe_allow_html=True)
+    if placeholder is None:
+        st.markdown(audio_html, unsafe_allow_html=True)
+    else:
+        placeholder.markdown(audio_html, unsafe_allow_html=True)
