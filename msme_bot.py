@@ -143,7 +143,7 @@ def get_system_prompt(language, user_name="User"):
        2. **Response Guidelines**:
        - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
-       - Response must be at least 200 words and ≤350 words.
+       - Response must be at least 150 and <=250 words.
        - Never mention agent fees unless specified in RAG Response for scheme queries.
        - Never mention technical terms like RAG, LLM, Database etc. to the user.
        - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
@@ -227,7 +227,7 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
         logger.debug(f"Processing query: {full_query}")
         retrieve_start = time.time()
         retriever = PineconeRecordRetriever(
-            index=vector_store, state=state, gender=gender, k=3
+            index=vector_store, state=state, gender=gender, k=5
         )
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
@@ -796,7 +796,7 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
     - Summarize the core information from the provided 'Original Response'.
     - Ensure the summary flows naturally as if spoken by a human.
     - Translate the summary into clear and simple Hindi (Devanagari script) using simple hindi words.
-    - Focus on the main points and keep the summary concise, between 100-150 words, to ensure a smooth audio experience.
+    - Focus on the main points and keep the summary concise, between 50-100 words, to ensure a smooth audio experience.
     - The response should be purely the Hindi script, with no introductory or concluding remarks.
     - Do NOT use any english words. 
     - Do NOT translate Smileys or emoticons.

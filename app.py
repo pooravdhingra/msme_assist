@@ -80,7 +80,7 @@ def generate_query_id(query, timestamp):
 # Animate text typing effect
 
 
-def type_text(text, placeholder, timestamp: Optional[str] = None, delay: float = 0.02):
+def type_text(text, placeholder, timestamp: Optional[str] = None, delay: float = 0.015):
     """Display text with a typing animation followed by an optional timestamp."""
     typed = ""
     for char in text:

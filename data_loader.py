@@ -55,7 +55,7 @@ class PineconeRecordRetriever(BaseRetriever):
     index: Any
     state: str | None = None
     gender: str | None = None
-    k: int = 3
+    k: int = 5
 
     model_config = {
         "arbitrary_types_allowed": True,
@@ -66,7 +66,7 @@ class PineconeRecordRetriever(BaseRetriever):
         index: Any,
         state: str | None = None,
         gender: str | None = None,
-        k: int = 3,
+        k: int = 5,
     ) -> None:
         # Ensure BaseModel initialises correctly
         super().__init__(index=index, state=state, gender=gender, k=k)
