@@ -44,7 +44,13 @@ def init_vector_store():
     logger.info("Loading vector store")
     start_time = time.time()
     index_name = os.getenv("PINECONE_INDEX_NAME")
-    vector_store = load_rag_data(index_name=index_name, version_file="faiss_version.txt")
+    if not index_name:
+        raise ValueError("PINECONE_INDEX_NAME environment variable not set")
+    try:
+        vector_store = load_rag_data(index_name=index_name, version_file="faiss_version.txt")
+    except Exception as e:
+        logger.error(f"Failed to load scheme index: {e}")
+        raise
     logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds")
     return vector_store
 
@@ -56,7 +62,11 @@ def init_dfl_vector_store():
     if not google_drive_file_id:
         raise ValueError("DFL_GOOGLE_DOC_ID environment variable not set")
     index_name = os.getenv("PINECONE_DFL_INDEX_NAME")
-    vector_store = load_dfl_data(google_drive_file_id, index_name=index_name)
+    try:
+        vector_store = load_dfl_data(google_drive_file_id, index_name=index_name)
+    except Exception as e:
+        logger.error(f"Failed to load DFL index: {e}")
+        raise
     logger.info(
         f"DFL vector store loaded in {time.time() - start_time:.2f} seconds"
     )
@@ -216,7 +226,9 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
 
         logger.debug(f"Processing query: {full_query}")
         retrieve_start = time.time()
-        retriever = PineconeRecordRetriever(vector_store, state=state, gender=gender, k=5)
+        retriever = PineconeRecordRetriever(
+            index=vector_store, state=state, gender=gender, k=5
+        )
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
