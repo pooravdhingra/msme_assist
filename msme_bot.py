@@ -43,11 +43,12 @@ def init_llm():
 def init_vector_store():
     logger.info("Loading vector store")
     start_time = time.time()
+    index_host = os.getenv("PINECONE_SCHEME_HOST")
+    if not index_host:
+        raise ValueError("PINECONE_SCHEME_HOST environment variable not set")
     index_name = os.getenv("PINECONE_INDEX_NAME")
-    if not index_name:
-        raise ValueError("PINECONE_INDEX_NAME environment variable not set")
     try:
-        vector_store = load_rag_data(index_name=index_name, version_file="faiss_version.txt")
+        vector_store = load_rag_data(host=index_host, index_name=index_name, version_file="faiss_version.txt")
     except Exception as e:
         logger.error(f"Failed to load scheme index: {e}")
         raise
@@ -61,9 +62,12 @@ def init_dfl_vector_store():
     google_drive_file_id = os.getenv("DFL_GOOGLE_DOC_ID")
     if not google_drive_file_id:
         raise ValueError("DFL_GOOGLE_DOC_ID environment variable not set")
+    index_host = os.getenv("PINECONE_DFL_HOST")
+    if not index_host:
+        raise ValueError("PINECONE_DFL_HOST environment variable not set")
     index_name = os.getenv("PINECONE_DFL_INDEX_NAME")
     try:
-        vector_store = load_dfl_data(google_drive_file_id, index_name=index_name)
+        vector_store = load_dfl_data(google_drive_file_id, host=index_host, index_name=index_name)
     except Exception as e:
         logger.error(f"Failed to load DFL index: {e}")
         raise

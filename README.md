@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 *Configure Pinecone*
 
-Update `.env` with your `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`, and `PINECONE_DFL_INDEX_NAME` values. These are required for storing embeddings in Pinecone. An example file is provided in `.env.example`. The index region is set automatically so no environment variable is needed for the environment.
+Update `.env` with your `PINECONE_API_KEY`, `PINECONE_SCHEME_HOST`, and `PINECONE_DFL_HOST` values along with the optional `PINECONE_INDEX_NAME` and `PINECONE_DFL_INDEX_NAME` for index creation. An example file is provided in `.env.example`.
 
 The application will create the indexes automatically on the first run using Pinecone's built-in embedding model, so no manual setup is required. All data is stored under the `__default__` namespace.
 
