@@ -50,7 +50,11 @@ __all__ = ["load_rag_data", "load_dfl_data", "PineconeRecordRetriever"]
 
 
 class PineconeRecordRetriever(BaseRetriever):
-    """Simple retriever that queries a Pinecone index using text search."""
+    """Simple retriever that queries a Pinecone index using text search.
+
+    If a ``state`` is provided, the search will be limited to records where
+    ``applicability_state`` matches the given state or ``ALL_STATES``.
+    """
 
     index: Any
     state: str | None = None
@@ -84,11 +88,22 @@ class PineconeRecordRetriever(BaseRetriever):
                 parameters={"input_type": "query"},
             ).data[0]["values"]
             logger.debug(f"Query embedding sample: {embedding[:5]}")
+
+            # Build metadata filter for state applicability
+            pinecone_filter = None
+            if self.state:
+                pinecone_filter = {
+                    "applicability_state": {
+                        "$in": [self.state, "ALL_STATES"]
+                    }
+                }
+
             res = self.index.query(
                 vector=embedding,
                 top_k=self.k,
                 namespace="__default__",
                 include_metadata=True,
+                filter=pinecone_filter,
             )
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
