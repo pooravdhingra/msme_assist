@@ -39,7 +39,7 @@ def pinecone_has_index(name: str) -> bool:
         logger.error(f"Failed to list Pinecone indexes: {exc}")
         return False
 
-__all__ = ["load_rag_data", "load_dfl_data"]
+__all__ = ["load_rag_data", "load_dfl_data", "PineconeRecordRetriever"]
 
 
 class PineconeRecordRetriever(BaseRetriever):
@@ -74,18 +74,31 @@ class PineconeRecordRetriever(BaseRetriever):
         if states:
             flt["applicability_state"] = {"$in": states}
 
+        logger.debug(f"Pinecone query text: {query}")
+        logger.debug(f"Filter being used: {flt}")
+        logger.debug(f"Top K: {self.k}")
+
         try:
             embedding = pc.inference.embed(
                 model="llama-text-embed-v2",
                 inputs=query,
                 parameters={"input_type": "query"},
             ).data[0]["values"]
-            res = self.index.query(vector=embedding, top_k=self.k, namespace="__default__", filter=flt, include_metadata=True)
+            logger.debug(f"Query embedding sample: {embedding[:5]}")
+            res = self.index.query(
+                vector=embedding,
+                top_k=self.k,
+                namespace="__default__",
+                filter=flt,
+                include_metadata=True,
+            )
+            logger.debug(f"Raw Pinecone response: {res}")
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
             return []
 
         hits = getattr(res, "matches", [])
+        logger.debug(f"Number of matches returned: {len(hits)}")
         docs = []
         for hit in hits:
             metadata = getattr(hit, "metadata", {}) or {}
