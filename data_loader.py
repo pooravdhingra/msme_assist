@@ -83,7 +83,7 @@ def load_rag_data(
     index_name: str | None = None,
     version_file: str = "faiss_version.txt",
     cached_file_path: str = "scheme_db_latest.xlsx",
-    chunk_size: int = 100,
+    chunk_size: int = 50,
 ):
     """Download scheme data and upsert it into a Pinecone index."""
     if index_name is None:
@@ -160,13 +160,13 @@ def load_rag_data(
         logger.info(f"Cached file available at {temp_file_path}")
 
     relevant_columns = [
-        "Scheme GUID",
-        "Scheme Name",
+        "scheme_guid",
+        "scheme_name",
         "parent_scheme_name",
-        "Applicability (State)",
+        "applicability_state",
         "Central Department Name",
         "State department name",
-        "Type (Sch/Doc)",
+        "type_sch_doc",
         "Service Type Name",
         "Scheme description",
         "Scheme Eligibility",
@@ -187,15 +187,12 @@ def load_rag_data(
             content = " ".join(parts)
             record = {
                 "id": str(row.get("_id", row.name)),
-                "values": {"chunk_text": content},
-                "metadata": {
-                    "scheme_guid": row.get("Scheme GUID", ""),
-                    "scheme_name": row.get("Scheme Name", ""),
-                    "Applicability (State)": row.get("Applicability (State)", ""),
-                    "Type (Sch/Doc)": row.get("Type (Sch/Doc)", ""),
-                    "gender": row.get("gender", "")
-                },
-            }
+                "chunk_text": content,
+                "scheme_guid": row.get("scheme_guid", ""),
+                "scheme_name": row.get("scheme_name", ""),
+                "applicability_state": row.get("applicability_state", ""),
+                "type_sch_doc": row.get("type_sch_doc", ""),
+                }
             records.append(record)
 
     if pc and not pinecone_has_index(index_name):
@@ -227,7 +224,7 @@ def load_dfl_data(
     google_drive_file_id: str = "1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
     index_name: str | None = None,
     version_file: str = "dfl_version.txt",
-    chunk_tokens: int = 350,
+    chunk_tokens: int = 300,
 ):
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
@@ -281,7 +278,7 @@ def load_dfl_data(
     records = []
     for i in range(0, len(tokens), chunk_tokens):
         chunk = enc.decode(tokens[i : i + chunk_tokens])
-        records.append({"id": str(i // chunk_tokens), "values": {"chunk_text": chunk}})
+        records.append({"id": str(i // chunk_tokens), "chunk_text": chunk})
     for start in range(0, len(records), 100):
         batch = records[start : start + 100]
         index.upsert_records("__default__", batch)
