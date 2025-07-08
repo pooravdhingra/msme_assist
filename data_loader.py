@@ -54,6 +54,16 @@ class PineconeRecordRetriever(BaseRetriever):
         "arbitrary_types_allowed": True,
     }
 
+    def __init__(
+        self,
+        index: Any,
+        state: str | None = None,
+        gender: str | None = None,
+        k: int = 5,
+    ) -> None:
+        # Ensure BaseModel initialises correctly
+        super().__init__(index=index, state=state, gender=gender, k=k)
+
     def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
         flt = {}
         states = []
