@@ -64,6 +64,7 @@ class PineconeRecordRetriever(BaseRetriever):
         # Ensure BaseModel initialises correctly
         super().__init__(index=index, state=state, gender=gender, k=k)
 
+
     def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
         flt = {}
         states = []
