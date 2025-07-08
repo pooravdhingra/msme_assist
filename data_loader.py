@@ -75,7 +75,11 @@ class PineconeRecordRetriever(BaseRetriever):
             flt["applicability_state"] = {"$in": states}
 
         try:
-            embedding = pc.inference.embed(model="llama-text-embed-v2", inputs=query).data[0]["values"]
+            embedding = pc.inference.embed(
+                model="llama-text-embed-v2",
+                inputs=query,
+                parameters={"input_type": "search_query"},
+            ).data[0]["values"]
             res = self.index.query(vector=embedding, top_k=self.k, namespace="__default__", filter=flt, include_metadata=True)
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
