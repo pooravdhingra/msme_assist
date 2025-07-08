@@ -97,7 +97,10 @@ class PineconeRecordRetriever(BaseRetriever):
             logger.error(f"Pinecone search failed: {e}")
             return []
 
-        hits = getattr(res, "matches", [])
+        # `index.query` returns a dictionary, not an object, so use `.get`
+        # to access the matches list. Using `getattr` would always return the
+        # default value and ignore actual matches.
+        hits = res.get("matches", [])
         logger.debug(f"Number of matches returned: {len(hits)}")
         docs = []
         for hit in hits:
