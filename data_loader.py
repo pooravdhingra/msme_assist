@@ -1,7 +1,8 @@
 import pandas as pd
-from pinecone import Pinecone, SearchQuery
+from pinecone import Pinecone
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
+from typing import Any
 import os
 import logging
 import gdown  # For downloading from Google Drive
@@ -44,12 +45,14 @@ __all__ = ["load_rag_data", "load_dfl_data"]
 class PineconeRecordRetriever(BaseRetriever):
     """Simple retriever that queries a Pinecone index using text search."""
 
-    def __init__(self, index, state: str | None = None, gender: str | None = None, k: int = 5):
-        super().__init__()
-        self.index = index
-        self.state = state
-        self.gender = gender
-        self.k = k
+    index: Any
+    state: str | None = None
+    gender: str | None = None
+    k: int = 5
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+    }
 
     def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
         flt = {}
@@ -61,18 +64,17 @@ class PineconeRecordRetriever(BaseRetriever):
             flt["applicability_state"] = {"$in": states}
 
         try:
-            search_query = SearchQuery(inputs={"text": query}, top_k=self.k, filter=flt)
-            res = self.index.search_records("__default__", search_query)
+            embedding = pc.inference.embed(model="llama-text-embed-v2", inputs=query).data[0]["values"]
+            res = self.index.query(vector=embedding, top_k=self.k, namespace="__default__", filter=flt, include_metadata=True)
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
             return []
 
-        hits = getattr(res.result, "hits", [])
+        hits = getattr(res, "matches", [])
         docs = []
         for hit in hits:
-            fields = getattr(hit, "fields", {}) or hit.get("fields", {})
-            text = fields.get("chunk_text", "")
-            metadata = fields
+            metadata = getattr(hit, "metadata", {}) or {}
+            text = metadata.get("chunk_text", "")
             docs.append(Document(page_content=text, metadata=metadata))
         return docs
 
