@@ -66,16 +66,8 @@ class PineconeRecordRetriever(BaseRetriever):
 
 
     def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
-        flt = {}
-        states = []
-        if self.state:
-            states.append(self.state)
-        states.append("ALL_STATES")
-        if states:
-            flt["applicability_state"] = {"$in": states}
 
         logger.debug(f"Pinecone query text: {query}")
-        logger.debug(f"Filter being used: {flt}")
         logger.debug(f"Top K: {self.k}")
 
         try:
@@ -89,7 +81,6 @@ class PineconeRecordRetriever(BaseRetriever):
                 vector=embedding,
                 top_k=self.k,
                 namespace="__default__",
-                filter=flt,
                 include_metadata=True,
             )
             logger.debug(f"Raw Pinecone response: {res}")
