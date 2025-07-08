@@ -4,13 +4,9 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
-from data_loader import load_rag_data, load_dfl_data
-from utils import (
-    get_embeddings,
-    extract_scheme_guid,
-)
+from data_loader import load_rag_data, load_dfl_data, PineconeRecordRetriever
+from utils import extract_scheme_guid
 import streamlit as st
 from data import DataManager
 import re
@@ -47,8 +43,15 @@ def init_llm():
 def init_vector_store():
     logger.info("Loading vector store")
     start_time = time.time()
-    vector_store = load_rag_data(faiss_index_path="faiss_index", version_file="faiss_version.txt")
-    logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents")
+    index_name = os.getenv("PINECONE_INDEX_NAME")
+    if not index_name:
+        raise ValueError("PINECONE_INDEX_NAME environment variable not set")
+    try:
+        vector_store = load_rag_data(index_name=index_name, version_file="faiss_version.txt")
+    except Exception as e:
+        logger.error(f"Failed to load scheme index: {e}")
+        raise
+    logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds")
     return vector_store
 
 @st.cache_resource
@@ -58,16 +61,20 @@ def init_dfl_vector_store():
     google_drive_file_id = os.getenv("DFL_GOOGLE_DOC_ID")
     if not google_drive_file_id:
         raise ValueError("DFL_GOOGLE_DOC_ID environment variable not set")
-    vector_store = load_dfl_data(google_drive_file_id)
+    index_name = os.getenv("PINECONE_DFL_INDEX_NAME")
+    try:
+        vector_store = load_dfl_data(google_drive_file_id, index_name=index_name)
+    except Exception as e:
+        logger.error(f"Failed to load DFL index: {e}")
+        raise
     logger.info(
-        f"DFL vector store loaded in {time.time() - start_time:.2f} seconds with {vector_store.index.ntotal} documents"
+        f"DFL vector store loaded in {time.time() - start_time:.2f} seconds"
     )
     return vector_store
 
 llm = init_llm()
 scheme_vector_store = init_vector_store()
 dfl_vector_store = init_dfl_vector_store()
-embeddings = get_embeddings()
 
 # Dataclass to hold user context information
 @dataclass
@@ -218,11 +225,10 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
             fallback_query = f"{fallback_query}. {' '.join(fallback_details)}"
 
         logger.debug(f"Processing query: {full_query}")
-        embed_start = time.time()
-        query_embedding = embeddings.embed_query(full_query)
-        logger.debug(f"Query embedding generated in {time.time() - embed_start:.2f} seconds (first 10 values): {query_embedding[:10]}")
         retrieve_start = time.time()
-        retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+        retriever = PineconeRecordRetriever(
+            index=vector_store, state=state, gender=gender, k=5
+        )
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
@@ -931,37 +937,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             logger.info(f"No welcome message for returning user")
             log_timings()
             return None, None
-
-    # Check if vector stores are valid
-    step = time.time()
-    try:
-        doc_count = scheme_vector_store.index.ntotal
-        logger.info(f"Scheme vector store contains {doc_count} documents")
-        if doc_count == 0:
-            logger.error("Vector store is empty")
-            error_message = "No scheme data available. Please check the data source."
-            if query_language == "Hindi":
-                error_message = "कोई योजना डेटा उपलब्ध नहीं है। कृपया डेटा स्रोत की जाँच करें।"
-            hindi_audio_script = generate_hindi_audio_script(error_message, user_info)
-            record("vector_store_check", step)
-            log_timings()
-            return error_message, hindi_audio_script
-        dfl_count = dfl_vector_store.index.ntotal
-        logger.info(f"DFL vector store contains {dfl_count} documents")
-        if dfl_count == 0:
-            logger.error(
-                "DFL vector store is empty, will rely solely on LLM knowledge"
-            )
-        record("vector_store_check", step)
-    except Exception as e:
-        logger.error(f"Vector store check failed: {str(e)}")
-        error_message = "Error accessing scheme data."
-        if query_language == "Hindi":
-            error_message = "योजना डेटा तक पहुँचने में त्रुटि।"
-        hindi_audio_script = generate_hindi_audio_script(error_message, user_info)
-        record("vector_store_check", step)
-        log_timings()
-        return error_message, hindi_audio_script
 
     # Check if query is related to any previous query in the session
     scheme_rag = None
