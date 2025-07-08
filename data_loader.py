@@ -56,11 +56,9 @@ class PineconeRecordRetriever(BaseRetriever):
         states = []
         if self.state:
             states.append(self.state)
-        states.append("all_states")
+        states.append("ALL_STATES")
         if states:
-            flt["Applicability (State)"] = {"$in": states}
-        if self.gender:
-            flt["gender"] = {"$in": [self.gender, "all_genders"]}
+            flt["applicability_state"] = {"$in": states}
 
         try:
             search_query = SearchQuery(inputs={"text": query}, top_k=self.k, filter=flt)
