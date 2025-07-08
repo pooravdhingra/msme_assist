@@ -39,6 +39,13 @@ def pinecone_has_index(name: str) -> bool:
         logger.error(f"Failed to list Pinecone indexes: {exc}")
         return False
 
+def safe_get(row: pd.Series, column: str, default: str = ""):
+    """Return a value from the row, replacing NaN with a default."""
+    value = row.get(column, default)
+    if pd.isna(value):
+        return default
+    return value
+
 __all__ = ["load_rag_data", "load_dfl_data", "PineconeRecordRetriever"]
 
 
@@ -48,7 +55,7 @@ class PineconeRecordRetriever(BaseRetriever):
     index: Any
     state: str | None = None
     gender: str | None = None
-    k: int = 5
+    k: int = 3
 
     model_config = {
         "arbitrary_types_allowed": True,
@@ -59,7 +66,7 @@ class PineconeRecordRetriever(BaseRetriever):
         index: Any,
         state: str | None = None,
         gender: str | None = None,
-        k: int = 5,
+        k: int = 3,
     ) -> None:
         # Ensure BaseModel initialises correctly
         super().__init__(index=index, state=state, gender=gender, k=k)
@@ -167,17 +174,6 @@ def load_rag_data(
 
 
 
-    # Read Excel file
-    try:
-        df = pd.read_excel(temp_file_path)
-        logger.info(f"Excel file loaded successfully. Rows: {len(df)}")
-    except Exception as e:
-        logger.error(f"Failed to read Excel file: {str(e)}")
-        raise
-    finally:
-        # Keep the downloaded file for future reuse
-        logger.info(f"Cached file available at {temp_file_path}")
-
     relevant_columns = [
         "scheme_guid",
         "scheme_name",
@@ -190,7 +186,29 @@ def load_rag_data(
         "scheme_description",
         "scheme_eligibility",
         "application_process",
-        "benefit"
+        "benefit",
+    ]
+
+    # Read Excel file with only relevant columns
+    try:
+        df = pd.read_excel(temp_file_path, usecols=relevant_columns)
+        logger.info(f"Excel file loaded successfully. Rows: {len(df)}")
+    except Exception as e:
+        logger.error(f"Failed to read Excel file: {str(e)}")
+        raise
+    finally:
+        # Keep the downloaded file for future reuse
+        logger.info(f"Cached file available at {temp_file_path}")
+
+    metadata_only_columns = [
+        "parent_scheme_name",
+        "central_department_name",
+        "state_department_name",
+        "type_sch_doc",
+        "scheme_guid",
+        "scheme_eligibility",
+        "application_process",
+        "benefit",
     ]
 
     records = []
@@ -200,18 +218,26 @@ def load_rag_data(
         chunk = df.iloc[start : start + chunk_size]
         for _, row in chunk.iterrows():
             parts = []
-            for col in df.columns:
-                if pd.notna(row.get(col)):
-                    parts.append(str(row[col]))
+            for col in relevant_columns:
+                if col in metadata_only_columns:
+                    continue
+                value = safe_get(row, col)
+                if value:
+                    parts.append(str(value))
             content = " ".join(parts)
+            scheme_guid = safe_get(row, "scheme_guid", row.name)
             record = {
-                "id": str(row.get("scheme_guid", row.name)),
+                "id": str(scheme_guid),
                 "chunk_text": content,
-                "scheme_guid": row.get("scheme_guid", ""),
-                "scheme_name": row.get("scheme_name", ""),
-                "applicability_state": row.get("applicability_state", ""),
-                "type_sch_doc": row.get("type_sch_doc", ""),
-                }
+                "scheme_guid": safe_get(row, "scheme_guid"),
+                "scheme_name": safe_get(row, "scheme_name"),
+                "applicability_state": safe_get(row, "applicability_state"),
+                "type_sch_doc": safe_get(row, "type_sch_doc"),
+                "service_type_name": safe_get(row, "service_type_name"),
+                "scheme_eligibility": safe_get(row, "scheme_eligibility"),
+                "application_process": safe_get(row, "application_process"),
+                "benefit": safe_get(row, "benefit"),
+            }
             records.append(record)
 
     if pc and not pinecone_has_index(index_name):
