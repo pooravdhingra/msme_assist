@@ -97,7 +97,8 @@ class PineconeRecordRetriever(BaseRetriever):
             logger.error(f"Pinecone search failed: {e}")
             return []
 
-        hits = getattr(res, "matches", [])
+  
+        hits = res.get("matches", [])
         logger.debug(f"Number of matches returned: {len(hits)}")
         docs = []
         for hit in hits:
