@@ -107,7 +107,7 @@ def load_rag_data(
 ):
     """Download scheme data and upsert it into a Pinecone index."""
     if index_name is None:
-        index_name = PINECONE_DFL_INDEX_NAME or PINECONE_INDEX_NAME
+        index_name = PINECONE_INDEX_NAME
 
     if index_name is None:
         raise ValueError("Pinecone index name not provided")
@@ -260,7 +260,7 @@ def load_dfl_data(
         raise
 
     if index_name is None:
-        index_name = PINECONE_INDEX_NAME
+        index_name = PINECONE_DFL_INDEX_NAME
 
     if index_name is None:
         raise ValueError("Pinecone index name not provided")
