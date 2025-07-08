@@ -227,7 +227,7 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
         logger.debug(f"Processing query: {full_query}")
         retrieve_start = time.time()
         retriever = PineconeRecordRetriever(
-            index=vector_store, state=state, gender=gender, k=5
+            index=vector_store, state=state, gender=gender, k=3
         )
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,

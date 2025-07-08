@@ -55,7 +55,7 @@ class PineconeRecordRetriever(BaseRetriever):
     index: Any
     state: str | None = None
     gender: str | None = None
-    k: int = 5
+    k: int = 3
 
     model_config = {
         "arbitrary_types_allowed": True,
@@ -66,7 +66,7 @@ class PineconeRecordRetriever(BaseRetriever):
         index: Any,
         state: str | None = None,
         gender: str | None = None,
-        k: int = 5,
+        k: int = 3,
     ) -> None:
         # Ensure BaseModel initialises correctly
         super().__init__(index=index, state=state, gender=gender, k=k)
@@ -201,6 +201,11 @@ def load_rag_data(
         logger.info(f"Cached file available at {temp_file_path}")
 
     metadata_only_columns = [
+        "parent_scheme_name",
+        "central_department_name",
+        "state_department_name",
+        "type_sch_doc",
+        "scheme_guid",
         "scheme_eligibility",
         "application_process",
         "benefit",
@@ -228,6 +233,7 @@ def load_rag_data(
                 "scheme_name": safe_get(row, "scheme_name"),
                 "applicability_state": safe_get(row, "applicability_state"),
                 "type_sch_doc": safe_get(row, "type_sch_doc"),
+                "service_type_name": safe_get(row, "service_type_name"),
                 "scheme_eligibility": safe_get(row, "scheme_eligibility"),
                 "application_process": safe_get(row, "application_process"),
                 "benefit": safe_get(row, "benefit"),
