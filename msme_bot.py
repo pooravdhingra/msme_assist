@@ -183,7 +183,7 @@ def welcome_user(state_name, user_name, query_language):
     - Generate a welcome message for a new user in the specified language ({query_language}).
     - For Hindi, use Devanagari script with simple, clear words suitable for micro business owners with low Hindi proficiency.
     - For English, use simple English with a friendly tone.
-    - The message should welcome the user, mention their state ({state_name}), and offer assistance with schemes and documents applicable to their state and all central government schemes or help with digital/financial literacy and business growth.
+    - The message should welcome the user, and offer assistance with schemes and documents applicable to their state and all central government schemes or help with digital/financial literacy and business growth.
     - Response must be ≤70 words.
     - Start the response with 'Hi {user_name}!' (English) or 'नमस्ते {user_name}!' (Hindi).
 
