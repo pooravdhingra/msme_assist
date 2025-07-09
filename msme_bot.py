@@ -802,6 +802,7 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
     - Translate the summary into clear and simple Hindi (Devanagari script) using simple hindi words.
     - Focus on the main points and keep the summary concise, between 50-100 words, to ensure a smooth audio experience.
     - The response should be purely the Hindi script, with no introductory or concluding remarks.
+    - For number ranges like "10%-20%", use "10 se 20" in Hindi.
     - Do NOT use any english words. 
     - Do NOT translate Smileys or emoticons.
     - Always use simpler alternatives wherever the words are in complex hindi e.g. Instead of "vyavyasay" say "business", instead of "vanijya" say "finance"
