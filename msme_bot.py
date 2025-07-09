@@ -1018,6 +1018,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             st.session_state.scheme_names_str = " ".join([f"{i}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
             logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
 
+    # Append previous interaction for context when required
+    if intent in {"Contextual_Follow_Up", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent"}:
+        if recent_query and recent_response:
+            augmented_query = (
+                f"{augmented_query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
+            )
+
     if intent == "Schemes_Know_Intent" and not st.session_state.scheme_flow_active:
         st.session_state.scheme_flow_active = True
         scheme_type = classify_scheme_type(query)
