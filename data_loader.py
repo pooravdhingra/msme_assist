@@ -35,6 +35,21 @@ if PINECONE_API_KEY:
 
 _index_cache: dict[str, Any] = {}
 
+# Cached dataframe for direct lookups
+_scheme_df: pd.DataFrame | None = None
+
+# Common scheme keywords for direct search
+DIRECT_SCHEME_KEYWORDS = [
+    "fssai",
+    "udyam",
+    "shop act",
+    "mudra",
+    "mudra yojana",
+    "vishwakarma",
+    "svanidhi",
+    "pmegp",
+]
+
 
 def get_index_by_host(host: str):
     """Return a cached Pinecone index connection for the given host."""
@@ -63,7 +78,83 @@ def safe_get(row: pd.Series, column: str, default: str = ""):
         return default
     return value
 
-__all__ = ["load_rag_data", "load_dfl_data", "PineconeRecordRetriever"]
+
+def get_scheme_dataframe(relevant_columns: list[str] | None = None) -> pd.DataFrame | None:
+    """Return the cached scheme dataframe if available."""
+    global _scheme_df
+    if _scheme_df is not None:
+        return _scheme_df
+    cached = "scheme_db_latest.xlsx"
+    if not os.path.exists(cached):
+        return None
+    cols = relevant_columns or [
+        "scheme_guid",
+        "scheme_name",
+        "parent_scheme_name",
+        "applicability_state",
+        "central_department_name",
+        "state_department_name",
+        "type_sch_doc",
+        "service_type_name",
+        "scheme_description",
+        "scheme_eligibility",
+        "application_process",
+        "benefit",
+    ]
+    try:
+        _scheme_df = pd.read_excel(cached, usecols=cols)
+        logger.info("Loaded cached scheme dataframe")
+    except Exception as exc:
+        logger.error(f"Failed to load cached dataframe: {exc}")
+        _scheme_df = None
+    return _scheme_df
+
+
+def find_scheme_by_query(query: str) -> dict | None:
+    """Return the first scheme row matching known keywords in the query."""
+    df = get_scheme_dataframe()
+    if df is None:
+        return None
+    qlower = query.lower()
+    for kw in DIRECT_SCHEME_KEYWORDS:
+        if kw in qlower:
+            try:
+                matches = df[df["scheme_name"].str.contains(kw, case=False, na=False)]
+                if not matches.empty:
+                    logger.info(f"Direct scheme match for '{kw}'")
+                    return matches.iloc[0].to_dict()
+            except Exception as exc:
+                logger.error(f"Direct lookup failed for {kw}: {exc}")
+    return None
+
+
+def scheme_row_to_text(row: dict) -> str:
+    """Construct a text block from a scheme dataframe row."""
+    parts = []
+    if not row:
+        return ""
+    desc = row.get("scheme_description")
+    if desc:
+        parts.append(str(desc))
+    elig = row.get("scheme_eligibility")
+    if elig:
+        parts.append(f"Eligibility: {elig}")
+    proc = row.get("application_process")
+    if proc:
+        parts.append(f"How to apply: {proc}")
+    ben = row.get("benefit")
+    if ben:
+        parts.append(f"Benefits: {ben}")
+    return "\n".join(parts)
+
+__all__ = [
+    "load_rag_data",
+    "load_dfl_data",
+    "PineconeRecordRetriever",
+    "get_scheme_dataframe",
+    "find_scheme_by_query",
+    "scheme_row_to_text",
+]
 
 
 class PineconeRecordRetriever(BaseRetriever):
@@ -136,6 +227,7 @@ def load_rag_data(
     chunk_size: int = 50,
 ):
     """Download scheme data and upsert it into a Pinecone index."""
+    global _scheme_df
     if host is None:
         host = PINECONE_SCHEME_HOST
 
@@ -157,6 +249,27 @@ def load_rag_data(
                     logger.info(
                         f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
                     )
+                    if _scheme_df is None:
+                        try:
+                            _scheme_df = pd.read_excel(
+                                cached_file_path,
+                                usecols=[
+                                    "scheme_guid",
+                                    "scheme_name",
+                                    "parent_scheme_name",
+                                    "applicability_state",
+                                    "central_department_name",
+                                    "state_department_name",
+                                    "type_sch_doc",
+                                    "service_type_name",
+                                    "scheme_description",
+                                    "scheme_eligibility",
+                                    "application_process",
+                                    "benefit",
+                                ],
+                            )
+                        except Exception as exc:
+                            logger.error(f"Failed to load cached dataframe: {exc}")
                     return get_index_by_host(host)
         except Exception as e:
             logger.error(f"Failed to load existing Pinecone index: {str(e)}. Will attempt download.")
@@ -220,6 +333,7 @@ def load_rag_data(
     try:
         df = pd.read_excel(temp_file_path, usecols=relevant_columns)
         logger.info(f"Excel file loaded successfully. Rows: {len(df)}")
+        _scheme_df = df
     except Exception as e:
         logger.error(f"Failed to read Excel file: {str(e)}")
         raise
