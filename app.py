@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import random
 import string
@@ -16,6 +17,7 @@ import numpy as np
 import logging
 from tts import synthesize, audio_player
 from typing import Optional
+import requests
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -133,70 +135,64 @@ def restore_session_from_url():
                 return True
     return False
 
-# Registration page
-def registration_page():
-    st.title("Register")
-    st.markdown("Please provide your personal and business details to register.")
-
-    with st.form("registration_form"):
-        st.subheader("Personal Details")
-        fname = st.text_input("First Name")
-        lname = st.text_input("Last Name")
-        mobile_number = st.text_input("Mobile Number (10 digits)")
-        state = st.selectbox("State", list(STATE_MAPPING.values()))
-        language = st.selectbox("Preferred Language", ["English", "Hindi"])
-        gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-
-        st.subheader("Business Details")
-        business_name = st.text_input("Business Name")
-        business_category = st.selectbox(
-            "Business Category",
-            [
-                "Manufacturing",
-                "Services",
-                "Retail",
-                "Agriculture and Allied Sectors",
-                "Traders/Wholesalers",
-            ],
-        )
 
 
-        submit_button = st.form_submit_button("Register")
+# token authentication function
+def token_authentication():
+    query_params = st.query_params
+    token = query_params.get("token", [None])
+    if token:
+        BASE_URL = os.getenv("HQ_API_URL", "https://customer-admin-test.haqdarshak.com")
+        ENDPOINT = "/person/get/citizen-details"
+        API_URL = f"{BASE_URL}{ENDPOINT}"
+        
+        try:
+            response = requests.get(API_URL, headers={"Authorization": f"Bearer {token}"})
+            if response.status_code == 200:
+                data = response.json()
 
-        if submit_button:
-            if not fname or not lname:
-                st.error("First name and last name are required.")
-            elif not mobile_number.isdigit() or len(mobile_number) != 10:
-                st.error("Mobile number must be 10 digits.")
-            elif not business_name:
-                st.error("Business name is required.")
-            elif not state:
-                st.error("State is required.")
-            elif not language:
-                st.error("Language is required.")
-            elif not gender:
-                st.error("Gender is required.")
-            else:
-                success, message = data_manager.register_user(
-                    fname,
-                    lname,
-                    mobile_number,
-                    state,
-                    business_name,
-                    business_category,
-                    language,
-                    gender,
-                )
-                if success:
-                    st.success(message)
-                    st.session_state.page = "login"
-                    st.query_params.clear()
+                if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
+                    result = data["result"]
+                    st.session_state.user = {
+                        "fname": result.get("firstName", ""),
+                        "lname": result.get("lastName", ""),
+                        "mobile_number": result.get("contactNumber", ""),
+                        "gender": result.get("gender", ""),
+                        "state_name": result.get("state", ""),
+                        "dob": result.get("dob", ""),
+                        "pincode": result.get("pincode", ""),
+                        "business_name": result.get("bussinessName", ""),
+                        "business_category": result.get("employmentType", ""),
+                        "language": "English",
+                        "state_id": STATE_MAPPING.get(result.get("state", ""), "Unknown")
+                    }
+
+                    # Generate session_id
+                    if not st.session_state.session_id:
+                        st.session_state.session_id = generate_session_id()
+                        data_manager.start_session(
+                            st.session_state.user["mobile_number"],
+                            st.session_state.session_id,
+                            st.session_state.user
+                        )
+
+                    st.session_state.messages = []
+                    st.session_state.page = "chat"
+                    st.session_state.welcome_message_sent = False
+                    st.query_params["session_id"] = st.session_state.session_id
+                    st.success("Login successful via token!")
                     st.rerun()
+                    st.session_state.page = "chat"
+                    return True
                 else:
-                    st.error(message)
+                    st.error("Token is invalid or user details not found.")
+            else:
+                st.error(f"API call failed: {response.status_code}")
+        except Exception as e:
+            st.error("Error contacting citizen API.")
+            logger.exception("Citizen API call failed")
+        return
 
-# Login page
-def login_page():
     # Try to restore session from URL
     if restore_session_from_url():
         st.rerun()
@@ -297,23 +293,7 @@ def chat_page():
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.markdown(f"Hi, {st.session_state.user['fname']}")
-    with col2:
-        if st.button("Logout", key="logout_button"):
-            data_manager.end_session(st.session_state.session_id)
-            st.session_state.page = "login"
-            st.session_state.user = None
-            st.session_state.otp = None
-            st.session_state.session_id = None
-            st.session_state.messages = []
-            st.session_state.otp_generated = False
-            st.session_state.welcome_message_sent = False
-            st.session_state.last_query_id = None
-            st.session_state.scheme_flow_active = False
-            st.session_state.scheme_flow_step = None
-            st.session_state.scheme_flow_data = {}
-            st.query_params.clear()
-            st.rerun()
+        st.markdown(f"Welcome, {st.session_state.user['fname']}")            
 
     # Ensure session_id is in URL
     if "session_id" not in st.query_params or st.query_params["session_id"] != st.session_state.session_id:
@@ -472,19 +452,22 @@ def chat_page():
 # Check for session restoration first
 restore_session_from_url()
 
-if st.session_state.page == "login":
-    login_page()
-elif st.session_state.page == "register":
-    registration_page()
-elif st.session_state.page == "chat":
+if not st.session_state.get("user"):
+    token_authentication()
+
+# if st.session_state.page == "login":
+#     token_authentication()
+# elif st.session_state.page == "register":
+#     registration_page()
+if st.session_state.page == "chat":
     chat_page()
 
 # Link to registration
-if st.session_state.page == "login":
-    if st.button("New User? Register Here"):
-        st.session_state.page = "register"
-        st.query_params.clear()
-        st.rerun()
+# if st.session_state.page == "login":
+#     if st.button("New User? Register Here"):
+#         st.session_state.page = "register"
+#         st.query_params.clear()
+#         st.rerun()
 
 # Update existing users to include state_id and state_name
 data_manager.update_existing_users_state()
