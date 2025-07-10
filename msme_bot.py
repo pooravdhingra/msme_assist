@@ -5,7 +5,13 @@ from dataclasses import dataclass
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
-from data_loader import load_rag_data, load_dfl_data, PineconeRecordRetriever
+from data_loader import (
+    load_rag_data,
+    load_dfl_data,
+    PineconeRecordRetriever,
+    find_scheme_by_query,
+    scheme_row_to_text,
+)
 from utils import extract_scheme_guid
 import streamlit as st
 from data import DataManager
@@ -283,6 +289,12 @@ def get_scheme_response(
 ):
     """Wrapper for scheme dataset retrieval with optional Mudra scheme info."""
     logger.info("Querying scheme dataset")
+
+    # Direct lookup for well known scheme names to avoid embedding search
+    direct_row = find_scheme_by_query(query)
+    if direct_row:
+        logger.info("Scheme information fetched via direct search")
+        return {"text": scheme_row_to_text(direct_row), "sources": []}
     rag = get_rag_response(
         query,
         vector_store,
