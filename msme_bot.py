@@ -323,37 +323,6 @@ def get_dfl_response(query, vector_store, state="ALL_STATES", gender=None, busin
         business_category=business_category,
     )
 
-# Check query similarity for context
-def is_query_related(query, prev_query, prev_response):
-    prompt = f"""You are an assistant for Haqdarshak, helping small business owners in India with government schemes, digital/financial literacy, and business growth. Determine if the current query is a follow-up to the previous conversation.
-
-    **Input**:
-    - Current Query: {query}
-    - Previous User Query: {prev_query}
-    - Previous Bot Response: {prev_response}
-
-    **Instructions**:
-    - A query is a related follow-up if it is ambiguous and contextually refers to one of the schemes or topics mentioned in the previous interaction.
-    - Examples of ambiguous queries: 'Tell me more', 'How to apply?', 'What next?', 'Can you help with it?', 'और बताएं', 'आगे क्या?'.
-    - The query is a follow-up if it seeks clarification or additional information about a previously discussed scheme or topic.
-    - The query is not a follow-up if it introduces a new scheme or topic not mentioned above (e.g., 'What is FSSAI?', 'How to use UPI?', 'एफएसएसएआई क्या है?') or is unrelated (e.g., 'What’s the weather?', 'मौसम कैसा है?', 'Time?').
-    - Return 'True' if the query is a follow-up, 'False' otherwise. Focus on the previous interaction only, ignoring rule-based keyword matching or similarity scores.
-
-    **Output**:
-    - Return only 'True' or 'False'.
-    """
-
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        result = response.content.strip()
-        logger.debug(
-            f"LLM determined query '{query}' is {'related' if result == 'True' else 'not related'} to previous context"
-        )
-        return result == "True"
-    except Exception as e:
-        logger.error(f"Failed to determine query relation: {str(e)}")
-        return False
-
 # Classify the intent of the user's query
 def classify_intent(query, prev_response, conversation_history=""):
     """Return one of the predefined intent labels."""
@@ -975,24 +944,24 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
 
 
-    # Determine if the current query is a follow-up to the recent response
-    follow_up = False
-    if recent_query and recent_response:
-        step = time.time()
-        follow_up = is_query_related(
-            query,
-            recent_query,
-            recent_response,
-        )
-        record("follow_up_check", step)
+    # Build conversation history for intent classification
+    conversation_history = build_conversation_history(st.session_state.messages)
+    step = time.time()
+    intent = classify_intent(query, recent_response or "", conversation_history)
+    record("intent_classification", step)
+
+    # Determine if the query is a follow-up based on intent
+    follow_up_intents = {
+        "Contextual_Follow_Up",
+        "Specific_Scheme_Eligibility_Intent",
+        "Specific_Scheme_Apply_Intent",
+        "Confirmation_New_RAG",
+    }
+    follow_up = intent in follow_up_intents
 
     # Use conversation context only when the query is a follow-up
     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
 
-    step = time.time()
-    conversation_history = build_conversation_history(st.session_state.messages)
-    intent = classify_intent(query, recent_response or "", conversation_history)
-    record("intent_classification", step)
     augmented_query = query
     logger.info(f"Using conversation context: {context_pair}")
     logger.info(f"Classified intent: {intent}")
