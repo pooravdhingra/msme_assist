@@ -12,7 +12,7 @@ SCHEME_KEYWORDS: Dict[str, List[str]] = {
     "SH000BGH": ["prime minister employment generation program", "pmegp"],
     "SH000889": ["stand up india", "standup india", "standup", "standupindia"],
     "SH00088L": ["credit guarantee fund for micro units", "cgfmu"],
-    "SH0008VH": ["udyam registration", "udyam"],
+    "DC0008R0": ["udyam registration", "udyam"],
     "SH0008C4": ["government e-marketplace", "gem"],
     "SH0008C5": ["trade receivables discounting system", "treds"],
     "SH0008C6": ["59 minutes loan gst", "msme loan 59 minutes gst", "59 minute loan gst"],
