@@ -42,7 +42,7 @@ SCHEME_KEYWORDS: Dict[str, List[str]] = {
     "SH000BEX": ["e-commerce onboarding", "e-commerce", "ecommerce"],
     "SH000A16": ["food aggregator onboarding", "cloud kitchen"],
     "SH000A17": ["swiggy onboarding", "swiggy"],
-    "SH000A2E": ["fssai registration", "fssai"],
+    "DC00096J": ["fssai registration", "fssai"],
     "SH000AD3": ["fssai state license", "fssai state"],
     "SH000DFP": ["prime minister formalisation of micro food processing enterprises", "pmfme", "pm fme"],
     "SH0009G3": ["seed capital shg", "pm-fme"],
