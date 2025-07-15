@@ -296,7 +296,7 @@ def get_scheme_response(
 
     if guid:
         logger.info(f"Directly fetching scheme details for GUID {guid}")
-        docs = fetch_scheme_docs_by_guid(guid)
+        docs = fetch_scheme_docs_by_guid(guid, vector_store)
         if docs:
             retriever = DocumentListRetriever(docs)
             qa_chain = RetrievalQA.from_chain_type(

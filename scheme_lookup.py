@@ -99,12 +99,24 @@ def find_scheme_guid_by_query(query: str) -> Optional[str]:
     return None
 
 
-def fetch_scheme_docs_by_guid(guid: str):
-    """Return scheme document from the local cache."""
+def fetch_scheme_docs_by_guid(guid: str, index=None):
+    """Return scheme document from the local cache or Pinecone."""
     doc = SCHEME_DOCS.get(str(guid))
     if doc:
         return [doc]
     logger.warning(f"Scheme document for GUID {guid} not found in local cache")
+    if index is not None:
+        try:
+            res = index.fetch(ids=[str(guid)], namespace="__default__")
+            record = res.records.get(str(guid))
+            if record and record.metadata:
+                text = record.metadata.get("chunk_text", "")
+                if text:
+                    doc = Document(page_content=text, metadata=record.metadata)
+                    SCHEME_DOCS[str(guid)] = doc
+                    return [doc]
+        except Exception as exc:
+            logger.error(f"Failed to fetch GUID {guid} from Pinecone: {exc}")
     return []
 
 
