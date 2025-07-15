@@ -951,7 +951,13 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     record("intent_classification", step)
 
     # Determine if the query is a follow-up based on intent
-    follow_up = intent == "Contextual_Follow_Up"
+    follow_up_intents = {
+        "Contextual_Follow_Up",
+        "Specific_Scheme_Eligibility_Intent",
+        "Specific_Scheme_Apply_Intent",
+        "Confirmation_New_RAG",
+    }
+    follow_up = intent in follow_up_intents
 
     # Use conversation context only when the query is a follow-up
     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
