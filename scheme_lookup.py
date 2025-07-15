@@ -123,9 +123,10 @@ def fetch_scheme_docs_by_guid(guid: str, index=None):
 class DocumentListRetriever(BaseRetriever):
     """A simple retriever that returns a fixed list of documents."""
 
-    def __init__(self, docs: List[Document]):
-        super().__init__()
-        self.docs = docs
+    docs: List[Document]
 
-    def _get_relevant_documents(self, query: str, *, run_manager=None):
+    def __init__(self, docs: List[Document]):
+        super().__init__(docs=docs)
+
+    def _get_relevant_documents(self, query: str, *, run_manager=None):  # type: ignore[override]
         return self.docs
