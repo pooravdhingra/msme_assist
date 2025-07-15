@@ -327,7 +327,7 @@ def chat_page():
         user_type = "returning" if conversations else "new"
 
         if user_type == "new":
-            welcome_response, welcome_audio_script = process_query(
+            welcome_response, welcome_audio_task = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
                 st.session_state.dfl_vector_store,
@@ -342,9 +342,10 @@ def chat_page():
 
                     audio_container = {}
 
-                    if welcome_audio_script:
+                    if welcome_audio_task:
                         def _gen_audio():
-                            audio_container['data'] = synthesize(welcome_audio_script, "Hindi")
+                            script = welcome_audio_task()
+                            audio_container['data'] = synthesize(script, "Hindi")
 
                         audio_thread = threading.Thread(target=_gen_audio)
                         audio_thread.start()
@@ -425,7 +426,7 @@ def chat_page():
             # Display typing indicator while generating response
             with st.chat_message("assistant", avatar="logo.jpeg"):
                 with st.spinner("Assistant is typing..."):
-                    response, audio_script_for_tts = process_query(
+                    response, audio_task_for_tts = process_query(
                         query,
                         st.session_state.scheme_vector_store,
                         st.session_state.dfl_vector_store,
@@ -440,9 +441,10 @@ def chat_page():
 
                 audio_container = {}
 
-                if audio_script_for_tts:
+                if audio_task_for_tts:
                     def _gen_audio():
-                        audio_container['data'] = synthesize(audio_script_for_tts, "Hindi")
+                        script = audio_task_for_tts()
+                        audio_container['data'] = synthesize(script, "Hindi")
 
                     audio_thread = threading.Thread(target=_gen_audio)
                     audio_thread.start()

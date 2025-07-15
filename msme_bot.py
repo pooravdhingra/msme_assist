@@ -889,54 +889,66 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         )
         record("scheme_flow", step)
         generated_response = resp
-        hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
-        try:
-            interaction_id = generate_interaction_id(query, datetime.utcnow())
-            messages_to_save = [
-                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-            ]
-            if not any(
-                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-                for conv in conversations
-            ):
-                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-            else:
-                logger.debug(
-                    f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
-                )
-        except Exception as e:
-            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
-        log_timings()
-        return generated_response, hindi_audio_script
+
+        def audio_task():
+            step_local = time.time()
+            hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
+            record("audio_script", step_local)
+            try:
+                interaction_id = generate_interaction_id(query, datetime.utcnow())
+                messages_to_save = [
+                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                    {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+                ]
+                if not any(
+                    any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                    for conv in conversations
+                ):
+                    data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+                else:
+                    logger.debug(
+                        f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+            log_timings()
+            return hindi_audio_script
+
+        return generated_response, audio_task
 
 
     # Handle welcome query
     if query.lower() == "welcome":
         if user_type == "new":
             response = welcome_user(state_name, user_name, query_language)
-            hindi_audio_script = generate_hindi_audio_script(response, user_info)
-            try:
-                interaction_id = generate_interaction_id(response, datetime.utcnow())
-                if not any(
-                    msg["role"] == "assistant" and msg["content"] == response
-                    for conv in conversations for msg in conv["messages"]
-                ):
-                    data_manager.save_conversation(
-                        session_id,
-                        mobile_number,
-                        [
-                            {"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script}
-                        ]
-                    )
-                    logger.info(f"Saved welcome message for new user in session {session_id} (Interaction ID: {interaction_id})")
-                else:
-                    logger.debug(f"Skipped saving duplicate welcome message: {response}")
-            except Exception as e:
-                logger.error(f"Failed to save welcome message for new user in session {session_id}: {str(e)}")
+
+            def audio_task():
+                step_local = time.time()
+                hindi_audio_script = generate_hindi_audio_script(response, user_info)
+                record("audio_script", step_local)
+                try:
+                    interaction_id = generate_interaction_id(response, datetime.utcnow())
+                    if not any(
+                        msg["role"] == "assistant" and msg["content"] == response
+                        for conv in conversations for msg in conv["messages"]
+                    ):
+                        data_manager.save_conversation(
+                            session_id,
+                            mobile_number,
+                            [
+                                {"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script}
+                            ]
+                        )
+                        logger.info(f"Saved welcome message for new user in session {session_id} (Interaction ID: {interaction_id})")
+                    else:
+                        logger.debug(f"Skipped saving duplicate welcome message: {response}")
+                except Exception as e:
+                    logger.error(f"Failed to save welcome message for new user in session {session_id}: {str(e)}")
+                log_timings()
+                return hindi_audio_script
+
             logger.info(f"Generated welcome response for new user in {time.time() - start_time:.2f} seconds: {response}")
-            log_timings()
-            return response, hindi_audio_script
+            return response, audio_task
         else:
             logger.info(f"No welcome message for returning user")
             log_timings()
@@ -1039,24 +1051,28 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             first_q = ask_scheme_question("loan_amount", query_language)
         else:
             first_q = ask_scheme_question("turnover", query_language)
-        step = time.time()
-        hindi_audio_script = generate_hindi_audio_script(first_q, user_info)
-        record("scheme_flow", step)
-        try:
-            interaction_id = generate_interaction_id(query, datetime.utcnow())
-            messages_to_save = [
-                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                {"role": "assistant", "content": first_q, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-            ]
-            if not any(
-                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-                for conv in conversations
-            ):
-                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-        except Exception as e:
-            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
-        log_timings()
-        return first_q, hindi_audio_script
+
+        def audio_task():
+            step_local = time.time()
+            hindi_audio_script = generate_hindi_audio_script(first_q, user_info)
+            record("scheme_flow", step_local)
+            try:
+                interaction_id = generate_interaction_id(query, datetime.utcnow())
+                messages_to_save = [
+                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                    {"role": "assistant", "content": first_q, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+                ]
+                if not any(
+                    any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                    for conv in conversations
+                ):
+                    data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+            except Exception as e:
+                logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+            log_timings()
+            return hindi_audio_script
+
+        return first_q, audio_task
 
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
@@ -1148,33 +1164,35 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             st.session_state.scheme_names_str = f"1. {referenced_scheme}"
         logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
 
-    step = time.time()
-    hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
-    record("audio_script", step)
+    def audio_task():
+        step_local = time.time()
+        hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
+        record("audio_script", step_local)
 
-    # Save conversation to MongoDB
-    try:
-        interaction_id = generate_interaction_id(query, datetime.utcnow())
-        messages_to_save = [
-            {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-            {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-        ]
-        if not any(
-            any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-            for conv in conversations
-        ):
-            step = time.time()
-            data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-            record("save_conversation", step)
-            logger.info(
-                f"Saved conversation for session {session_id}: {query} -> {generated_response} (Interaction ID: {interaction_id})"
-            )
-        else:
-            logger.debug(
-                f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
-            )
-    except Exception as e:
-        logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+        try:
+            interaction_id = generate_interaction_id(query, datetime.utcnow())
+            messages_to_save = [
+                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+            ]
+            if not any(
+                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                for conv in conversations
+            ):
+                step_db = time.time()
+                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+                record("save_conversation", step_db)
+                logger.info(
+                    f"Saved conversation for session {session_id}: {query} -> {generated_response} (Interaction ID: {interaction_id})"
+                )
+            else:
+                logger.debug(
+                    f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
+                )
+        except Exception as e:
+            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
 
-    log_timings()
-    return generated_response, hindi_audio_script
+        log_timings()
+        return hindi_audio_script
+
+    return generated_response, audio_task
