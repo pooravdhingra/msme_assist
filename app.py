@@ -2,6 +2,8 @@ import os
 import streamlit as st
 import random
 import string
+import threading
+import time
 from datetime import datetime, timedelta
 from msme_bot import (
     load_rag_data,
@@ -15,6 +17,7 @@ import numpy as np
 import logging
 from tts import synthesize, audio_player
 import requests
+from typing import Optional
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -75,6 +78,19 @@ def generate_session_id():
 # Generate unique query ID
 def generate_query_id(query, timestamp):
     return f"{query[:50]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
+
+# Animate text typing effect
+
+
+def type_text(text, placeholder, timestamp: Optional[str] = None, delay: float = 0.015):
+    """Display text with a typing animation followed by an optional timestamp."""
+    typed = ""
+    for char in text:
+        typed += char
+        placeholder.markdown(typed + "▌")
+        time.sleep(delay)
+    final_text = typed if timestamp is None else f"{typed} *({timestamp})*"
+    placeholder.markdown(final_text)
 
 # Restore session from URL query parameters
 def restore_session_from_url():
@@ -291,7 +307,7 @@ def chat_page():
         user_type = "returning" if conversations else "new"
 
         if user_type == "new":
-            welcome_response, welcome_audio_script = process_query(
+            welcome_response, welcome_audio_task = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
                 st.session_state.dfl_vector_store,
@@ -300,9 +316,28 @@ def chat_page():
                 user_language=st.session_state.user["language"]
             )
             if welcome_response:  # Only append if a welcome message was generated
-                if welcome_audio_script:
-                    audio_bytes = synthesize(welcome_audio_script, "Hindi")
-                    audio_player(audio_bytes, autoplay=True)
+                with st.chat_message("assistant", avatar="logo.jpeg"):
+                    message_placeholder = st.empty()
+                    audio_placeholder = st.empty()
+
+                    audio_container = {}
+
+                    if welcome_audio_task:
+                        def _gen_audio():
+                            script = welcome_audio_task()
+                            audio_container['data'] = synthesize(script, "Hindi")
+
+                        audio_thread = threading.Thread(target=_gen_audio)
+                        audio_thread.start()
+                    else:
+                        audio_thread = None
+
+                    welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                    type_text(welcome_response, message_placeholder, welcome_timestamp)
+
+                    if audio_thread:
+                        audio_thread.join()
+                        audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
                 st.session_state.welcome_message_sent = True
 
 
@@ -342,24 +377,10 @@ def chat_page():
         with st.chat_message(msg["role"], avatar="logo.jpeg" if msg["role"] == "assistant" else None):
             if msg["role"] == "user":
                 st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
-            else: # Assistant messages
-                # --- MODIFICATION START ---
+            else:  # Assistant messages
                 full_content = msg["content"]
                 display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
-                expand_threshold = 200 
-
-                if len(full_content) > expand_threshold:
-                    # Create the expander label including the timestamp
-                    concise_preview = full_content[:expand_threshold].rsplit(' ', 1)[0] + "..."
-                    expander_label = f"{concise_preview} *({display_timestamp})*"
-                    
-                    # Place the expander. The full content goes inside the expander.
-                    with st.expander(expander_label):
-                        st.markdown(full_content)
-                else:
-                    # If content is short, display it directly with timestamp.
-                    st.markdown(f"{full_content} *({display_timestamp})*")
-                # --- MODIFICATION END ---
+                st.markdown(f"{full_content} *({display_timestamp})*")
 
 
     # Chat input
@@ -385,7 +406,7 @@ def chat_page():
             # Display typing indicator while generating response
             with st.chat_message("assistant", avatar="logo.jpeg"):
                 with st.spinner("Assistant is typing..."):
-                    response, audio_script_for_tts = process_query(
+                    response, audio_task_for_tts = process_query(
                         query,
                         st.session_state.scheme_vector_store,
                         st.session_state.dfl_vector_store,
@@ -395,25 +416,29 @@ def chat_page():
                     )
                 response_timestamp = datetime.utcnow()
 
-                # Play audio only for the NEW response
-                if audio_script_for_tts:
-                    audio_bytes = synthesize(audio_script_for_tts, "Hindi")
-                    audio_player(audio_bytes, autoplay=True)
-                
-                # --- MODIFICATION START ---
+                message_placeholder = st.empty()
+                audio_placeholder = st.empty()
+
+                audio_container = {}
+
+                if audio_task_for_tts:
+                    def _gen_audio():
+                        script = audio_task_for_tts()
+                        audio_container['data'] = synthesize(script, "Hindi")
+
+                    audio_thread = threading.Thread(target=_gen_audio)
+                    audio_thread.start()
+                else:
+                    audio_thread = None
+
                 full_content_response = response
                 display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                expand_threshold_response = 200 
 
-                if len(full_content_response) > expand_threshold_response:
-                    concise_preview_response = full_content_response[:expand_threshold_response].rsplit(' ', 1)[0] + "..."
-                    expander_label_response = f"{concise_preview_response} *({display_timestamp_response})*"
-                    
-                    with st.expander(expander_label_response):
-                        st.markdown(full_content_response)
-                else:
-                    st.markdown(f"{full_content_response} *({display_timestamp_response})*")
-                # --- MODIFICATION END ---
+                type_text(full_content_response, message_placeholder, display_timestamp_response)
+
+                if audio_thread:
+                    audio_thread.join()
+                    audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
 
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):

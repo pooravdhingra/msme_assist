@@ -1,40 +1,210 @@
 import pandas as pd
-from langchain_community.vectorstores import FAISS
+from pinecone import Pinecone
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
+from typing import Any
+from scheme_lookup import register_scheme_docs
+from functools import lru_cache
 import os
 import logging
 import gdown  # For downloading from Google Drive
 import hashlib
 import requests
-from utils import get_embeddings
+from dotenv import load_dotenv
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-__all__ = ["load_rag_data", "load_dfl_data"]
+load_dotenv()
+
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+PINECONE_DFL_INDEX_NAME = os.getenv("PINECONE_DFL_INDEX_NAME")
+PINECONE_SCHEME_HOST = os.getenv("PINECONE_SCHEME_HOST")
+PINECONE_DFL_HOST = os.getenv("PINECONE_DFL_HOST")
+
+if not PINECONE_API_KEY:
+    logger.warning("PINECONE_API_KEY not set; vector storage will not work")
+
+pc = None
+if PINECONE_API_KEY:
+    try:
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Pinecone client: {e}")
+
+_index_cache: dict[str, Any] = {}
+
+
+def get_index_by_host(host: str):
+    """Return a cached Pinecone index connection for the given host."""
+    if host in _index_cache:
+        return _index_cache[host]
+    if not pc:
+        raise ValueError("Pinecone client not initialized")
+    logger.info(f"Connecting to Pinecone index at {host}")
+    index = pc.Index(host=host)
+    _index_cache[host] = index
+    return index
+
+def pinecone_has_index(name: str) -> bool:
+    if not pc:
+        return False
+    try:
+        return name in pc.list_indexes().names()
+    except Exception as exc:
+        logger.error(f"Failed to list Pinecone indexes: {exc}")
+        return False
+
+def safe_get(row: pd.Series, column: str, default: str = ""):
+    """Return a value from the row, replacing NaN with a default."""
+    value = row.get(column, default)
+    if pd.isna(value):
+        return default
+    return value
+
+# Columns we care about from the scheme Excel file
+RELEVANT_COLUMNS = [
+    "scheme_guid",
+    "scheme_name",
+    "parent_scheme_name",
+    "applicability_state",
+    "central_department_name",
+    "state_department_name",
+    "type_sch_doc",
+    "service_type_name",
+    "scheme_description",
+    "scheme_eligibility",
+    "application_process",
+    "benefit",
+]
+
+METADATA_ONLY_COLUMNS = [
+    "parent_scheme_name",
+    "central_department_name",
+    "state_department_name",
+    "type_sch_doc",
+    "scheme_guid",
+    "scheme_eligibility",
+    "application_process",
+    "benefit",
+]
+
+
+def parse_scheme_excel(path: str) -> list[dict]:
+    """Return records parsed from a scheme Excel file."""
+    df = pd.read_excel(path, usecols=RELEVANT_COLUMNS)
+    records = []
+    for _, row in df.iterrows():
+        parts = []
+        for col in RELEVANT_COLUMNS:
+            if col in METADATA_ONLY_COLUMNS:
+                continue
+            value = safe_get(row, col)
+            if value:
+                parts.append(str(value))
+        content = " ".join(parts)
+        scheme_guid = safe_get(row, "scheme_guid", row.name)
+        record = {
+            "id": str(scheme_guid),
+            "chunk_text": content,
+            "scheme_guid": safe_get(row, "scheme_guid"),
+            "scheme_name": safe_get(row, "scheme_name"),
+            "applicability_state": safe_get(row, "applicability_state"),
+            "type_sch_doc": safe_get(row, "type_sch_doc"),
+            "service_type_name": safe_get(row, "service_type_name"),
+            "scheme_eligibility": safe_get(row, "scheme_eligibility"),
+            "application_process": safe_get(row, "application_process"),
+            "benefit": safe_get(row, "benefit"),
+        }
+        records.append(record)
+    return records
+
+__all__ = ["load_rag_data", "load_dfl_data", "PineconeRecordRetriever"]
+
+
+class PineconeRecordRetriever(BaseRetriever):
+    """Simple retriever that queries a Pinecone index using text search."""
+
+    index: Any
+    state: str | None = None
+    gender: str | None = None
+    k: int = 5
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+    }
+
+    def __init__(
+        self,
+        index: Any,
+        state: str | None = None,
+        gender: str | None = None,
+        k: int = 5,
+    ) -> None:
+        # Ensure BaseModel initialises correctly
+        super().__init__(index=index, state=state, gender=gender, k=k)
+
+
+    def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
+
+        logger.debug(f"Pinecone query text: {query}")
+        logger.debug(f"Top K: {self.k}")
+
+        try:
+            embedding = pc.inference.embed(
+                model="llama-text-embed-v2",
+                inputs=query,
+                parameters={"input_type": "query"},
+            ).data[0]["values"]
+            logger.debug(f"Query embedding sample: {embedding[:5]}")
+            filter_arg = None
+            if self.state:
+                filter_arg = {
+                    "applicability_state": {"$in": [self.state, "ALL_STATES"]}
+                }
+            res = self.index.query(
+                vector=embedding,
+                top_k=self.k,
+                namespace="__default__",
+                include_metadata=True,
+                filter=filter_arg,
+            )
+        except Exception as e:
+            logger.error(f"Pinecone search failed: {e}")
+            return []
+
+  
+        hits = res.get("matches", [])
+        logger.debug(f"Number of matches returned: {len(hits)}")
+        docs = []
+        for hit in hits:
+            metadata = getattr(hit, "metadata", {}) or {}
+            text = metadata.get("chunk_text", "")
+            docs.append(Document(page_content=text, metadata=metadata))
+        return docs
 
 def load_rag_data(
-    google_drive_file_id="13OKwV3G_j4OJdm1Cxt7FAlO6qzrxBMW6",
-    faiss_index_path="faiss_index",
-    version_file="faiss_version.txt",
-    cached_file_path="scheme_db_latest.xlsx",
-    chunk_size=300,
+    google_drive_file_id: str = "13OKwV3G_j4OJdm1Cxt7FAlO6qzrxBMW6",
+    host: str | None = None,
+    index_name: str | None = None,
+    version_file: str = "faiss_version.txt",
+    cached_file_path: str = "scheme_db_latest.xlsx",
+    chunk_size: int = 50,
 ):
-    """
-    Load scheme_db.xlsx, check for precomputed FAISS index, and return a FAISS vector store.
-    If a valid precomputed index exists, load it; otherwise, process in chunks and create a new index.
-    
-    Args:
-        google_drive_file_id (str): The file ID from the Google Drive shareable link.
-        faiss_index_path (str): Directory containing the precomputed FAISS index.
-        version_file (str): File containing the hash of the Excel file used for the index.
-    
-    Returns:
-        FAISS: FAISS vector store with indexed scheme documents.
-    """
-    # Check if index and version hash exist and cached file matches
-    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+    """Download scheme data and upsert it into a Pinecone index."""
+    if host is None:
+        host = PINECONE_SCHEME_HOST
+
+    if host is None:
+        raise ValueError("Pinecone host not provided")
+
+    if index_name is None:
+        index_name = PINECONE_INDEX_NAME
+
+    # Check if index and cached file hash exist
+    if pc and pinecone_has_index(index_name) and os.path.exists(version_file):
         try:
             with open(version_file, "r") as vf:
                 stored_hash = vf.read().strip()
@@ -43,18 +213,16 @@ def load_rag_data(
                     cached_hash = hashlib.md5(cf.read()).hexdigest()
                 if cached_hash == stored_hash:
                     logger.info(
-                        f"Using existing FAISS index and cached file with hash {stored_hash}"
+                        f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
                     )
-                    embeddings = get_embeddings()
-                    return FAISS.load_local(
-                        faiss_index_path,
-                        embeddings,
-                        allow_dangerous_deserialization=True,
-                    )
+                    try:
+                        records = parse_scheme_excel(cached_file_path)
+                        register_scheme_docs(records)
+                    except Exception as e:
+                        logger.error(f"Failed to load cached scheme docs: {e}")
+                    return get_index_by_host(host)
         except Exception as e:
-            logger.error(
-                f"Failed to load precomputed FAISS index: {str(e)}. Will attempt download."
-            )
+            logger.error(f"Failed to load existing Pinecone index: {str(e)}. Will attempt download.")
 
     # Download the Google Sheet as an Excel file
     download_url = f"https://docs.google.com/spreadsheets/d/{google_drive_file_id}/export?format=xlsx"
@@ -75,110 +243,71 @@ def load_rag_data(
     logger.info(f"Computed file hash: {file_hash}")
 
     # If index exists and hash matches, skip processing
-    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+    if pc and pinecone_has_index(index_name) and os.path.exists(version_file):
         try:
             with open(version_file, "r") as vf:
                 stored_hash = vf.read().strip()
             if stored_hash == file_hash:
                 logger.info(
-                    f"Precomputed FAISS index found with matching hash at {faiss_index_path}"
+                    f"Using existing Pinecone index {index_name} with matching hash"
                 )
-                embeddings = get_embeddings()
-                return FAISS.load_local(
-                    faiss_index_path,
-                    embeddings,
-                    allow_dangerous_deserialization=True,
-                )
+                return get_index_by_host(host)
             else:
                 logger.info(
-                    f"Hash mismatch: stored hash {stored_hash}, current hash {file_hash}. Recomputing FAISS index."
+                    f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
                 )
+                pc.delete_index(index_name)
         except Exception as e:
             logger.error(
-                f"Failed to load precomputed FAISS index: {str(e)}. Recomputing FAISS index."
+                f"Failed to load existing Pinecone index: {str(e)}. Recreating."
             )
 
-    else:
-        logger.info(
-            f"No precomputed FAISS index found at {faiss_index_path} or version file missing. Computing new index."
-        )
 
 
-
-    # Read Excel file
+    logger.info("Parsing downloaded Excel file")
     try:
-        df = pd.read_excel(temp_file_path)
-        logger.info(f"Excel file loaded successfully. Rows: {len(df)}")
+        records = parse_scheme_excel(temp_file_path)
+        logger.info(f"Excel file loaded successfully. Records: {len(records)}")
     except Exception as e:
         logger.error(f"Failed to read Excel file: {str(e)}")
         raise
     finally:
-        # Keep the downloaded file for future reuse
         logger.info(f"Cached file available at {temp_file_path}")
 
-    relevant_columns = [
-        "Scheme GUID",
-        "Scheme Name",
-        "parent_scheme_name",
-        "Applicability (State)",
-        "Central Department Name",
-        "State department name",
-        "Type (Sch/Doc)",
-        "Service Type Name",
-        "Scheme description",
-        "Scheme Eligibility",
-        "Application Process",
-        "Benefit"
-    ]
+    register_scheme_docs(records)
 
-    embeddings = get_embeddings()
-    vector_store = None
+    if pc and index_name and not pinecone_has_index(index_name):
+        pc.create_index_for_model(
+            name=index_name,
+            cloud="aws",
+            region="us-east-1",
+            embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
+        )
 
-    def process_rows(rows):
-        docs = []
-        for _, row in rows.iterrows():
-            parts = []
-            for col in relevant_columns:
-                if col in row and pd.notna(row[col]):
-                    clean_col = col.replace('(', ' ').replace(')', '')
-                    parts.append(f"{clean_col}: {row[col]}")
-            content = "\n".join(parts)
-            metadata = {
-                "guid": row.get("Scheme GUID", ""),
-                "name": row.get("Scheme Name", ""),
-                "applicability": row.get("Applicability (State)", ""),
-                "type": row.get("Type (Sch/Doc)", "")
-            }
-            docs.append(Document(page_content=content, metadata=metadata))
-        return docs
+    index = get_index_by_host(host)
+    for start in range(0, len(records), chunk_size):
+        batch = records[start : start + chunk_size]
+        index.upsert_records("__default__", batch)
 
-    logger.info(f"Processing {len(df)} rows in chunks of {chunk_size}")
-    for start in range(0, len(df), chunk_size):
-        chunk = df.iloc[start : start + chunk_size]
-        documents = process_rows(chunk)
-        if vector_store is None:
-            vector_store = FAISS.from_documents(documents, embeddings)
-        else:
-            temp_store = FAISS.from_documents(documents, embeddings)
-            vector_store.merge_from(temp_store)
-    logger.info(f"FAISS vector store created with {vector_store.index.ntotal} documents")
-    
-    # Save the FAISS index and version file
     try:
-        os.makedirs(faiss_index_path, exist_ok=True)
-        vector_store.save_local(faiss_index_path)
-        logger.info(f"Saved FAISS vector store to {faiss_index_path}")
         with open(version_file, "w") as f:
             f.write(file_hash)
         logger.info(f"Saved file hash to {version_file}")
     except Exception as e:
-        logger.error(f"Failed to save FAISS vector store or version: {str(e)}")
+        logger.error(f"Failed to save version file: {str(e)}")
         raise
 
-    return vector_store
+    logger.info("Pinecone index updated")
+    return index
 
 
-def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE", faiss_index_path="dfl_faiss_index", version_file="dfl_version.txt"):
+def load_dfl_data(
+    google_drive_file_id: str = "1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eIWJCE",
+    host: str | None = None,
+    index_name: str | None = None,
+    version_file: str = "dfl_version.txt",
+    chunk_tokens: int = 350,
+):
 
     download_url = f"https://docs.google.com/document/d/{google_drive_file_id}/export?format=txt"
     logger.info(f"Downloading Google Doc from {download_url}")
@@ -192,46 +321,60 @@ def load_dfl_data(google_drive_file_id="1nHdHze3Za5BthXGsk9KptADCLNM7SN0JW4ZI8eI
         logger.error(f"Failed to download Google Doc: {str(e)}")
         raise
 
-    if os.path.exists(faiss_index_path) and os.path.exists(version_file):
+    if host is None:
+        host = PINECONE_DFL_HOST
+
+    if host is None:
+        raise ValueError("Pinecone host not provided")
+
+    if index_name is None:
+        index_name = PINECONE_DFL_INDEX_NAME
+
+    if pc and pinecone_has_index(index_name) and os.path.exists(version_file):
         try:
             with open(version_file, "r") as vf:
                 stored_hash = vf.read().strip()
             if stored_hash == file_hash:
                 logger.info(
-                    f"Precomputed DFL FAISS index found with matching hash at {faiss_index_path}"
+                    f"Using existing Pinecone index {index_name} for DFL with matching hash"
                 )
-                embeddings = get_embeddings()
-                return FAISS.load_local(
-                    faiss_index_path,
-                    embeddings,
-                    allow_dangerous_deserialization=True,
-                )
+                return get_index_by_host(host)
             else:
                 logger.info(
-                    f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recomputing index."
+                    f"Hash mismatch: stored {stored_hash}, current {file_hash}. Recreating index."
                 )
+                pc.delete_index(index_name)
         except Exception as e:
-            logger.error(f"Failed to load precomputed DFL index: {str(e)}. Recomputing.")
+            logger.error(f"Failed to load existing DFL index: {str(e)}. Recreating.")
 
-    logger.info("Creating new DFL FAISS index")
-    chunk_size = 400
-    documents = []
-    for i in range(0, len(text), chunk_size):
-        chunk = text[i : i + chunk_size].strip()
-        if chunk:
-            documents.append(Document(page_content=chunk, metadata={"chunk": i // chunk_size}))
+    logger.info("Creating new DFL Pinecone index")
+    if pc and not pinecone_has_index(index_name):
+        pc.create_index_for_model(
+            name=index_name,
+            cloud="aws",
+            region="us-east-1",
+            embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
+        )
 
-    embeddings = get_embeddings()
-    vector_store = FAISS.from_documents(documents, embeddings)
+    index = get_index_by_host(host)
+    import tiktoken
+    enc = tiktoken.get_encoding("cl100k_base")
+    tokens = enc.encode(text)
+    records = []
+    for i in range(0, len(tokens), chunk_tokens):
+        chunk = enc.decode(tokens[i : i + chunk_tokens])
+        records.append({"id": str(i // chunk_tokens), "chunk_text": chunk})
+    for start in range(0, len(records), 100):
+        batch = records[start : start + 100]
+        index.upsert_records("__default__", batch)
 
     try:
-        os.makedirs(faiss_index_path, exist_ok=True)
-        vector_store.save_local(faiss_index_path)
         with open(version_file, "w") as vf:
             vf.write(file_hash)
-        logger.info(f"Saved DFL FAISS index to {faiss_index_path} and hash to {version_file}")
+        logger.info(f"Saved file hash to {version_file}")
     except Exception as e:
-        logger.error(f"Failed to save DFL FAISS index: {str(e)}")
+        logger.error(f"Failed to save DFL version file: {str(e)}")
         raise
 
-    return vector_store
+    logger.info("DFL Pinecone index updated")
+    return index
