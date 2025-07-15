@@ -152,6 +152,7 @@ def get_system_prompt(language, user_name="User", word_limit=200):
        2. **Response Guidelines**:
        - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
+       - Give structured responses with formatting like bullets or headings/subheadings where relevant.
        - Response must be <={word_limit} words.
 
        - Never mention agent fees unless specified in RAG Response for scheme queries.
