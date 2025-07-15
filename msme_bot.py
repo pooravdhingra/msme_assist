@@ -32,15 +32,14 @@ data_manager = DataManager()
 def init_llm():
     logger.info("Initializing LLM client")
     start_time = time.time()
-    api_key = os.getenv("XAI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("XAI_API_KEY environment variable not set")
+        raise ValueError("OPENAI_API_KEY environment variable not set")
     llm = ChatOpenAI(
-        model="grok-3-mini-fast",
+        model="gpt-4.1-nano",
         api_key=api_key,
-        base_url="https://api.x.ai/v1",
-        temperature=0,
-        reasoning_effort="low"
+        base_url="https://api.openai.com/v1",
+        temperature=0
     )
     logger.info(f"LLM initialized in {time.time() - start_time:.2f} seconds")
     return llm
