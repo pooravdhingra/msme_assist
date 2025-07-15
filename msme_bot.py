@@ -134,7 +134,7 @@ def detect_language(query):
 
     return "English"
 
-def get_system_prompt(language, user_name="User"):
+def get_system_prompt(language, user_name="User", word_limit=250):
 
     """Return tone and style instructions."""
 
@@ -147,7 +147,7 @@ def get_system_prompt(language, user_name="User"):
        2. **Response Guidelines**:
        - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
-       - Response must be at least 150 and <=250 words.
+       - Response must be <={word_limit} words.
        - Never mention agent fees unless specified in RAG Response for scheme queries.
        - Never mention technical terms like RAG, LLM, Database etc. to the user.
        - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
@@ -389,7 +389,8 @@ def generate_response(intent, rag_response, user_info, language, context, query,
                 return "Thanks! Kya main aur madad kar sakta hoon?"
             return "You're welcome! Let me know if you need anything else."
 
-    tone_prompt = get_system_prompt(language, user_info.name)
+    word_limit = 150 if intent == "Schemes_Know_Intent" else 100
+    tone_prompt = get_system_prompt(language, user_info.name, word_limit)
 
     base_prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
@@ -463,11 +464,11 @@ def generate_response(intent, rag_response, user_info, language, context, query,
         )
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
-            "List schemes from **RAG Response** (few lines each). Filter for schemes "
-            "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
+            "List multiple schemes from **RAG Response** with a short one-line description for each. "
+            "Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
             "'Centrally Sponsored Scheme' (CSS). Use any user provided scheme details to choose the most relevant schemes. "
-            "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. Finally Ask: 'Want more details on any scheme?' "
-            "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
+            "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. "
+            "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
         intent_prompt += (
@@ -757,7 +758,11 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         logger.info(f"Stored scheme names after flow: {st.session_state.scheme_names_str}")
     return response, True
 
-def generate_hindi_audio_script(original_response: str, user_info: UserContext) -> str:
+def generate_hindi_audio_script(
+    original_response: str,
+    user_info: UserContext,
+    rag_response: str = "",
+) -> str:
     """
     Generates a summarized, human-like Hindi script for text-to-speech from the original bot response.
     The script should avoid punctuation marks and focus on natural flow.
@@ -766,7 +771,7 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
     in natural Hindi (Devanagari script) for a text-to-speech system.
     
     **Instructions**:
-    - Summarize the core information from the provided 'Original Response'.
+    - Summarize the core information from the provided 'Final Response' and 'RAG Response'.
     - Ensure the summary flows naturally as if spoken by a human.
     - Translate the summary into clear and simple Hindi (Devanagari script) using simple hindi words.
     - Focus on the main points and keep the summary concise, between 50-100 words, to ensure a smooth audio experience.
@@ -777,8 +782,11 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
     - Always use simpler alternatives wherever the words are in complex hindi e.g. Instead of "vyavyasay" say "business", instead of "vanijya" say "finance"
     - Do NOT include urls and web links. 
 
-    **Original Response**:
+    **Final Response**:
     {original_response}
+
+    **RAG Response**:
+    {rag_response}
 
     **Output**:
     """
@@ -861,7 +869,11 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
         def audio_task():
             step_local = time.time()
-            hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
+            hindi_audio_script = generate_hindi_audio_script(
+                generated_response,
+                user_info,
+                "",
+            )
             record("audio_script", step_local)
             try:
                 interaction_id = generate_interaction_id(query, datetime.utcnow())
@@ -893,7 +905,11 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
             def audio_task():
                 step_local = time.time()
-                hindi_audio_script = generate_hindi_audio_script(response, user_info)
+                hindi_audio_script = generate_hindi_audio_script(
+                    response,
+                    user_info,
+                    "",
+                )
                 record("audio_script", step_local)
                 try:
                     interaction_id = generate_interaction_id(response, datetime.utcnow())
@@ -1023,7 +1039,11 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
         def audio_task():
             step_local = time.time()
-            hindi_audio_script = generate_hindi_audio_script(first_q, user_info)
+            hindi_audio_script = generate_hindi_audio_script(
+                first_q,
+                user_info,
+                "",
+            )
             record("scheme_flow", step_local)
             try:
                 interaction_id = generate_interaction_id(query, datetime.utcnow())
@@ -1135,7 +1155,11 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     def audio_task():
         step_local = time.time()
-        hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
+        hindi_audio_script = generate_hindi_audio_script(
+            generated_response,
+            user_info,
+            rag_text or "",
+        )
         record("audio_script", step_local)
 
         try:
