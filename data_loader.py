@@ -3,6 +3,7 @@ from pinecone import Pinecone
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from typing import Any
+from scheme_lookup import register_scheme_docs
 from functools import lru_cache
 import os
 import logging
@@ -266,6 +267,9 @@ def load_rag_data(
                 "benefit": safe_get(row, "benefit"),
             }
             records.append(record)
+
+    # populate local cache for direct scheme lookup
+    register_scheme_docs(records)
 
     if pc and index_name and not pinecone_has_index(index_name):
         pc.create_index_for_model(
