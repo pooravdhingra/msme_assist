@@ -3,6 +3,7 @@ from pinecone import Pinecone
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from typing import Any
+from scheme_lookup import register_scheme_docs
 from functools import lru_cache
 import os
 import logging
@@ -62,6 +63,63 @@ def safe_get(row: pd.Series, column: str, default: str = ""):
     if pd.isna(value):
         return default
     return value
+
+# Columns we care about from the scheme Excel file
+RELEVANT_COLUMNS = [
+    "scheme_guid",
+    "scheme_name",
+    "parent_scheme_name",
+    "applicability_state",
+    "central_department_name",
+    "state_department_name",
+    "type_sch_doc",
+    "service_type_name",
+    "scheme_description",
+    "scheme_eligibility",
+    "application_process",
+    "benefit",
+]
+
+METADATA_ONLY_COLUMNS = [
+    "parent_scheme_name",
+    "central_department_name",
+    "state_department_name",
+    "type_sch_doc",
+    "scheme_guid",
+    "scheme_eligibility",
+    "application_process",
+    "benefit",
+]
+
+
+def parse_scheme_excel(path: str) -> list[dict]:
+    """Return records parsed from a scheme Excel file."""
+    df = pd.read_excel(path, usecols=RELEVANT_COLUMNS)
+    records = []
+    for _, row in df.iterrows():
+        parts = []
+        for col in RELEVANT_COLUMNS:
+            if col in METADATA_ONLY_COLUMNS:
+                continue
+            value = safe_get(row, col)
+            if value:
+                parts.append(str(value))
+        content = " ".join(parts)
+        scheme_guid = safe_get(row, "scheme_guid", row.name)
+        record = {
+            "id": str(scheme_guid),
+            "chunk_text": content,
+            "scheme_guid": safe_get(row, "scheme_guid"),
+            "scheme_name": safe_get(row, "scheme_name"),
+            "applicability_state": safe_get(row, "applicability_state"),
+            "type_sch_doc": safe_get(row, "type_sch_doc"),
+            "service_type_name": safe_get(row, "service_type_name"),
+            "scheme_eligibility": safe_get(row, "scheme_eligibility"),
+            "application_process": safe_get(row, "application_process"),
+            "benefit": safe_get(row, "benefit"),
+        }
+        records.append(record)
+    return records
 
 __all__ = ["load_rag_data", "load_dfl_data", "PineconeRecordRetriever"]
 
@@ -157,6 +215,11 @@ def load_rag_data(
                     logger.info(
                         f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
                     )
+                    try:
+                        records = parse_scheme_excel(cached_file_path)
+                        register_scheme_docs(records)
+                    except Exception as e:
+                        logger.error(f"Failed to load cached scheme docs: {e}")
                     return get_index_by_host(host)
         except Exception as e:
             logger.error(f"Failed to load existing Pinecone index: {str(e)}. Will attempt download.")
@@ -201,71 +264,17 @@ def load_rag_data(
 
 
 
-    relevant_columns = [
-        "scheme_guid",
-        "scheme_name",
-        "parent_scheme_name",
-        "applicability_state",
-        "central_department_name",
-        "state_department_name",
-        "type_sch_doc",
-        "service_type_name",
-        "scheme_description",
-        "scheme_eligibility",
-        "application_process",
-        "benefit",
-    ]
-
-    # Read Excel file with only relevant columns
+    logger.info("Parsing downloaded Excel file")
     try:
-        df = pd.read_excel(temp_file_path, usecols=relevant_columns)
-        logger.info(f"Excel file loaded successfully. Rows: {len(df)}")
+        records = parse_scheme_excel(temp_file_path)
+        logger.info(f"Excel file loaded successfully. Records: {len(records)}")
     except Exception as e:
         logger.error(f"Failed to read Excel file: {str(e)}")
         raise
     finally:
-        # Keep the downloaded file for future reuse
         logger.info(f"Cached file available at {temp_file_path}")
 
-    metadata_only_columns = [
-        "parent_scheme_name",
-        "central_department_name",
-        "state_department_name",
-        "type_sch_doc",
-        "scheme_guid",
-        "scheme_eligibility",
-        "application_process",
-        "benefit",
-    ]
-
-    records = []
-    logger.info(f"Processing {len(df)} rows in chunks of {chunk_size}")
-
-    for start in range(0, len(df), chunk_size):
-        chunk = df.iloc[start : start + chunk_size]
-        for _, row in chunk.iterrows():
-            parts = []
-            for col in relevant_columns:
-                if col in metadata_only_columns:
-                    continue
-                value = safe_get(row, col)
-                if value:
-                    parts.append(str(value))
-            content = " ".join(parts)
-            scheme_guid = safe_get(row, "scheme_guid", row.name)
-            record = {
-                "id": str(scheme_guid),
-                "chunk_text": content,
-                "scheme_guid": safe_get(row, "scheme_guid"),
-                "scheme_name": safe_get(row, "scheme_name"),
-                "applicability_state": safe_get(row, "applicability_state"),
-                "type_sch_doc": safe_get(row, "type_sch_doc"),
-                "service_type_name": safe_get(row, "service_type_name"),
-                "scheme_eligibility": safe_get(row, "scheme_eligibility"),
-                "application_process": safe_get(row, "application_process"),
-                "benefit": safe_get(row, "benefit"),
-            }
-            records.append(record)
+    register_scheme_docs(records)
 
     if pc and index_name and not pinecone_has_index(index_name):
         pc.create_index_for_model(

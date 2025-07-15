@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
 from data_loader import load_rag_data, load_dfl_data, PineconeRecordRetriever
+from scheme_lookup import (
+    find_scheme_guid_by_query,
+    fetch_scheme_docs_by_guid,
+    DocumentListRetriever,
+)
 from utils import extract_scheme_guid
 import streamlit as st
 from data import DataManager
@@ -149,7 +154,9 @@ def get_system_prompt(language, user_name="User", word_limit=200):
        - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
        - Response must be <={word_limit} words.
+
        - Never mention agent fees unless specified in RAG Response for scheme queries.
+       - Never repeat user query or bring up ambiguity in the response, proceed directly to answering.
        - Never mention technical terms like RAG, LLM, Database etc. to the user.
        - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
        - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
@@ -281,16 +288,40 @@ def get_scheme_response(
     gender=None,
     business_category=None,
     include_mudra=False,
+    intent=None,
 ):
-    """Wrapper for scheme dataset retrieval with optional Mudra scheme info."""
+    """Retrieve scheme info, using keyword lookup for popular schemes."""
     logger.info("Querying scheme dataset")
-    rag = get_rag_response(
-        query,
-        vector_store,
-        state=state,
-        gender=gender,
-        business_category=business_category,
-    )
+
+    guid = None
+    if intent == "Specific_Scheme_Know_Intent":
+        guid = find_scheme_guid_by_query(query)
+
+    if guid:
+        logger.info(f"Directly fetching scheme details for GUID {guid}")
+        docs = fetch_scheme_docs_by_guid(guid, vector_store)
+        if docs:
+            retriever = DocumentListRetriever(docs)
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=llm,
+                chain_type="stuff",
+                retriever=retriever,
+                return_source_documents=True,
+            )
+            result = qa_chain.invoke({"query": query})
+            rag = {"text": result["result"], "sources": result["source_documents"]}
+        else:
+            logger.warning("No documents fetched by GUID; falling back to search")
+            guid = None
+
+    if not guid:
+        rag = get_rag_response(
+            query,
+            vector_store,
+            state=state,
+            gender=gender,
+            business_category=business_category,
+        )
 
     if include_mudra:
         logger.info("Fetching Pradhan Mantri Mudra Yojana details")
@@ -733,6 +764,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         gender=user_info.gender,
         business_category=user_info.business_category,
         include_mudra=details.get("path") == "credit",
+        intent="Schemes_Know_Intent",
     )
     if isinstance(rag, dict):
         rag_text = rag.get("text")
@@ -1072,6 +1104,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 gender=None,
                 business_category=None,
                 include_mudra=False,
+                intent=intent,
             )
             record("rag_retrieval", step)
         else:
@@ -1095,6 +1128,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             gender=gender,
             business_category=business_category,
             include_mudra=classify_scheme_type(augmented_query) == "credit",
+            intent=intent,
         )
         record("rag_retrieval", step)
         if session_id not in st.session_state.rag_cache:
