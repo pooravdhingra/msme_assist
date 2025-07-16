@@ -36,7 +36,7 @@ def init_llm():
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
     llm = ChatOpenAI(
-        model="gpt-4.1-nano",
+        model="gpt-4.1-mini-2025-04-14",  # Updated model
         api_key=api_key,
         base_url="https://api.openai.com/v1",
         temperature=0
