@@ -36,7 +36,7 @@ def init_llm():
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
     llm = ChatOpenAI(
-        model="gpt-4.1-nano",
+        model="gpt-4.1-mini-2025-04-14",
         api_key=api_key,
         base_url="https://api.openai.com/v1",
         temperature=0
@@ -367,15 +367,15 @@ def classify_intent(query, prev_response, conversation_history=""):
 
     **Instructions**:
     Return only one label from the following:
-       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
-       - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'How can going digital help grow business', etc.)
-       - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana')
-       - Specific_Scheme_Apply_Intent (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
-       - Specific_Scheme_Eligibility_Intent (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
-       - Out_of_Scope (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?')
-       - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye')
-       - Confirmation_New_RAG (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.')
-       - Gratitude_Intent (user expresses thanks or acknowledgement, e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद')
+       - Schemes_Know_Intent - General ambiguous queries enquiring about schemes or loans without specifics (e.g., 'loan', 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
+       - DFL_Intent - Digital/financial literacy queries (e.g., 'Current account', 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety')
+       - Specific_Scheme_Know_Intent - Queries about specific schemes (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp')
+       - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसआईएआई के लिए आवेदन कैसे करें?')
+       - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसआईएआई की पात्रता क्या है?')
+       - Out_of_Scope - Queries that are not relevant (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?')
+       - Contextual_Follow_Up - Follow-up queries (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye')
+       - Confirmation_New_RAG - Confirmation for initiating another RAG search (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.'))
+       - Gratitude_Intent - User expresses thanks or acknowledgement (e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद')
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
