@@ -153,6 +153,7 @@ def token_authentication():
 
                 if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
                     result = data["result"]
+                    logger.debug(f"Citizen API result: {result}")
                     st.session_state.user = {
                         "fname": result.get("firstName", ""),
                         "lname": result.get("lastName", ""),
@@ -166,6 +167,7 @@ def token_authentication():
                         "language": "English",
                         "state_id": STATE_MAPPING.get(result.get("state", ""), "Unknown")
                     }
+                    logger.info(f"Fetched user details from token: {st.session_state.user}")
 
                     # Generate session_id
                     if not st.session_state.session_id:
