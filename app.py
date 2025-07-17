@@ -12,7 +12,7 @@ from msme_bot import (
     welcome_user,
     detect_language,
 )
-from data import DataManager, STATE_MAPPING
+from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
 import numpy as np
 import logging
 from tts import synthesize, audio_player
@@ -157,18 +157,21 @@ def token_authentication():
                 if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
                     result = data["result"]
                     logger.debug(f"Citizen API result: {result}")
+                    gender_raw = result.get("gender", "") or ""
+                    gender = GENDER_MAPPING.get(gender_raw.upper(), gender_raw)
+                    state_name = result.get("state", "")
                     st.session_state.user = {
                         "fname": result.get("firstName", ""),
                         "lname": result.get("lastName", ""),
                         "mobile_number": result.get("contactNumber", ""),
-                        "gender": result.get("gender", ""),
-                        "state_name": result.get("state", ""),
+                        "gender": gender,
+                        "state_name": state_name,
                         "dob": result.get("dob", ""),
                         "pincode": result.get("pincode", ""),
                         "business_name": result.get("bussinessName", ""),
                         "business_category": result.get("employmentType", ""),
                         "language": "English",
-                        "state_id": STATE_MAPPING.get(result.get("state", ""), "Unknown")
+                        "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown")
                     }
                     logger.info(f"Fetched user details from token: {st.session_state.user}")
 

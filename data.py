@@ -58,6 +58,12 @@ STATE_MAPPING = {
     "PY": "PUDUCHERRY"
 }
 
+# Reverse lookup: map full state name to abbreviation
+STATE_NAME_TO_ID = {v: k for k, v in STATE_MAPPING.items()}
+
+# Map gender codes from the Citizen API to full labels
+GENDER_MAPPING = {"M": "Male", "F": "Female", "O": "Other"}
+
 @st.cache_resource
 def get_mongo_client():
     """Initialize and cache MongoDB client."""
@@ -143,11 +149,7 @@ class DataManager:
                 logger.warning(f"Mobile number {mobile_number} already registered")
                 return False, "Mobile number already registered. Please log in."
             
-            state_id = None
-            for key, value in STATE_MAPPING.items():
-                if value == state:
-                    state_id = key
-                    break
+            state_id = STATE_NAME_TO_ID.get(state)
             
             user_data = {
                 "fname": fname,
@@ -218,10 +220,7 @@ class DataManager:
                     logger.error(f"Invalid state: {value}")
                     return False, "Invalid state selected."
                 update_data["state_name"] = value
-                for k, v in STATE_MAPPING.items():
-                    if v == value:
-                        update_data["state_id"] = k
-                        break
+                update_data["state_id"] = STATE_NAME_TO_ID.get(value)
             else:
                 update_data[key] = value
 
