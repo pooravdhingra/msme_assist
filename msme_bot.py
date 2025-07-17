@@ -1158,7 +1158,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             state=state_id,
             gender=gender,
             business_category=business_category,
-            include_mudra=classify_scheme_type(augmented_query) == "credit",
+            include_mudra=classify_scheme_type(query) == "credit",
             intent=intent,
         )
         record("rag_retrieval", step)
