@@ -391,7 +391,7 @@ def classify_intent(query, prev_response, conversation_history=""):
         return "Out_of_Scope"
 
 # Generate final response based on intent and RAG output
-def generate_response(intent, rag_response, user_info, language, context, query, scheme_guid=None, scheme_details=None):
+def generate_response(intent, rag_response, user_info, language, context, query, scheme_guid=None, scheme_details=None, stream: bool = False):
     if intent == "Out_of_Scope":
         if language == "Hindi":
             return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
@@ -544,13 +544,34 @@ def generate_response(intent, rag_response, user_info, language, context, query,
     prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
 
     try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        final_text = response.content.strip()
-        if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
-            screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
-            if screening_link not in final_text:
-                final_text += f"\n{screening_link}"
-        return final_text
+        if stream:
+            def token_generator():
+                buffer = ""
+                try:
+                    for chunk in llm.stream([{"role": "user", "content": prompt}]):
+                        token = chunk.content or ""
+                        buffer += token
+                        if token:
+                            yield token
+                except Exception as e:
+                    logger.error(f"Failed to stream response: {str(e)}")
+                    return
+
+                if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+                    screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+                    if screening_link not in buffer:
+                        for char in "\n" + screening_link:
+                            yield char
+
+            return token_generator()
+        else:
+            response = llm.invoke([{"role": "user", "content": prompt}])
+            final_text = response.content.strip()
+            if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+                screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+                if screening_link not in final_text:
+                    final_text += f"\n{screening_link}"
+            return final_text
     except Exception as e:
         logger.error(f"Failed to generate response: {str(e)}")
         if language == "Hindi":
@@ -836,7 +857,7 @@ def generate_hindi_audio_script(
             return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।" # Error generating audio script.
 
 # Main function to process query
-def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
+def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None, stream: bool = False):
     start_time = time.time()
     timings = {}
 
@@ -894,7 +915,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         record("scheme_flow", step)
         generated_response = resp
 
-        def audio_task():
+        def audio_task(final_text=None):
             step_local = time.time()
             hindi_audio_script = generate_hindi_audio_script(
                 generated_response,
@@ -922,6 +943,11 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             log_timings()
             return hindi_audio_script
 
+        if stream:
+            def gen():
+                for ch in generated_response:
+                    yield ch
+            return gen(), audio_task
         return generated_response, audio_task
 
 
@@ -930,7 +956,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         if user_type == "new":
             response = welcome_user(state_name, user_name, query_language)
 
-            def audio_task():
+            def audio_task(final_text=None):
                 step_local = time.time()
                 hindi_audio_script = generate_hindi_audio_script(
                     response,
@@ -960,6 +986,11 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 return hindi_audio_script
 
             logger.info(f"Generated welcome response for new user in {time.time() - start_time:.2f} seconds: {response}")
+            if stream:
+                def gen():
+                    for ch in response:
+                        yield ch
+                return gen(), audio_task
             return response, audio_task
         else:
             logger.info(f"No welcome message for returning user")
@@ -1064,7 +1095,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         else:
             first_q = ask_scheme_question("turnover", query_language)
 
-        def audio_task():
+        def audio_task(final_text=None):
             step_local = time.time()
             hindi_audio_script = generate_hindi_audio_script(
                 first_q,
@@ -1158,7 +1189,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
     step = time.time()
-    generated_response = generate_response(
+    gen_result = generate_response(
         intent,
         rag_text or "",
         user_info,
@@ -1167,35 +1198,53 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         query,
         scheme_guid=scheme_guid,
         scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
+        stream=stream,
     )
     record("generate_response", step)
 
-    if intent == "Schemes_Know_Intent":
-        names = extract_scheme_names(generated_response)
-        if names:
-            st.session_state.scheme_names = [n for n in names]
-            st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
-            logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
-    elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
-        if referenced_scheme not in st.session_state.scheme_names:
-            st.session_state.scheme_names = [referenced_scheme]
-            st.session_state.scheme_names_str = f"1. {referenced_scheme}"
-        logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
+    if not stream:
+        generated_response = gen_result
 
-    def audio_task():
+        if intent == "Schemes_Know_Intent":
+            names = extract_scheme_names(generated_response)
+            if names:
+                st.session_state.scheme_names = [n for n in names]
+                st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
+                logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
+        elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
+            if referenced_scheme not in st.session_state.scheme_names:
+                st.session_state.scheme_names = [referenced_scheme]
+                st.session_state.scheme_names_str = f"1. {referenced_scheme}"
+            logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
+
+    def audio_task(final_text=None):
+        text_for_use = final_text if stream else generated_response
         step_local = time.time()
         hindi_audio_script = generate_hindi_audio_script(
-            generated_response,
+            text_for_use,
             user_info,
             rag_text or "",
         )
         record("audio_script", step_local)
 
+        if stream:
+            if intent == "Schemes_Know_Intent":
+                names = extract_scheme_names(text_for_use)
+                if names:
+                    st.session_state.scheme_names = [n for n in names]
+                    st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
+                    logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
+            elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
+                if referenced_scheme not in st.session_state.scheme_names:
+                    st.session_state.scheme_names = [referenced_scheme]
+                    st.session_state.scheme_names_str = f"1. {referenced_scheme}"
+                logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
+
         try:
             interaction_id = generate_interaction_id(query, datetime.utcnow())
             messages_to_save = [
                 {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+                {"role": "assistant", "content": text_for_use, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
             ]
             if not any(
                 any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
@@ -1205,7 +1254,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 data_manager.save_conversation(session_id, mobile_number, messages_to_save)
                 record("save_conversation", step_db)
                 logger.info(
-                    f"Saved conversation for session {session_id}: {query} -> {generated_response} (Interaction ID: {interaction_id})"
+                    f"Saved conversation for session {session_id}: {query} -> {text_for_use} (Interaction ID: {interaction_id})"
                 )
             else:
                 logger.debug(
@@ -1217,4 +1266,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         log_timings()
         return hindi_audio_script
 
+    if stream:
+        return gen_result, audio_task
     return generated_response, audio_task
