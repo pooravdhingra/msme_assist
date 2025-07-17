@@ -116,6 +116,7 @@ st.markdown("""
         }
         div[data-testid="stChatMessage"]{
             max-width: 100%;
+            padding: 0.5rem 0px !important;
         }
         div[data-testid="stLayoutWrapper"]:nth-child(even) > div[data-testid="stChatMessage"]{
             width: fit-content;
@@ -124,7 +125,7 @@ st.markdown("""
             max-width: 100%;
         }
         div[data-testid="stLayoutWrapper"]:nth-child(even) {
-            margin-left: 2rem;
+            padding-left: 1.5rem;
         }
         div[data-testid="stLayoutWrapper"]:nth-child(odd) {
             flex-flow: row;
@@ -434,10 +435,18 @@ def chat_page():
 
         st.markdown(f"""
                 <h2 style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    background-color: white;
+                    padding: 1rem;
                     font-size: 1.5rem;
                     color: #4F285E;
-                    padding: 0.2rem 1rem;
                     text-align: center;
+                    z-index: 9999;
+                    border-bottom: 1.5px solid #4f285e;
+                    box-shadow: 0px 2px 10px;
                 ">
                     Vyapaar Saathi
                 </h2>

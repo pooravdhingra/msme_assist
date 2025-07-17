@@ -85,10 +85,10 @@ def audio_player(
     styled_audio_html = f"""
     <div style="
         background-color: #4F285E; 
-        padding: 12px;
+        padding: 10px;
         border-radius: 12px;
-        margin-top: 8px;
-        margin-bottom: 8px;
+        margin-top: 3px;
+        margin-bottom: 3px;
     ">
         <audio {autoplay_attr} controls
             controlsList="nodownload noplaybackrate"
