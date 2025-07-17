@@ -245,7 +245,8 @@ def restore_session_from_url():
                 }
                 st.session_state.page = "chat"
                 # Restore messages from MongoDB, but do NOT include audio_script
-                conversations = data_manager.get_conversations(mobile_number, limit=10)
+                # Fetch entire conversation history for the user
+                conversations = data_manager.get_conversations(mobile_number)
                 all_messages = []
                 for conv in conversations:
                     for msg in conv["messages"]:
@@ -447,8 +448,9 @@ def chat_page():
 
     # Trigger welcome message only for new users or on fresh login
     if not st.session_state.welcome_message_sent:
+        # Retrieve all previous conversations to determine if the user is returning
         conversations = data_manager.get_conversations(
-            st.session_state.user["mobile_number"], limit=10
+            st.session_state.user["mobile_number"]
         )
         user_type = "returning" if conversations else "new"
 
@@ -491,7 +493,8 @@ def chat_page():
     all_messages = []
 
     # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
-    conversations = data_manager.get_conversations(st.session_state.user["mobile_number"], limit=10)
+    # Load complete chat history for returning users
+    conversations = data_manager.get_conversations(st.session_state.user["mobile_number"])
     for conv in conversations:
         for msg in conv["messages"]:
             if "content" not in msg or "role" not in msg or "timestamp" not in msg:
