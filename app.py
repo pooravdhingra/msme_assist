@@ -20,7 +20,9 @@ import requests
 from typing import Optional
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
 
 # Initialize DataManager
@@ -309,6 +311,7 @@ def chat_page():
         user_type = "returning" if conversations else "new"
 
         if user_type == "new":
+            logger.info(f"User info before welcome query: {st.session_state.user}")
             welcome_response, welcome_audio_task = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
@@ -408,6 +411,7 @@ def chat_page():
             # Display typing indicator while generating response
             with st.chat_message("assistant", avatar="logo.jpeg"):
                 with st.spinner("Assistant is typing..."):
+                    logger.info(f"User info before query: {st.session_state.user}")
                     response, audio_task_for_tts = process_query(
                         query,
                         st.session_state.scheme_vector_store,

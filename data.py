@@ -9,7 +9,9 @@ import streamlit as st
 from urllib.parse import quote_plus, urlparse, urlunparse
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
 
 # Load environment variables

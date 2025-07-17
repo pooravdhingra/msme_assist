@@ -6,7 +6,9 @@ from langchain_openai import OpenAIEmbeddings
 
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
 
 # Load environment variables
