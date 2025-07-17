@@ -178,6 +178,10 @@ if "scheme_names" not in st.session_state:
     st.session_state.scheme_names = []
 if "scheme_names_str" not in st.session_state:
     st.session_state.scheme_names_str = ""
+if "last_response_placeholder" not in st.session_state:
+    st.session_state.last_response_placeholder = None
+if "last_audio_placeholder" not in st.session_state:
+    st.session_state.last_audio_placeholder = None
 
 # Generate session ID
 def generate_session_id():
@@ -484,6 +488,10 @@ def chat_page():
                         audio_thread.start()
                         audio_thread.join()
                         audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
+
+                # Store placeholders to clear on next query
+                st.session_state.last_response_placeholder = message_placeholder
+                st.session_state.last_audio_placeholder = audio_placeholder
                 st.session_state.welcome_message_sent = True
 
 
@@ -565,6 +573,20 @@ def chat_page():
                 logger.debug(f"Appended user query to session state: {query} (ID: {query_id})")
 
             # Display typing indicator while generating response
+            # Clear previous assistant and audio placeholders if they exist
+            if st.session_state.last_response_placeholder is not None:
+                try:
+                    st.session_state.last_response_placeholder.empty()
+                except Exception:
+                    pass
+                st.session_state.last_response_placeholder = None
+            if st.session_state.last_audio_placeholder is not None:
+                try:
+                    st.session_state.last_audio_placeholder.empty()
+                except Exception:
+                    pass
+                st.session_state.last_audio_placeholder = None
+
             with st.chat_message("assistant"):
                 with st.spinner("Assistant is typing..."):
 
@@ -581,7 +603,10 @@ def chat_page():
                 response_timestamp = datetime.utcnow()
 
                 message_placeholder = st.empty()
+                # Store placeholder to remove it on the next query
+                st.session_state.last_response_placeholder = message_placeholder
                 audio_placeholder = st.empty()
+                st.session_state.last_audio_placeholder = audio_placeholder
 
                 audio_container = {}
                 
