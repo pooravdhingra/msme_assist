@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
 from data_loader import load_rag_data, load_dfl_data, PineconeRecordRetriever
+from scheme_lookup import (
+    find_scheme_guid_by_query,
+    fetch_scheme_docs_by_guid,
+    DocumentListRetriever,
+)
 from utils import extract_scheme_guid
 import streamlit as st
 from data import DataManager
@@ -13,8 +18,11 @@ import re
 import os
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 # Load environment variables
 load_dotenv()
@@ -27,13 +35,13 @@ data_manager = DataManager()
 def init_llm():
     logger.info("Initializing LLM client")
     start_time = time.time()
-    api_key = os.getenv("XAI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("XAI_API_KEY environment variable not set")
+        raise ValueError("OPENAI_API_KEY environment variable not set")
     llm = ChatOpenAI(
-        model="grok-3-mini-fast",
+        model="gpt-4.1-mini-2025-04-14",
         api_key=api_key,
-        base_url="https://api.x.ai/v1",
+        base_url="https://api.openai.com/v1",
         temperature=0
     )
     logger.info(f"LLM initialized in {time.time() - start_time:.2f} seconds")
@@ -134,7 +142,7 @@ def detect_language(query):
 
     return "English"
 
-def get_system_prompt(language, user_name="User"):
+def get_system_prompt(language, user_name="User", word_limit=200):
 
     """Return tone and style instructions."""
 
@@ -147,8 +155,11 @@ def get_system_prompt(language, user_name="User"):
        2. **Response Guidelines**:
        - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
        - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
-       - Response must be at least 150 and <=250 words.
+       - Give structured responses with formatting like bullets or headings/subheadings. Do not give long paragraphs of text.
+       - Response must be <={word_limit} words.
+
        - Never mention agent fees unless specified in RAG Response for scheme queries.
+       - Never repeat user query or bring up ambiguity in the response, proceed directly to answering.
        - Never mention technical terms like RAG, LLM, Database etc. to the user.
        - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
        - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
@@ -215,21 +226,11 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
         if business_category:
             details.append(f"business category: {business_category}")
 
-        fallback_details = []
-        if state:
-            fallback_details.append(f"state: {state}")
-        if gender:
-            fallback_details.append(f"gender: {gender}")
-
-        fallback_query = query
         full_query = query
         if details:
             full_query = f"{full_query}. {' '.join(details)}"
-        if fallback_details:
-            fallback_query = f"{fallback_query}. {' '.join(fallback_details)}"
 
         logger.debug(f"Processing query: {full_query}")
-        retrieve_start = time.time()
         retriever = PineconeRecordRetriever(
             index=vector_store, state=state, gender=gender, k=5
         )
@@ -237,39 +238,27 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
             llm=llm,
             chain_type="stuff",
             retriever=retriever,
-            return_source_documents=True
+            return_source_documents=True,
         )
         result = qa_chain.invoke({"query": full_query})
-        logger.debug(f"Retrieval and QA completed in {time.time() - retrieve_start:.2f} seconds")
         response = result["result"]
         sources = result["source_documents"]
-        logger.info(f"RAG response generated in {time.time() - start_time:.2f} seconds: {response}")
+        logger.info(
+            f"RAG response generated in {time.time() - start_time:.2f} seconds: {response}"
+        )
         if not sources:
-            logger.warning(
-                f"No documents retrieved for query with profile details: {full_query}."
-            )
-            if full_query != query:
-                logger.info("Retrying RAG search without profile details")
-                result = qa_chain.invoke({"query": query})
-                response = result["result"]
-                sources = result["source_documents"]
-        if not sources:
-            logger.warning(f"No documents retrieved for query: {query}")
-            logger.info(f"Attempting fallback retrieval with query: {fallback_query}")
-            result = qa_chain.invoke({"query": fallback_query})
-            response = result["result"]
-            sources = result["source_documents"]
-        if not sources:
-            logger.warning(f"Fallback also returned no documents for query: {query}")
-            return "No relevant scheme information found."
-        logger.info(f"Retrieved {len(sources)} documents for query: {query}")
-        for i, doc in enumerate(sources):
-            logger.debug(f"Document {i+1}:")
-            logger.debug(f"  Content: {doc.page_content}")
-            logger.debug(f"  Metadata: {doc.metadata}")
+            logger.warning(f"No documents retrieved for query: {full_query}")
+        else:
+            logger.info(f"Retrieved {len(sources)} documents for query: {full_query}")
+            for i, doc in enumerate(sources):
+                logger.debug(f"Document {i+1}:")
+                logger.debug(f"  Content: {doc.page_content}")
+                logger.debug(f"  Metadata: {doc.metadata}")
         return {"text": response, "sources": sources}
     except Exception as e:
-        logger.error(f"RAG retrieval failed in {time.time() - start_time:.2f} seconds: {str(e)}")
+        logger.error(
+            f"RAG retrieval failed in {time.time() - start_time:.2f} seconds: {str(e)}"
+        )
         return {"text": "Error retrieving scheme information.", "sources": []}
 
 
@@ -280,16 +269,40 @@ def get_scheme_response(
     gender=None,
     business_category=None,
     include_mudra=False,
+    intent=None,
 ):
-    """Wrapper for scheme dataset retrieval with optional Mudra scheme info."""
+    """Retrieve scheme info, using keyword lookup for popular schemes."""
     logger.info("Querying scheme dataset")
-    rag = get_rag_response(
-        query,
-        vector_store,
-        state=state,
-        gender=gender,
-        business_category=business_category,
-    )
+
+    guid = None
+    if intent == "Specific_Scheme_Know_Intent":
+        guid = find_scheme_guid_by_query(query)
+
+    if guid:
+        logger.info(f"Directly fetching scheme details for GUID {guid}")
+        docs = fetch_scheme_docs_by_guid(guid, vector_store)
+        if docs:
+            retriever = DocumentListRetriever(docs)
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=llm,
+                chain_type="stuff",
+                retriever=retriever,
+                return_source_documents=True,
+            )
+            result = qa_chain.invoke({"query": query})
+            rag = {"text": result["result"], "sources": result["source_documents"]}
+        else:
+            logger.warning("No documents fetched by GUID; falling back to search")
+            guid = None
+
+    if not guid:
+        rag = get_rag_response(
+            query,
+            vector_store,
+            state=state,
+            gender=gender,
+            business_category=business_category,
+        )
 
     if include_mudra:
         logger.info("Fetching Pradhan Mantri Mudra Yojana details")
@@ -323,37 +336,6 @@ def get_dfl_response(query, vector_store, state="ALL_STATES", gender=None, busin
         business_category=business_category,
     )
 
-# Check query similarity for context
-def is_query_related(query, prev_query, prev_response):
-    prompt = f"""You are an assistant for Haqdarshak, helping small business owners in India with government schemes, digital/financial literacy, and business growth. Determine if the current query is a follow-up to the previous conversation.
-
-    **Input**:
-    - Current Query: {query}
-    - Previous User Query: {prev_query}
-    - Previous Bot Response: {prev_response}
-
-    **Instructions**:
-    - A query is a related follow-up if it is ambiguous and contextually refers to one of the schemes or topics mentioned in the previous interaction.
-    - Examples of ambiguous queries: 'Tell me more', 'How to apply?', 'What next?', 'Can you help with it?', 'और बताएं', 'आगे क्या?'.
-    - The query is a follow-up if it seeks clarification or additional information about a previously discussed scheme or topic.
-    - The query is not a follow-up if it introduces a new scheme or topic not mentioned above (e.g., 'What is FSSAI?', 'How to use UPI?', 'एफएसएसएआई क्या है?') or is unrelated (e.g., 'What’s the weather?', 'मौसम कैसा है?', 'Time?').
-    - Return 'True' if the query is a follow-up, 'False' otherwise. Focus on the previous interaction only, ignoring rule-based keyword matching or similarity scores.
-
-    **Output**:
-    - Return only 'True' or 'False'.
-    """
-
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        result = response.content.strip()
-        logger.debug(
-            f"LLM determined query '{query}' is {'related' if result == 'True' else 'not related'} to previous context"
-        )
-        return result == "True"
-    except Exception as e:
-        logger.error(f"Failed to determine query relation: {str(e)}")
-        return False
-
 # Classify the intent of the user's query
 def classify_intent(query, prev_response, conversation_history=""):
     """Return one of the predefined intent labels."""
@@ -367,15 +349,15 @@ def classify_intent(query, prev_response, conversation_history=""):
 
     **Instructions**:
     Return only one label from the following:
-       - Schemes_Know_Intent (e.g., 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
-       - DFL_Intent (digital/financial literacy queries, e.g., 'How to use UPI?', 'UPI kaise use karein?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'How can going digital help grow business', etc.)
-       - Specific_Scheme_Know_Intent (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana')
-       - Specific_Scheme_Apply_Intent (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसएआई के लिए आवेदन कैसे करें?')
-       - Specific_Scheme_Eligibility_Intent (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसएआई की पात्रता क्या है?')
-       - Out_of_Scope (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?')
-       - Contextual_Follow_Up (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye')
-       - Confirmation_New_RAG (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.')
-       - Gratitude_Intent (user expresses thanks or acknowledgement, e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद')
+       - Schemes_Know_Intent - General ambiguous queries enquiring about schemes or loans without specifics (e.g., 'loan', 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
+       - DFL_Intent - Digital/financial literacy queries (e.g., 'Current account', 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety')
+       - Specific_Scheme_Know_Intent - Queries about specific schemes (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp')
+       - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसआईएआई के लिए आवेदन कैसे करें?')
+       - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसआईएआई की पात्रता क्या है?')
+       - Out_of_Scope - Queries that are not relevant (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?')
+       - Contextual_Follow_Up - Follow-up queries (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye')
+       - Confirmation_New_RAG - Confirmation for initiating another RAG search (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.'))
+       - Gratitude_Intent - User expresses thanks or acknowledgement (e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद')
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
@@ -391,7 +373,7 @@ def classify_intent(query, prev_response, conversation_history=""):
         return "Out_of_Scope"
 
 # Generate final response based on intent and RAG output
-def generate_response(intent, rag_response, user_info, language, context, query, scheme_guid=None, scheme_details=None):
+def generate_response(intent, rag_response, user_info, language, context, query, scheme_guid=None, scheme_details=None, stream: bool = False):
     if intent == "Out_of_Scope":
         if language == "Hindi":
             return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
@@ -420,7 +402,8 @@ def generate_response(intent, rag_response, user_info, language, context, query,
                 return "Thanks! Kya main aur madad kar sakta hoon?"
             return "You're welcome! Let me know if you need anything else."
 
-    tone_prompt = get_system_prompt(language, user_info.name)
+    word_limit = 150 if intent == "Schemes_Know_Intent" else 100
+    tone_prompt = get_system_prompt(language, user_info.name, word_limit)
 
     base_prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
@@ -456,9 +439,7 @@ def generate_response(intent, rag_response, user_info, language, context, query,
     if intent == "Specific_Scheme_Know_Intent":
         intent_prompt = (
             "Share scheme name, purpose, benefits and other fetched relevant details in a structured format from **RAG Response**. "
-            "Filter for schemes where 'applicability' includes state_id or 'ALL_STATES' "
-            "or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). List CSS schemes first, "
-            "then state-specific. Ask: 'Want details on eligibility or how to apply?' "
+            "Ask: 'Want details on eligibility or how to apply?' "
             "(English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' "
             "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
         )
@@ -470,9 +451,7 @@ def generate_response(intent, rag_response, user_info, language, context, query,
         )
     elif intent == "Specific_Scheme_Apply_Intent":
         intent_prompt = (
-            "Share application process from **RAG Response**. Filter for schemes "
-            "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS)."
+            "Share application process from **RAG Response**."
         )
         intent_prompt += (
             f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
@@ -494,11 +473,10 @@ def generate_response(intent, rag_response, user_info, language, context, query,
         )
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
-            "List schemes from **RAG Response** (few lines each). Filter for schemes "
-            "where 'applicability' includes state_id or 'ALL_STATES' or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS). Use any user provided scheme details to choose the most relevant schemes. "
-            "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. Finally Ask: 'Want more details on any scheme?' "
-            "(English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
+            "List multiple schemes from **RAG Response** with a short one-line description for each. "
+            "Use any user provided scheme details to choose the most relevant schemes. "
+            "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. "
+            "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
         intent_prompt += (
@@ -548,13 +526,34 @@ def generate_response(intent, rag_response, user_info, language, context, query,
     prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
 
     try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        final_text = response.content.strip()
-        if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
-            screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
-            if screening_link not in final_text:
-                final_text += f"\n{screening_link}"
-        return final_text
+        if stream:
+            def token_generator():
+                buffer = ""
+                try:
+                    for chunk in llm.stream([{"role": "user", "content": prompt}]):
+                        token = chunk.content or ""
+                        buffer += token
+                        if token:
+                            yield token
+                except Exception as e:
+                    logger.error(f"Failed to stream response: {str(e)}")
+                    return
+
+                if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+                    screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+                    if screening_link not in buffer:
+                        for char in "\n" + screening_link:
+                            yield char
+
+            return token_generator()
+        else:
+            response = llm.invoke([{"role": "user", "content": prompt}])
+            final_text = response.content.strip()
+            if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+                screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+                if screening_link not in final_text:
+                    final_text += f"\n{screening_link}"
+            return final_text
     except Exception as e:
         logger.error(f"Failed to generate response: {str(e)}")
         if language == "Hindi":
@@ -767,6 +766,7 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         gender=user_info.gender,
         business_category=user_info.business_category,
         include_mudra=details.get("path") == "credit",
+        intent="Schemes_Know_Intent",
     )
     if isinstance(rag, dict):
         rag_text = rag.get("text")
@@ -788,7 +788,11 @@ def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, u
         logger.info(f"Stored scheme names after flow: {st.session_state.scheme_names_str}")
     return response, True
 
-def generate_hindi_audio_script(original_response: str, user_info: UserContext) -> str:
+def generate_hindi_audio_script(
+    original_response: str,
+    user_info: UserContext,
+    rag_response: str = "",
+) -> str:
     """
     Generates a summarized, human-like Hindi script for text-to-speech from the original bot response.
     The script should avoid punctuation marks and focus on natural flow.
@@ -797,7 +801,7 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
     in natural Hindi (Devanagari script) for a text-to-speech system.
     
     **Instructions**:
-    - Summarize the core information from the provided 'Original Response'.
+    - Summarize the core information from the provided 'Final Response' and 'RAG Response'.
     - Ensure the summary flows naturally as if spoken by a human.
     - Translate the summary into clear and simple Hindi (Devanagari script) using simple hindi words.
     - Focus on the main points and keep the summary concise, between 50-100 words, to ensure a smooth audio experience.
@@ -808,8 +812,11 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
     - Always use simpler alternatives wherever the words are in complex hindi e.g. Instead of "vyavyasay" say "business", instead of "vanijya" say "finance"
     - Do NOT include urls and web links. 
 
-    **Original Response**:
+    **Final Response**:
     {original_response}
+
+    **RAG Response**:
+    {rag_response}
 
     **Output**:
     """
@@ -832,7 +839,7 @@ def generate_hindi_audio_script(original_response: str, user_info: UserContext) 
             return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।" # Error generating audio script.
 
 # Main function to process query
-def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None):
+def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None, stream: bool = False):
     start_time = time.time()
     timings = {}
 
@@ -851,6 +858,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     step = time.time()
     user_info = get_user_context(st.session_state)
     record("user_context", step)
+    logger.info(f"User context in process_query: {user_info}")
     if not user_info:
         log_timings()
         return "Error: User not logged in.", None  # Return tuple
@@ -889,54 +897,84 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         )
         record("scheme_flow", step)
         generated_response = resp
-        hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
-        try:
-            interaction_id = generate_interaction_id(query, datetime.utcnow())
-            messages_to_save = [
-                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-            ]
-            if not any(
-                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-                for conv in conversations
-            ):
-                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-            else:
-                logger.debug(
-                    f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
-                )
-        except Exception as e:
-            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
-        log_timings()
-        return generated_response, hindi_audio_script
+
+        def audio_task(final_text=None):
+            step_local = time.time()
+            hindi_audio_script = generate_hindi_audio_script(
+                generated_response,
+                user_info,
+                "",
+            )
+            record("audio_script", step_local)
+            try:
+                interaction_id = generate_interaction_id(query, datetime.utcnow())
+                messages_to_save = [
+                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                    {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+                ]
+                if not any(
+                    any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                    for conv in conversations
+                ):
+                    data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+                else:
+                    logger.debug(
+                        f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+            log_timings()
+            return hindi_audio_script
+
+        if stream:
+            def gen():
+                for ch in generated_response:
+                    yield ch
+            return gen(), audio_task
+        return generated_response, audio_task
 
 
     # Handle welcome query
     if query.lower() == "welcome":
         if user_type == "new":
             response = welcome_user(state_name, user_name, query_language)
-            hindi_audio_script = generate_hindi_audio_script(response, user_info)
-            try:
-                interaction_id = generate_interaction_id(response, datetime.utcnow())
-                if not any(
-                    msg["role"] == "assistant" and msg["content"] == response
-                    for conv in conversations for msg in conv["messages"]
-                ):
-                    data_manager.save_conversation(
-                        session_id,
-                        mobile_number,
-                        [
-                            {"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script}
-                        ]
-                    )
-                    logger.info(f"Saved welcome message for new user in session {session_id} (Interaction ID: {interaction_id})")
-                else:
-                    logger.debug(f"Skipped saving duplicate welcome message: {response}")
-            except Exception as e:
-                logger.error(f"Failed to save welcome message for new user in session {session_id}: {str(e)}")
+
+            def audio_task(final_text=None):
+                step_local = time.time()
+                hindi_audio_script = generate_hindi_audio_script(
+                    response,
+                    user_info,
+                    "",
+                )
+                record("audio_script", step_local)
+                try:
+                    interaction_id = generate_interaction_id(response, datetime.utcnow())
+                    if not any(
+                        msg["role"] == "assistant" and msg["content"] == response
+                        for conv in conversations for msg in conv["messages"]
+                    ):
+                        data_manager.save_conversation(
+                            session_id,
+                            mobile_number,
+                            [
+                                {"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script}
+                            ]
+                        )
+                        logger.info(f"Saved welcome message for new user in session {session_id} (Interaction ID: {interaction_id})")
+                    else:
+                        logger.debug(f"Skipped saving duplicate welcome message: {response}")
+                except Exception as e:
+                    logger.error(f"Failed to save welcome message for new user in session {session_id}: {str(e)}")
+                log_timings()
+                return hindi_audio_script
+
             logger.info(f"Generated welcome response for new user in {time.time() - start_time:.2f} seconds: {response}")
-            log_timings()
-            return response, hindi_audio_script
+            if stream:
+                def gen():
+                    for ch in response:
+                        yield ch
+                return gen(), audio_task
+            return response, audio_task
         else:
             logger.info(f"No welcome message for returning user")
             log_timings()
@@ -963,24 +1001,24 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
 
 
-    # Determine if the current query is a follow-up to the recent response
-    follow_up = False
-    if recent_query and recent_response:
-        step = time.time()
-        follow_up = is_query_related(
-            query,
-            recent_query,
-            recent_response,
-        )
-        record("follow_up_check", step)
+    # Build conversation history for intent classification
+    conversation_history = build_conversation_history(st.session_state.messages)
+    step = time.time()
+    intent = classify_intent(query, recent_response or "", conversation_history)
+    record("intent_classification", step)
+
+    # Determine if the query is a follow-up based on intent
+    follow_up_intents = {
+        "Contextual_Follow_Up",
+        "Specific_Scheme_Eligibility_Intent",
+        "Specific_Scheme_Apply_Intent",
+        "Confirmation_New_RAG",
+    }
+    follow_up = intent in follow_up_intents
 
     # Use conversation context only when the query is a follow-up
     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
 
-    step = time.time()
-    conversation_history = build_conversation_history(st.session_state.messages)
-    intent = classify_intent(query, recent_response or "", conversation_history)
-    record("intent_classification", step)
     augmented_query = query
     logger.info(f"Using conversation context: {context_pair}")
     logger.info(f"Classified intent: {intent}")
@@ -1014,13 +1052,18 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             if not referenced_scheme and stored_names:
                 referenced_scheme = stored_names[0]
         if referenced_scheme:
-            augmented_query = f"Referenced Scheme: {referenced_scheme}. {query}"
+            augmented_query = f"Referenced Scheme: {referenced_scheme}. Current Query: {query}"
             st.session_state.scheme_names = stored_names if referenced_scheme in stored_names else [referenced_scheme]
             st.session_state.scheme_names_str = " ".join([f"{i}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
             logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
 
     # Append previous interaction for context when required
-    if intent in {"Contextual_Follow_Up", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent"}:
+    if intent in {
+        "Contextual_Follow_Up",
+        "Specific_Scheme_Eligibility_Intent",
+        "Specific_Scheme_Apply_Intent",
+        "Confirmation_New_RAG",
+    }:
         if recent_query and recent_response:
             augmented_query = (
                 f"{augmented_query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
@@ -1039,24 +1082,32 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             first_q = ask_scheme_question("loan_amount", query_language)
         else:
             first_q = ask_scheme_question("turnover", query_language)
-        step = time.time()
-        hindi_audio_script = generate_hindi_audio_script(first_q, user_info)
-        record("scheme_flow", step)
-        try:
-            interaction_id = generate_interaction_id(query, datetime.utcnow())
-            messages_to_save = [
-                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                {"role": "assistant", "content": first_q, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-            ]
-            if not any(
-                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-                for conv in conversations
-            ):
-                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-        except Exception as e:
-            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
-        log_timings()
-        return first_q, hindi_audio_script
+
+        def audio_task(final_text=None):
+            step_local = time.time()
+            hindi_audio_script = generate_hindi_audio_script(
+                first_q,
+                user_info,
+                "",
+            )
+            record("scheme_flow", step_local)
+            try:
+                interaction_id = generate_interaction_id(query, datetime.utcnow())
+                messages_to_save = [
+                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                    {"role": "assistant", "content": first_q, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+                ]
+                if not any(
+                    any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                    for conv in conversations
+                ):
+                    data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+            except Exception as e:
+                logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+            log_timings()
+            return hindi_audio_script
+
+        return first_q, audio_task
 
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
@@ -1071,6 +1122,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 gender=None,
                 business_category=None,
                 include_mudra=False,
+                intent=intent,
             )
             record("rag_retrieval", step)
         else:
@@ -1093,7 +1145,8 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             state=state_id,
             gender=gender,
             business_category=business_category,
-            include_mudra=classify_scheme_type(augmented_query) == "credit",
+            include_mudra=classify_scheme_type(query) == "credit",
+            intent=intent,
         )
         record("rag_retrieval", step)
         if session_id not in st.session_state.rag_cache:
@@ -1124,7 +1177,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
     step = time.time()
-    generated_response = generate_response(
+    gen_result = generate_response(
         intent,
         rag_text or "",
         user_info,
@@ -1133,48 +1186,78 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         query,
         scheme_guid=scheme_guid,
         scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
+        stream=stream,
     )
     record("generate_response", step)
 
-    if intent == "Schemes_Know_Intent":
-        names = extract_scheme_names(generated_response)
-        if names:
-            st.session_state.scheme_names = [n for n in names]
-            st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
-            logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
-    elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
-        if referenced_scheme not in st.session_state.scheme_names:
-            st.session_state.scheme_names = [referenced_scheme]
-            st.session_state.scheme_names_str = f"1. {referenced_scheme}"
-        logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
+    if not stream:
+        generated_response = gen_result
 
-    step = time.time()
-    hindi_audio_script = generate_hindi_audio_script(generated_response, user_info)
-    record("audio_script", step)
+        if intent == "Schemes_Know_Intent":
+            names = extract_scheme_names(generated_response)
+            if names:
+                st.session_state.scheme_names = [n for n in names]
+                st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
+                logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
+        elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
+            if referenced_scheme not in st.session_state.scheme_names:
+                st.session_state.scheme_names = [referenced_scheme]
+                st.session_state.scheme_names_str = f"1. {referenced_scheme}"
+            logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
 
-    # Save conversation to MongoDB
-    try:
-        interaction_id = generate_interaction_id(query, datetime.utcnow())
-        messages_to_save = [
-            {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-            {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-        ]
-        if not any(
-            any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-            for conv in conversations
-        ):
-            step = time.time()
-            data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-            record("save_conversation", step)
-            logger.info(
-                f"Saved conversation for session {session_id}: {query} -> {generated_response} (Interaction ID: {interaction_id})"
-            )
-        else:
-            logger.debug(
-                f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
-            )
-    except Exception as e:
-        logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+    def audio_task(final_text=None):
+        if "scheme_names" not in st.session_state:
+            st.session_state.scheme_names = []
+        if "scheme_names_str" not in st.session_state:
+            st.session_state.scheme_names_str = ""
+        text_for_use = final_text if stream else generated_response
+        step_local = time.time()
+        hindi_audio_script = generate_hindi_audio_script(
+            text_for_use,
+            user_info,
+            rag_text or "",
+        )
+        record("audio_script", step_local)
 
-    log_timings()
-    return generated_response, hindi_audio_script
+        if stream:
+            if intent == "Schemes_Know_Intent":
+                names = extract_scheme_names(text_for_use)
+                if names:
+                    st.session_state.scheme_names = [n for n in names]
+                    st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
+                    logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
+            elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
+                if referenced_scheme not in st.session_state.scheme_names:
+                    st.session_state.scheme_names = [referenced_scheme]
+                    st.session_state.scheme_names_str = f"1. {referenced_scheme}"
+                logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
+
+        try:
+            interaction_id = generate_interaction_id(query, datetime.utcnow())
+            messages_to_save = [
+                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                {"role": "assistant", "content": text_for_use, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+            ]
+            if not any(
+                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+                for conv in conversations
+            ):
+                step_db = time.time()
+                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+                record("save_conversation", step_db)
+                logger.info(
+                    f"Saved conversation for session {session_id}: {query} -> {text_for_use} (Interaction ID: {interaction_id})"
+                )
+            else:
+                logger.debug(
+                    f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
+                )
+        except Exception as e:
+            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+
+        log_timings()
+        return hindi_audio_script
+
+    if stream:
+        return gen_result, audio_task
+    return generated_response, audio_task

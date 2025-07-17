@@ -9,51 +9,60 @@ import streamlit as st
 from urllib.parse import quote_plus, urlparse, urlunparse
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 # Load environment variables
 load_dotenv()
 
 # State mapping
 STATE_MAPPING = {
-    "AP": "Andhra Pradesh",
-    "AR": "Arunachal Pradesh",
-    "AS": "Assam",
-    "BR": "Bihar",
-    "CT": "Chhattisgarh",
-    "GA": "Goa",
-    "GJ": "Gujarat",
-    "HR": "Haryana",
-    "HP": "Himachal Pradesh",
-    "JK": "Jammu and Kashmir",
-    "JH": "Jharkhand",
-    "KA": "Karnataka",
-    "KL": "Kerala",
-    "MP": "Madhya Pradesh",
-    "MH": "Maharashtra",
-    "MN": "Manipur",
-    "ML": "Meghalaya",
-    "MZ": "Mizoram",
-    "NL": "Nagaland",
-    "OR": "Odisha",
-    "PB": "Punjab",
-    "RJ": "Rajasthan",
-    "SK": "Sikkim",
-    "TN": "Tamil Nadu",
-    "TG": "Telangana",
-    "TR": "Tripura",
-    "UT": "Uttarakhand",
-    "UP": "Uttar Pradesh",
-    "WB": "West Bengal",
-    "AN": "Andaman and Nicobar Islands",
-    "CH": "Chandigarh",
-    "DN": "Dadra and Nagar Haveli",
-    "DD": "Daman and Diu",
-    "DL": "Delhi",
-    "LD": "Lakshadweep",
-    "PY": "Puducherry"
+    "AP": "ANDHRA PRADESH",
+    "AR": "ARUNACHAL PRADESH",
+    "AS": "ASSAM",
+    "BR": "BIHAR",
+    "CT": "CHHATTISGARH",
+    "GA": "GOA",
+    "GJ": "GUJARAT",
+    "HR": "HARYANA",
+    "HP": "HIMACHAL PRADESH",
+    "JK": "JAMMU AND KASHMIR",
+    "JH": "JHARKHAND",
+    "KA": "KARNATAKA",
+    "KL": "KERALA",
+    "MP": "MADHYA PRADESH",
+    "MH": "MAHARASHTRA",
+    "MN": "MANIPUR",
+    "ML": "MEGHALAYA",
+    "MZ": "MIZORAM",
+    "NL": "NAGALAND",
+    "OR": "ODISHA",
+    "PB": "PUNJAB",
+    "RJ": "RAJASTHAN",
+    "SK": "SIKKIM",
+    "TN": "TAMIL NADU",
+    "TG": "TELANGANA",
+    "TR": "TRIPURA",
+    "UT": "UTTARAKHAND",
+    "UP": "UTTAR PRADESH",
+    "WB": "WEST BENGAL",
+    "AN": "ANDAMAN AND NICOBAR ISLANDS",
+    "CH": "CHANDIGARH",
+    "DN": "DADRA AND NAGAR HAVELI",
+    "DD": "DAMAN AND DIU",
+    "DL": "DELHI",
+    "LD": "LAKSHADWEEP",
+    "PY": "PUDUCHERRY"
 }
+
+# Reverse lookup: map full state name to abbreviation
+STATE_NAME_TO_ID = {v: k for k, v in STATE_MAPPING.items()}
+
+# Map gender codes from the Citizen API to full labels
+GENDER_MAPPING = {"M": "Male", "F": "Female", "O": "Other"}
 
 @st.cache_resource
 def get_mongo_client():
@@ -140,11 +149,7 @@ class DataManager:
                 logger.warning(f"Mobile number {mobile_number} already registered")
                 return False, "Mobile number already registered. Please log in."
             
-            state_id = None
-            for key, value in STATE_MAPPING.items():
-                if value == state:
-                    state_id = key
-                    break
+            state_id = STATE_NAME_TO_ID.get(state)
             
             user_data = {
                 "fname": fname,
@@ -215,10 +220,7 @@ class DataManager:
                     logger.error(f"Invalid state: {value}")
                     return False, "Invalid state selected."
                 update_data["state_name"] = value
-                for k, v in STATE_MAPPING.items():
-                    if v == value:
-                        update_data["state_id"] = k
-                        break
+                update_data["state_id"] = STATE_NAME_TO_ID.get(value)
             else:
                 update_data[key] = value
 

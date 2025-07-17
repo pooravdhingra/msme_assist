@@ -3,12 +3,14 @@ import os
 from functools import lru_cache
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
-from collections import Counter
 
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 # Load environment variables
 load_dotenv()
@@ -37,15 +39,22 @@ def get_embeddings():
 
 
 def extract_scheme_guid(sources):
-    """Return the most frequent non-empty GUID from a list of documents."""
-    guid_counter = Counter()
+    """Return the GUID from the document that generated the response.
+
+    Pinecone records store the scheme identifier under ``scheme_guid`` but
+    some earlier versions used ``guid``. This helper fetches the GUID from
+    the first document in ``sources`` with either of these keys. The first
+    document typically represents the most relevant hit used to produce the
+    final answer.
+    """
+
     for doc in sources:
-        if doc and getattr(doc, "metadata", None):
-            guid = doc.metadata.get("guid")
-            if guid:
-                guid_counter[str(guid).strip()] += 1
-    if not guid_counter:
-        return None
-    return guid_counter.most_common(1)[0][0]
+        if not doc or not getattr(doc, "metadata", None):
+            continue
+        guid = doc.metadata.get("scheme_guid") or doc.metadata.get("guid")
+        if guid:
+            return str(guid).strip()
+
+    return None
 
 
