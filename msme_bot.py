@@ -1218,6 +1218,10 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
 
     def audio_task(final_text=None):
+        if "scheme_names" not in st.session_state:
+            st.session_state.scheme_names = []
+        if "scheme_names_str" not in st.session_state:
+            st.session_state.scheme_names_str = ""
         text_for_use = final_text if stream else generated_response
         step_local = time.time()
         hindi_audio_script = generate_hindi_audio_script(

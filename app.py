@@ -2,6 +2,7 @@ import streamlit as st
 import random
 import string
 import threading
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 import time
 from datetime import datetime, timedelta
 from msme_bot import (
@@ -363,6 +364,7 @@ def chat_page():
                             audio_container['data'] = synthesize(script, "Hindi")
 
                         audio_thread = threading.Thread(target=_gen_audio)
+                        add_script_run_ctx(audio_thread)
                         audio_thread.start()
                         audio_thread.join()
                         audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
@@ -460,6 +462,7 @@ def chat_page():
                         audio_container['data'] = synthesize(script, "Hindi")
 
                     audio_thread = threading.Thread(target=_gen_audio)
+                    add_script_run_ctx(audio_thread)
                     audio_thread.start()
                     audio_thread.join()
                     audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
