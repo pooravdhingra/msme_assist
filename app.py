@@ -12,7 +12,7 @@ from msme_bot import (
     welcome_user,
     detect_language,
 )
-from data import DataManager, STATE_MAPPING
+from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
 import numpy as np
 import logging
 from tts import synthesize, audio_player
@@ -20,8 +20,11 @@ import requests
 from typing import Optional
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 # Initialize DataManager
 data_manager = DataManager()
@@ -153,19 +156,24 @@ def token_authentication():
 
                 if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
                     result = data["result"]
+                    logger.debug(f"Citizen API result: {result}")
+                    gender_raw = result.get("gender", "") or ""
+                    gender = GENDER_MAPPING.get(gender_raw.upper(), gender_raw)
+                    state_name = result.get("state", "")
                     st.session_state.user = {
                         "fname": result.get("firstName", ""),
                         "lname": result.get("lastName", ""),
                         "mobile_number": result.get("contactNumber", ""),
-                        "gender": result.get("gender", ""),
-                        "state_name": result.get("state", ""),
+                        "gender": gender,
+                        "state_name": state_name,
                         "dob": result.get("dob", ""),
                         "pincode": result.get("pincode", ""),
                         "business_name": result.get("bussinessName", ""),
                         "business_category": result.get("employmentType", ""),
                         "language": "English",
-                        "state_id": STATE_MAPPING.get(result.get("state", ""), "Unknown")
+                        "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown")
                     }
+                    logger.info(f"Fetched user details from token: {st.session_state.user}")
 
                     # Generate session_id
                     if not st.session_state.session_id:
@@ -307,6 +315,7 @@ def chat_page():
         user_type = "returning" if conversations else "new"
 
         if user_type == "new":
+            logger.info(f"User info before welcome query: {st.session_state.user}")
             welcome_response, welcome_audio_task = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
@@ -406,6 +415,7 @@ def chat_page():
             # Display typing indicator while generating response
             with st.chat_message("assistant", avatar="logo.jpeg"):
                 with st.spinner("Assistant is typing..."):
+                    logger.info(f"User info before query: {st.session_state.user}")
                     response, audio_task_for_tts = process_query(
                         query,
                         st.session_state.scheme_vector_store,
