@@ -361,6 +361,7 @@ def classify_intent(query, prev_response, conversation_history=""):
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
+       - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' are in scope and should be classified as Specific_Scheme_Know_Intent.
        - For Contextual_Follow_Up, prioritize the Previous Assistant Response for context to check if the query is a follow-up.
        - Only use conversation history for context, intent should be determined solely by current query.
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
