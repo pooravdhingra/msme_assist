@@ -3,6 +3,7 @@ import streamlit as st
 import random
 import string
 import threading
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 import time
 from datetime import datetime, timedelta
 from msme_bot import (
@@ -12,16 +13,20 @@ from msme_bot import (
     welcome_user,
     detect_language,
 )
-from data import DataManager, STATE_MAPPING
+from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
 import numpy as np
 import logging
 from tts import synthesize, audio_player
+import requests
 from typing import Optional
 import requests
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 # Initialize DataManager
 data_manager = DataManager()
@@ -204,6 +209,17 @@ def type_text(text, placeholder, timestamp=None, delay=0.015):
     """, unsafe_allow_html=True)
 
 
+
+def stream_tokens(token_generator, placeholder, timestamp: Optional[str] = None):
+    """Stream tokens from the LLM and display them as they arrive."""
+    typed = ""
+    for token in token_generator:
+        typed += token
+        placeholder.markdown(typed + "▌")
+    final_text = typed if timestamp is None else f"{typed} *({timestamp})*"
+    placeholder.markdown(final_text)
+    return typed
+
 # Restore session from URL query parameters
 def restore_session_from_url():
     query_params = st.query_params
@@ -265,19 +281,27 @@ def token_authentication():
 
                 if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
                     result = data["result"]
+
+                    logger.debug(f"Citizen API result: {result}")
+                    gender_raw = result.get("gender", "") or ""
+                    gender = GENDER_MAPPING.get(gender_raw.upper(), gender_raw)
+                    state_name = result.get("state", "")
+
                     st.session_state.user = {
                         "fname": result.get("firstName", ""),
                         "lname": result.get("lastName", ""),
                         "mobile_number": result.get("contactNumber", ""),
-                        "gender": result.get("gender", ""),
-                        "state_name": result.get("state", ""),
+                        "gender": gender,
+                        "state_name": state_name,
                         "dob": result.get("dob", ""),
                         "pincode": result.get("pincode", ""),
                         "business_name": result.get("bussinessName", ""),
                         "business_category": result.get("employmentType", ""),
                         "language": "English",
-                        "state_id": STATE_MAPPING.get(result.get("state", ""), "Unknown")
+                        "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown")
                     }
+                    logger.info(f"Fetched user details from token: {st.session_state.user}")
+
 
                     # Generate session_id
                     if not st.session_state.session_id:
@@ -405,6 +429,7 @@ def chat_page():
 
     col1, col2 = st.columns([1, 1])
     with col1:
+
         st.markdown(f"""
                 <h2 style="
                     font-size: 1.5rem;
@@ -428,34 +453,35 @@ def chat_page():
         user_type = "returning" if conversations else "new"
 
         if user_type == "new":
-            welcome_response, welcome_audio_script = process_query(
+
+            welcome_stream, welcome_audio_task = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
                 st.session_state.dfl_vector_store,
                 st.session_state.session_id,
                 st.session_state.user["mobile_number"],
-                user_language=st.session_state.user["language"]
+                user_language=st.session_state.user["language"],
+                stream=True
             )
-            if welcome_response:  # Only append if a welcome message was generated
-                with st.chat_message("assistant"):
+
+            if welcome_stream:  # Only append if a welcome message was generated
+                with st.chat_message("assistant", avatar="logo.jpeg"):
                     message_placeholder = st.empty()
                     audio_placeholder = st.empty()
 
                     audio_container = {}
 
-                    if welcome_audio_script:
+                    welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                    final_welcome = stream_tokens(welcome_stream, message_placeholder, welcome_timestamp)
+
+                    if welcome_audio_task:
                         def _gen_audio():
-                            audio_container['data'] = synthesize(welcome_audio_script, "Hindi")
+                            script = welcome_audio_task(final_welcome)
+                            audio_container['data'] = synthesize(script, "Hindi")
 
                         audio_thread = threading.Thread(target=_gen_audio)
+                        add_script_run_ctx(audio_thread)
                         audio_thread.start()
-                    else:
-                        audio_thread = None
-
-                    welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                    type_text(welcome_response, message_placeholder, welcome_timestamp)
-
-                    if audio_thread:
                         audio_thread.join()
                         audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
                 st.session_state.welcome_message_sent = True
@@ -541,13 +567,16 @@ def chat_page():
             # Display typing indicator while generating response
             with st.chat_message("assistant"):
                 with st.spinner("Assistant is typing..."):
-                    response, audio_script_for_tts = process_query(
+
+                    response_stream, audio_task_for_tts = process_query(
+
                         query,
                         st.session_state.scheme_vector_store,
                         st.session_state.dfl_vector_store,
                         st.session_state.session_id,
                         st.session_state.user["mobile_number"],
-                        user_language=st.session_state.user["language"]
+                        user_language=st.session_state.user["language"],
+                        stream=True
                     )
                 response_timestamp = datetime.utcnow()
 
@@ -555,33 +584,30 @@ def chat_page():
                 audio_placeholder = st.empty()
 
                 audio_container = {}
-
-                if audio_script_for_tts:
-                    def _gen_audio():
-                        audio_container['data'] = synthesize(audio_script_for_tts, "Hindi")
-
-                    audio_thread = threading.Thread(target=_gen_audio)
-                    audio_thread.start()
-                else:
-                    audio_thread = None
-
-                full_content_response = response
+                
                 display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
 
-                type_text(full_content_response, message_placeholder, display_timestamp_response)
+                final_response = stream_tokens(response_stream, message_placeholder, display_timestamp_response)
 
-                if audio_thread:
+                if audio_task_for_tts:
+                    def _gen_audio():
+                        script = audio_task_for_tts(final_response)
+                        audio_container['data'] = synthesize(script, "Hindi")
+
+                    audio_thread = threading.Thread(target=_gen_audio)
+                    add_script_run_ctx(audio_thread)
+                    audio_thread.start()
                     audio_thread.join()
                     audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
 
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
-            if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):
+            if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == final_response):
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": response,
+                    "content": final_response,
                     "timestamp": response_timestamp,
                 })
-                logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
+                logger.debug(f"Appended bot response to session state: {final_response} (Query ID: {query_id})")
                 logger.debug("Bot response appended")
 
 # Main app logic
