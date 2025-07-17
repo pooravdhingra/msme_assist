@@ -134,7 +134,7 @@ def detect_language(query):
     total_words = len(query_lower.split())
     
     # If more than 30% of words are Hindi or mixed with English
-    if total_words > 0 and hindi_word_count / total_words > 0.15:
+    if total_words > 0 and hindi_word_count / total_words > 0.20:
         return "Hinglish"
 
     return "English"
@@ -145,8 +145,9 @@ def get_system_prompt(language, user_name="User", word_limit=200):
 
     system_rules = f"""1. **Language Handling**:
        - The query language is provided as {language} (English, Hindi, or Hinglish).
-       - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
        - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script, prioritizing hindi words in the mix.
+       - Do NOT respond in Hindi script for Hinglish queries, always use Roman script.
+       - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
        - For English queries, respond in simple English.
        
        2. **Response Guidelines**:
