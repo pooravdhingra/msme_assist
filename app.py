@@ -2,6 +2,7 @@ import streamlit as st
 import random
 import string
 import threading
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 import time
 from datetime import datetime, timedelta
 from msme_bot import (
@@ -89,6 +90,17 @@ def type_text(text, placeholder, timestamp: Optional[str] = None, delay: float =
         time.sleep(delay)
     final_text = typed if timestamp is None else f"{typed} *({timestamp})*"
     placeholder.markdown(final_text)
+
+
+def stream_tokens(token_generator, placeholder, timestamp: Optional[str] = None):
+    """Stream tokens from the LLM and display them as they arrive."""
+    typed = ""
+    for token in token_generator:
+        typed += token
+        placeholder.markdown(typed + "▌")
+    final_text = typed if timestamp is None else f"{typed} *({timestamp})*"
+    placeholder.markdown(final_text)
+    return typed
 
 # Restore session from URL query parameters
 def restore_session_from_url():
@@ -327,35 +339,33 @@ def chat_page():
         user_type = "returning" if conversations else "new"
 
         if user_type == "new":
-            welcome_response, welcome_audio_task = process_query(
+            welcome_stream, welcome_audio_task = process_query(
                 "welcome",
                 st.session_state.scheme_vector_store,
                 st.session_state.dfl_vector_store,
                 st.session_state.session_id,
                 st.session_state.user["mobile_number"],
-                user_language=st.session_state.user["language"]
+                user_language=st.session_state.user["language"],
+                stream=True
             )
-            if welcome_response:  # Only append if a welcome message was generated
+            if welcome_stream:  # Only append if a welcome message was generated
                 with st.chat_message("assistant", avatar="logo.jpeg"):
                     message_placeholder = st.empty()
                     audio_placeholder = st.empty()
 
                     audio_container = {}
 
+                    welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                    final_welcome = stream_tokens(welcome_stream, message_placeholder, welcome_timestamp)
+
                     if welcome_audio_task:
                         def _gen_audio():
-                            script = welcome_audio_task()
+                            script = welcome_audio_task(final_welcome)
                             audio_container['data'] = synthesize(script, "Hindi")
 
                         audio_thread = threading.Thread(target=_gen_audio)
+                        add_script_run_ctx(audio_thread)
                         audio_thread.start()
-                    else:
-                        audio_thread = None
-
-                    welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                    type_text(welcome_response, message_placeholder, welcome_timestamp)
-
-                    if audio_thread:
                         audio_thread.join()
                         audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
                 st.session_state.welcome_message_sent = True
@@ -426,13 +436,14 @@ def chat_page():
             # Display typing indicator while generating response
             with st.chat_message("assistant", avatar="logo.jpeg"):
                 with st.spinner("Assistant is typing..."):
-                    response, audio_task_for_tts = process_query(
+                    response_stream, audio_task_for_tts = process_query(
                         query,
                         st.session_state.scheme_vector_store,
                         st.session_state.dfl_vector_store,
                         st.session_state.session_id,
                         st.session_state.user["mobile_number"],
-                        user_language=st.session_state.user["language"]
+                        user_language=st.session_state.user["language"],
+                        stream=True
                     )
                 response_timestamp = datetime.utcnow()
 
@@ -440,34 +451,30 @@ def chat_page():
                 audio_placeholder = st.empty()
 
                 audio_container = {}
+                
+                display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+
+                final_response = stream_tokens(response_stream, message_placeholder, display_timestamp_response)
 
                 if audio_task_for_tts:
                     def _gen_audio():
-                        script = audio_task_for_tts()
+                        script = audio_task_for_tts(final_response)
                         audio_container['data'] = synthesize(script, "Hindi")
 
                     audio_thread = threading.Thread(target=_gen_audio)
+                    add_script_run_ctx(audio_thread)
                     audio_thread.start()
-                else:
-                    audio_thread = None
-
-                full_content_response = response
-                display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-
-                type_text(full_content_response, message_placeholder, display_timestamp_response)
-
-                if audio_thread:
                     audio_thread.join()
                     audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
 
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
-            if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == response):
+            if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == final_response):
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": response,
+                    "content": final_response,
                     "timestamp": response_timestamp,
                 })
-                logger.debug(f"Appended bot response to session state: {response} (Query ID: {query_id})")
+                logger.debug(f"Appended bot response to session state: {final_response} (Query ID: {query_id})")
                 logger.debug("Bot response appended")
 
 # Main app logic
