@@ -2,3 +2,7 @@
 enableCORS = false
 enableXsrfProtection = false
 fileWatcherType = "none"  # Disable file watcher to avoid inotify limit
+
+[theme]
+base="light"
+font="sans serif"

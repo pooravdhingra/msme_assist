@@ -26,6 +26,109 @@ logger = logging.getLogger(__name__)
 # Initialize DataManager
 data_manager = DataManager()
 
+st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        .stApp {
+            background-color: #F6F1F3;
+        }
+        .stMarkdown {
+            font-family: 'Poppins, sans-serif';
+            color: #2F343A;
+            font-size: 1rem;
+        }
+        h3 {
+            font-size: 1.4rem !important;
+        }
+        .userChat {
+            background-color: #FFF;
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 1rem;
+            color: #4F285E;
+            font-family: "Poppins", sans-serif;
+        }
+        .assistanceChat {
+            background-color: #4F285E;
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 1rem;
+            color: #FFF;
+            font-family: "Poppins", sans-serif;
+        }
+        section[data-testid="stAppScrollToBottomContainer"] {
+            scrollbar-width: none;
+        }
+        div[data-testid="stBottomBlockContainer"]{
+            height: 6rem;
+            background-color: #F6F1F3;
+        }
+        textarea[data-testid="stChatInputTextArea"]{
+            max-height: 6rem !important;
+            height: 3.5rem;
+            background-color: #fff;
+            text-align: left;
+            padding: 1rem 0.6rem;
+            color:#4F285E;
+        }
+        textarea[data-testid="stChatInputTextArea"]:hover{
+            scrollbar-width: none;
+        }
+        div[data-testid="stChatMessageAvatar"] {
+            display: none !important;
+        }
+        div[data-testid="stChatMessageAvatarUser"] {
+            display: none !important;
+        }
+        div[data-testid="stChatMessageAvatarAssistant"] {
+            display: none !important;
+        }
+        .e1togvvn1{
+            max-height: 6rem !important;
+            padding: 0px;
+            height:3.5rem;
+            border-radius: 1.0rem;
+            border-width: 0px;
+            box-shadow:0px 0px 0px 2px rgba(0,0,0,0.1);
+        }
+        .e1togvvn1:focus-within{
+            border-color: #4F285E
+        }
+        .elbt1zu3{
+            background-color: #F6F1F3;
+        }
+        .e1togvvn1 div:last-child:{
+            align-items: center !important;
+        }
+        button[data-testid="stChatInputSubmitButton"]{
+            align-self: center
+        }
+        button[data-testid="stChatInputSubmitButton"]:hover{
+            color: #4F285E
+        }
+        button:not(:disabled){
+            color: #4F285E
+        }
+        div[data-testid="stChatMessage"]{
+            max-width: 100%;
+        }
+        div[data-testid="stLayoutWrapper"]:nth-child(even) > div[data-testid="stChatMessage"]{
+            width: fit-content;
+        }
+        div[data-testid="stLayoutWrapper"]{
+            max-width: 100%;
+        }
+        div[data-testid="stLayoutWrapper"]:nth-child(even) {
+            margin-left: 2rem;
+        }
+        div[data-testid="stLayoutWrapper"]:nth-child(odd) {
+            flex-flow: row;
+            justify-content: flex-start;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+
 # Initialize Streamlit session state
 if "scheme_vector_store" not in st.session_state:
     st.session_state.scheme_vector_store = load_rag_data()
@@ -82,15 +185,24 @@ def generate_query_id(query, timestamp):
 # Animate text typing effect
 
 
-def type_text(text, placeholder, timestamp: Optional[str] = None, delay: float = 0.015):
-    """Display text with a typing animation followed by an optional timestamp."""
+def type_text(text, placeholder, timestamp=None, delay=0.015):
     typed = ""
     for char in text:
         typed += char
-        placeholder.markdown(typed + "▌")
+        placeholder.markdown(f"""
+        <div class="assistanceChat">
+            {typed}▌
+        </div>
+        """, unsafe_allow_html=True)
         time.sleep(delay)
-    final_text = typed if timestamp is None else f"{typed} *({timestamp})*"
-    placeholder.markdown(final_text)
+
+    final_text = typed if timestamp is None else f"{typed}"
+    placeholder.markdown(f"""
+    <div class="assistanceChat">
+        {final_text}
+    </div>
+    """, unsafe_allow_html=True)
+
 
 # Restore session from URL query parameters
 def restore_session_from_url():
@@ -293,7 +405,16 @@ def chat_page():
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.markdown(f"Welcome, {st.session_state.user['fname']}")            
+        st.markdown(f"""
+                <h2 style="
+                    font-size: 1.5rem;
+                    color: #4F285E;
+                    padding: 0.2rem 1rem;
+                    text-align: center;
+                ">
+                    Vyapaar Saathi
+                </h2>
+                """,unsafe_allow_html=True)    
 
     # Ensure session_id is in URL
     if "session_id" not in st.query_params or st.query_params["session_id"] != st.session_state.session_id:
@@ -316,7 +437,7 @@ def chat_page():
                 user_language=st.session_state.user["language"]
             )
             if welcome_response:  # Only append if a welcome message was generated
-                with st.chat_message("assistant", avatar="logo.jpeg"):
+                with st.chat_message("assistant"):
                     message_placeholder = st.empty()
                     audio_placeholder = st.empty()
 
@@ -341,7 +462,6 @@ def chat_page():
 
 
     # Combine past conversations from MongoDB and current session messages
-    st.subheader("Conversation History")
     all_messages = []
 
     # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
@@ -373,13 +493,23 @@ def chat_page():
 
     # Display all messages. Audio player is only for the latest response in the chat input.
     for msg in all_messages:
-        with st.chat_message(msg["role"], avatar="logo.jpeg" if msg["role"] == "assistant" else None):
+        with st.chat_message(msg["role"]):
             if msg["role"] == "user":
-                st.markdown(f"{msg['content']} *({msg['timestamp'].strftime('%Y-%m-%d %H:%M:%S')})*")
+                full_content = msg["content"]
+                display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
+                st.markdown(f"""
+                <div class="userChat">
+                    {full_content}
+                </div>
+                """,unsafe_allow_html=True)
             else:  # Assistant messages
                 full_content = msg["content"]
                 display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
-                st.markdown(f"{full_content} *({display_timestamp})*")
+                st.markdown(f"""
+                <div class="assistanceChat">
+                    {full_content}
+                </div>
+                """,unsafe_allow_html=True)
 
 
     # Chat input
@@ -399,11 +529,17 @@ def chat_page():
                     "timestamp": query_timestamp
                 })
                 with st.chat_message("user"):
-                    st.markdown(f"{query} *({query_timestamp.strftime('%Y-%m-%d %H:%M:%S')})*")
+                    query = query
+                    query_timestamp = query_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                    st.markdown(f"""
+                <div class="userChat">
+                    {query} 
+                </div>
+                """,unsafe_allow_html=True)
                 logger.debug(f"Appended user query to session state: {query} (ID: {query_id})")
 
             # Display typing indicator while generating response
-            with st.chat_message("assistant", avatar="logo.jpeg"):
+            with st.chat_message("assistant"):
                 with st.spinner("Assistant is typing..."):
                     response, audio_script_for_tts = process_query(
                         query,

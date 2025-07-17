@@ -81,13 +81,30 @@ def audio_player(
     """Render an HTML audio player with optional autoplay."""
     b64 = base64.b64encode(audio_bytes).decode("utf-8")
     autoplay_attr = "autoplay" if autoplay else ""
-    audio_html = (
-        f'<audio {autoplay_attr} controls '
-        f'controlsList="nodownload noplaybackrate" style="width: 100%;">'
-        f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
-        "</audio>"
-    )
+    
+    styled_audio_html = f"""
+    <div style="
+        background-color: #4F285E; 
+        padding: 12px;
+        border-radius: 12px;
+        margin-top: 8px;
+        margin-bottom: 8px;
+    ">
+        <audio {autoplay_attr} controls
+            controlsList="nodownload noplaybackrate"
+            style="
+                width: 100%;
+                outline: none;
+                border-radius: 8px;
+                background-color: #FFF;
+            ">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+    """
+
     if placeholder is None:
-        st.markdown(audio_html, unsafe_allow_html=True)
+        st.markdown(styled_audio_html, unsafe_allow_html=True)
     else:
-        placeholder.markdown(audio_html, unsafe_allow_html=True)
+        placeholder.markdown(styled_audio_html, unsafe_allow_html=True)
