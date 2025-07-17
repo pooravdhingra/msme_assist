@@ -445,53 +445,14 @@ def chat_page():
     if "session_id" not in st.query_params or st.query_params["session_id"] != st.session_state.session_id:
         st.query_params["session_id"] = st.session_state.session_id
 
-    # Trigger welcome message only for new users or on fresh login
-    if not st.session_state.welcome_message_sent:
-        conversations = data_manager.get_conversations(
-            st.session_state.user["mobile_number"], limit=10
-        )
-        user_type = "returning" if conversations else "new"
-
-        if user_type == "new":
-
-            welcome_stream, welcome_audio_task = process_query(
-                "welcome",
-                st.session_state.scheme_vector_store,
-                st.session_state.dfl_vector_store,
-                st.session_state.session_id,
-                st.session_state.user["mobile_number"],
-                user_language=st.session_state.user["language"],
-                stream=True
-            )
-
-            if welcome_stream:  # Only append if a welcome message was generated
-                with st.chat_message("assistant", avatar="logo.jpeg"):
-                    message_placeholder = st.empty()
-                    audio_placeholder = st.empty()
-
-                    audio_container = {}
-
-                    welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                    final_welcome = stream_tokens(welcome_stream, message_placeholder, welcome_timestamp)
-
-                    if welcome_audio_task:
-                        def _gen_audio():
-                            script = welcome_audio_task(final_welcome)
-                            audio_container['data'] = synthesize(script, "Hindi")
-
-                        audio_thread = threading.Thread(target=_gen_audio)
-                        add_script_run_ctx(audio_thread)
-                        audio_thread.start()
-                        audio_thread.join()
-                        audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
-                st.session_state.welcome_message_sent = True
-
+    # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
+    conversations = data_manager.get_conversations(
+        st.session_state.user["mobile_number"], limit=10
+    )
+    user_type = "returning" if conversations else "new"
 
     # Combine past conversations from MongoDB and current session messages
     all_messages = []
-
-    # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
-    conversations = data_manager.get_conversations(st.session_state.user["mobile_number"], limit=10)
     for conv in conversations:
         for msg in conv["messages"]:
             if "content" not in msg or "role" not in msg or "timestamp" not in msg:
@@ -536,6 +497,45 @@ def chat_page():
                     {full_content}
                 </div>
                 """,unsafe_allow_html=True)
+
+    # Trigger welcome message only for new users or on fresh login AFTER history is shown
+    if not st.session_state.welcome_message_sent and user_type == "new":
+        welcome_stream, welcome_audio_task = process_query(
+            "welcome",
+            st.session_state.scheme_vector_store,
+            st.session_state.dfl_vector_store,
+            st.session_state.session_id,
+            st.session_state.user["mobile_number"],
+            user_language=st.session_state.user["language"],
+            stream=True
+        )
+
+        if welcome_stream:
+            with st.chat_message("assistant", avatar="logo.jpeg"):
+                message_placeholder = st.empty()
+                audio_placeholder = st.empty()
+
+                audio_container = {}
+
+                welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                final_welcome = stream_tokens(welcome_stream, message_placeholder, welcome_timestamp)
+
+                if welcome_audio_task:
+                    def _gen_audio():
+                        script = welcome_audio_task(final_welcome)
+                        audio_container['data'] = synthesize(script, "Hindi")
+
+                    audio_thread = threading.Thread(target=_gen_audio)
+                    add_script_run_ctx(audio_thread)
+                    audio_thread.start()
+                    audio_thread.join()
+                    audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": final_welcome,
+                "timestamp": datetime.utcnow(),
+            })
+            st.session_state.welcome_message_sent = True
 
 
     # Chat input
