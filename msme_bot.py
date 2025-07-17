@@ -18,8 +18,11 @@ import re
 import os
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
 logger = logging.getLogger(__name__)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 # Load environment variables
 load_dotenv()
@@ -855,6 +858,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     step = time.time()
     user_info = get_user_context(st.session_state)
     record("user_context", step)
+    logger.info(f"User context in process_query: {user_info}")
     if not user_info:
         log_timings()
         return "Error: User not logged in.", None  # Return tuple
