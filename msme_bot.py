@@ -881,7 +881,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     # Check user type and fetch recent conversations once
     step = time.time()
-    conversations = data_manager.get_conversations(mobile_number, limit=8)
+    conversations = data_manager.get_conversations(mobile_number)
     user_type = "returning" if conversations else "new"
     record("fetch_conversations", step)
     logger.info(f"User type: {user_type}")
