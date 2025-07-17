@@ -1070,7 +1070,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             if not referenced_scheme and stored_names:
                 referenced_scheme = stored_names[0]
         if referenced_scheme:
-            augmented_query = f"Referenced Scheme: {referenced_scheme}. {query}"
+            augmented_query = f"Referenced Scheme: {referenced_scheme}. Current Query: {query}"
             st.session_state.scheme_names = stored_names if referenced_scheme in stored_names else [referenced_scheme]
             st.session_state.scheme_names_str = " ".join([f"{i}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
             logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
