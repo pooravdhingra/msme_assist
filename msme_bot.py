@@ -223,21 +223,11 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
         if business_category:
             details.append(f"business category: {business_category}")
 
-        fallback_details = []
-        if state:
-            fallback_details.append(f"state: {state}")
-        if gender:
-            fallback_details.append(f"gender: {gender}")
-
-        fallback_query = query
         full_query = query
         if details:
             full_query = f"{full_query}. {' '.join(details)}"
-        if fallback_details:
-            fallback_query = f"{fallback_query}. {' '.join(fallback_details)}"
 
         logger.debug(f"Processing query: {full_query}")
-        retrieve_start = time.time()
         retriever = PineconeRecordRetriever(
             index=vector_store, state=state, gender=gender, k=5
         )
@@ -245,39 +235,27 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
             llm=llm,
             chain_type="stuff",
             retriever=retriever,
-            return_source_documents=True
+            return_source_documents=True,
         )
         result = qa_chain.invoke({"query": full_query})
-        logger.debug(f"Retrieval and QA completed in {time.time() - retrieve_start:.2f} seconds")
         response = result["result"]
         sources = result["source_documents"]
-        logger.info(f"RAG response generated in {time.time() - start_time:.2f} seconds: {response}")
+        logger.info(
+            f"RAG response generated in {time.time() - start_time:.2f} seconds: {response}"
+        )
         if not sources:
-            logger.warning(
-                f"No documents retrieved for query with profile details: {full_query}."
-            )
-            if full_query != query:
-                logger.info("Retrying RAG search without profile details")
-                result = qa_chain.invoke({"query": query})
-                response = result["result"]
-                sources = result["source_documents"]
-        if not sources:
-            logger.warning(f"No documents retrieved for query: {query}")
-            logger.info(f"Attempting fallback retrieval with query: {fallback_query}")
-            result = qa_chain.invoke({"query": fallback_query})
-            response = result["result"]
-            sources = result["source_documents"]
-        if not sources:
-            logger.warning(f"Fallback also returned no documents for query: {query}")
-            return "No relevant scheme information found."
-        logger.info(f"Retrieved {len(sources)} documents for query: {query}")
-        for i, doc in enumerate(sources):
-            logger.debug(f"Document {i+1}:")
-            logger.debug(f"  Content: {doc.page_content}")
-            logger.debug(f"  Metadata: {doc.metadata}")
+            logger.warning(f"No documents retrieved for query: {full_query}")
+        else:
+            logger.info(f"Retrieved {len(sources)} documents for query: {full_query}")
+            for i, doc in enumerate(sources):
+                logger.debug(f"Document {i+1}:")
+                logger.debug(f"  Content: {doc.page_content}")
+                logger.debug(f"  Metadata: {doc.metadata}")
         return {"text": response, "sources": sources}
     except Exception as e:
-        logger.error(f"RAG retrieval failed in {time.time() - start_time:.2f} seconds: {str(e)}")
+        logger.error(
+            f"RAG retrieval failed in {time.time() - start_time:.2f} seconds: {str(e)}"
+        )
         return {"text": "Error retrieving scheme information.", "sources": []}
 
 
@@ -1076,7 +1054,12 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
 
     # Append previous interaction for context when required
-    if intent in {"Contextual_Follow_Up", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent"}:
+    if intent in {
+        "Contextual_Follow_Up",
+        "Specific_Scheme_Eligibility_Intent",
+        "Specific_Scheme_Apply_Intent",
+        "Confirmation_New_RAG",
+    }:
         if recent_query and recent_response:
             augmented_query = (
                 f"{augmented_query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
