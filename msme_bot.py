@@ -569,55 +569,6 @@ def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
 
 
-# ---- Scheme personalisation helpers ----
-
-
-def extract_scheme_names(text: str) -> list:
-    """Use the LLM to extract scheme names from a text block.
-
-    Returns a list of names or an empty list when no schemes are mentioned."""
-    prompt = (
-        "Extract the scheme names mentioned in the following text. "
-        "Return the names exactly as written, separated by semicolons if there are multiple. "
-        "If no scheme is present, reply with 'none'.\n\n"
-        f"{text}"
-    )
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        content = response.content.strip()
-        if not content or "none" in content.lower():
-            logger.info("No scheme names extracted")
-            return []
-        names = [n.strip().replace("_", " ") for n in content.split(";") if n.strip()]
-        logger.info(f"Extracted scheme names: {names}")
-        return names
-    except Exception as e:
-        logger.error(f"Failed to extract scheme names: {e}")
-        return []
-
-
-def resolve_scheme_reference(query: str, scheme_names: list) -> str | None:
-    """Determine which scheme from scheme_names the query refers to."""
-    if not scheme_names:
-        return None
-    list_str = "; ".join(scheme_names)
-    prompt = (
-        "You will be given a user query and a list of scheme names. "
-        "If the query refers to any of these schemes, either by name or even by order (first scheme, second scheme, pehli vaali, doosri vaali etc.), "
-        "return the matching scheme name exactly as provided. If none match, return an empty string.\n\n"
-        f"Query: {query}\nScheme_Names: {list_str}"
-    )
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        name = response.content.strip().replace("_", " ")
-        resolved = name or None
-        logger.info(f"Resolved scheme reference '{query}' -> {resolved}")
-        return resolved
-    except Exception as e:
-        logger.error(f"Failed to resolve scheme reference: {e}")
-        return None
-
-
 
 def generate_hindi_audio_script(
     original_response: str,
@@ -699,10 +650,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     business_category = user_info.business_category
     gender = user_info.gender
 
-    if "scheme_names" not in st.session_state:
-        st.session_state.scheme_names = []
-    if "scheme_names_str" not in st.session_state:
-        st.session_state.scheme_names_str = ""
 
     # Use user_language for welcome message, otherwise detect query language
     step = time.time()
@@ -808,34 +755,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     logger.info(f"Using conversation context: {context_pair}")
     logger.info(f"Classified intent: {intent}")
 
-    maintain_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
-    query_scheme_names = extract_scheme_names(query)
-    if query_scheme_names:
-        logger.info(f"Scheme names detected in query: {query_scheme_names}")
-    stored_names = st.session_state.scheme_names
-    referenced_scheme = None
-    if intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}:
-        if query_scheme_names:
-            match = None
-            lower_stored = [n.lower() for n in stored_names]
-            for nm in query_scheme_names:
-                if nm.lower() in lower_stored:
-                    match = nm
-                    break
-            if match:
-                referenced_scheme = match
-            else:
-                referenced_scheme = query_scheme_names[0]
-                stored_names = [referenced_scheme]
-        else:
-            referenced_scheme = resolve_scheme_reference(query, stored_names)
-            if not referenced_scheme and stored_names:
-                referenced_scheme = stored_names[0]
-        if referenced_scheme:
-            augmented_query = f"Referenced Scheme: {referenced_scheme}. Current Query: {query}"
-            st.session_state.scheme_names = stored_names if referenced_scheme in stored_names else [referenced_scheme]
-            st.session_state.scheme_names_str = " ".join([f"{i}. {n}" for i, n in enumerate(st.session_state.scheme_names, 1)])
-            logger.info(f"Updated stored scheme names: {st.session_state.scheme_names_str}")
 
     # Append previous interaction for context when required
     if intent in {
@@ -933,23 +852,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     if not stream:
         generated_response = gen_result
 
-        if intent == "Schemes_Know_Intent":
-            names = extract_scheme_names(generated_response)
-            if names:
-                st.session_state.scheme_names = [n for n in names]
-                st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
-                logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
-        elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
-            if referenced_scheme not in st.session_state.scheme_names:
-                st.session_state.scheme_names = [referenced_scheme]
-                st.session_state.scheme_names_str = f"1. {referenced_scheme}"
-            logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
-
     def audio_task(final_text=None):
-        if "scheme_names" not in st.session_state:
-            st.session_state.scheme_names = []
-        if "scheme_names_str" not in st.session_state:
-            st.session_state.scheme_names_str = ""
         text_for_use = final_text if stream else generated_response
         step_local = time.time()
         hindi_audio_script = generate_hindi_audio_script(
@@ -959,18 +862,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         )
         record("audio_script", step_local)
 
-        if stream:
-            if intent == "Schemes_Know_Intent":
-                names = extract_scheme_names(text_for_use)
-                if names:
-                    st.session_state.scheme_names = [n for n in names]
-                    st.session_state.scheme_names_str = " ".join([f"{i+1}. {n}" for i, n in enumerate(names, 1)])
-                    logger.info(f"Stored scheme names from response: {st.session_state.scheme_names_str}")
-            elif intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent","Contextual_Follow_Up","Confirmation_New_RAG"} and referenced_scheme:
-                if referenced_scheme not in st.session_state.scheme_names:
-                    st.session_state.scheme_names = [referenced_scheme]
-                    st.session_state.scheme_names_str = f"1. {referenced_scheme}"
-                logger.info(f"Maintaining stored scheme names: {st.session_state.scheme_names_str}")
 
         try:
             interaction_id = generate_interaction_id(query, datetime.utcnow())
