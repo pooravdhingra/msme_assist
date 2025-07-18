@@ -76,35 +76,39 @@ def autoplay(audio_bytes: bytes) -> None:
 
 
 def audio_player(
-    audio_bytes: bytes, autoplay: bool = False, placeholder: Optional[st.delta_generator.DeltaGenerator] = None
+    audio_bytes: Optional[bytes],
+    autoplay: bool = False,
+    placeholder: Optional[st.delta_generator.DeltaGenerator] = None,
+    enabled: bool = True,
 ) -> None:
-    """Render an HTML audio player with optional autoplay."""
-    b64 = base64.b64encode(audio_bytes).decode("utf-8")
-    autoplay_attr = "autoplay" if autoplay else ""
-    
+    """Render an HTML audio player that can be enabled/disabled."""
+
+    b64 = base64.b64encode(audio_bytes).decode("utf-8") if audio_bytes else ""
+    autoplay_attr = "autoplay" if autoplay and enabled else ""
+    disabled_style = "pointer-events:none;opacity:0.5;" if not enabled else ""
+    source_html = (
+        f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
+        if audio_bytes and enabled
+        else ""
+    )
+    pause_script = (
+        "<script>var a=document.getElementById('assistant-audio');"
+        "if(a){a.pause();}</script>"
+        if not enabled
+        else ""
+    )
+
     styled_audio_html = f"""
-    <div style="
-        background-color: #4F285E; 
-        padding: 0.7rem;
-        border-radius: 12px;
-        margin-top: 3px;
-        margin-bottom: 3px;
-    ">
-        <audio {autoplay_attr} controls
+    <div class="sticky-audio">
+        <audio id="assistant-audio" {autoplay_attr} controls
             controlsList="nodownload noplaybackrate"
-            style="
-                width: 100%;
-                outline: none;
-                border-radius: 8px;
-                background-color: #FFF;
-            ">
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            style="width: 100%; outline: none; border-radius: 8px; background-color: #FFF; {disabled_style}">
+            {source_html}
             Your browser does not support the audio element.
         </audio>
     </div>
+    {pause_script}
     """
 
-    if placeholder is None:
-        st.markdown(styled_audio_html, unsafe_allow_html=True)
-    else:
-        placeholder.markdown(styled_audio_html, unsafe_allow_html=True)
+    target = placeholder if placeholder is not None else st
+    target.markdown(styled_audio_html, unsafe_allow_html=True)
