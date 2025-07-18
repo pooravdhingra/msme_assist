@@ -334,14 +334,13 @@ def get_dfl_response(query, vector_store, state="ALL_STATES", gender=None, busin
     )
 
 # Classify the intent of the user's query
-def classify_intent(query, prev_response, conversation_history=""):
+def classify_intent(query, conversation_history=""):
     """Return one of the predefined intent labels."""
 
     prompt = f"""You are an assistant for Haqdarshak. Classify the user's intent.
 
     **Input**:
     - Query: {query}
-    - Previous Assistant Response: {prev_response}
     - Conversation History: {conversation_history}
 
     **Instructions**:
@@ -358,7 +357,7 @@ def classify_intent(query, prev_response, conversation_history=""):
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
-       - For Contextual_Follow_Up, prioritize the Previous Assistant Response for context to check if the query is a follow-up.
+       - For Contextual_Follow_Up, prioritise the most recent query-response pair from the conversation history to determine if the current query is a follow-up.
        - Only use conversation history for context, intent should be determined solely by current query.
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
     """
@@ -1000,7 +999,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Build conversation history for intent classification
     conversation_history = build_conversation_history(st.session_state.messages)
     step = time.time()
-    intent = classify_intent(query, recent_response or "", conversation_history)
+    intent = classify_intent(query, conversation_history)
     record("intent_classification", step)
 
     # Determine if the query is a follow-up based on intent
