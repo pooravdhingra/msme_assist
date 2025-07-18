@@ -325,7 +325,7 @@ def get_scheme_response(
     return rag
 
 
-def get_dfl_response(query, vector_store, state="ALL_STATES", gender=None, business_category=None):
+def get_dfl_response(query, vector_store, state=None, gender=None, business_category=None):
     """Wrapper for DFL dataset retrieval with clearer logging."""
     logger.info("Querying DFL dataset")
     return get_rag_response(
