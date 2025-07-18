@@ -215,13 +215,27 @@ def type_text(text, placeholder, timestamp=None, delay=0.015):
 
 
 def stream_tokens(token_generator, placeholder, timestamp: Optional[str] = None):
-    """Stream tokens from the LLM and display them as they arrive."""
+    """Stream tokens from the LLM and display them inside the chat bubble."""
     typed = ""
     for token in token_generator:
         typed += token
-        placeholder.markdown(typed + "▌")
-    final_text = typed if timestamp is None else f"{typed} *({timestamp})*"
-    placeholder.markdown(final_text)
+        placeholder.markdown(
+            f"""
+        <div class="assistanceChat">
+            {typed}▌
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+    final_text = typed if timestamp is None else f"{typed}"
+    placeholder.markdown(
+        f"""
+    <div class="assistanceChat">
+        {final_text}
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
     return typed
 
 # Restore session from URL query parameters
@@ -603,9 +617,11 @@ def chat_page():
                 
                 display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
 
-                final_response = stream_tokens(response_stream, message_placeholder, display_timestamp_response)
-
-                type_text(final_response, message_placeholder, timestamp=display_timestamp_response)
+                final_response = stream_tokens(
+                    response_stream,
+                    message_placeholder,
+                    display_timestamp_response,
+                )
 
                 if audio_task_for_tts:
                     def _gen_audio():
