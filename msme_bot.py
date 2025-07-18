@@ -392,7 +392,8 @@ def classify_intent(query, conversation_history=""):
        - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' are in scope and should be classified as Specific_Scheme_Know_Intent.
        - For Contextual_Follow_Up, prioritise the most recent query-response pair from the conversation history to check if the query is a follow-up.
        - Use conversation history for context but intent should be determined solely by the current query.
-       - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
+       - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes.
+       - If some scheme name is mentioned in the query, then classify it as Specific_Scheme_Know_Intent.
     """
     try:
         response = intent_llm.invoke([{"role": "user", "content": prompt}])
