@@ -306,18 +306,25 @@ def get_scheme_response(
 
     if include_mudra:
         logger.info("Fetching Pradhan Mantri Mudra Yojana details")
-        mudra_rag = get_rag_response(
-            "Pradhan Mantri Mudra Yojana",
-            vector_store,
-            state=state,
-            gender=gender,
-            business_category=business_category,
-        )
+        mudra_guid = find_scheme_guid_by_query("pradhan mantri mudra yojana") or "SH0008BK"
+        mudra_docs = fetch_scheme_docs_by_guid(mudra_guid, vector_store)
+
+        if mudra_docs:
+            retriever = DocumentListRetriever(mudra_docs)
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=llm,
+                chain_type="stuff",
+                retriever=retriever,
+                return_source_documents=True,
+            )
+            result = qa_chain.invoke({"query": "Pradhan Mantri Mudra Yojana"})
+            mudra_rag = {"text": result["result"], "sources": result["source_documents"]}
+        else:
+            logger.warning("Mudra documents not found; skipping")
+            mudra_rag = {"text": "", "sources": []}
 
         if not isinstance(rag, dict):
             rag = {"text": str(rag), "sources": []}
-        if not isinstance(mudra_rag, dict):
-            mudra_rag = {"text": str(mudra_rag), "sources": []}
 
         rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
         rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
@@ -473,6 +480,7 @@ def generate_response(intent, rag_response, user_info, language, context, query,
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
             "List 3-4 schemes from **RAG Response** with a short one-line description for each. "
+            "Always include Pradhan Mantri Mudra Yojana as one of the schemes. "
             "Use any user provided scheme details to choose the most relevant schemes. "
             "If no close match is found, still list the top schemes applicable to the user in their state or CSS. "
             "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
@@ -879,7 +887,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             state=state_id,
             gender=gender,
             business_category=business_category,
-            include_mudra=False,
+            include_mudra=intent == "Schemes_Know_Intent",
             intent=intent,
         )
         record("rag_retrieval", step)
