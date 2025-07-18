@@ -34,6 +34,12 @@ data_manager = DataManager()
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        #root > div > div > div > div {
+            display:none !important;
+        }
+        #root > div > div  {
+            padding-bottom:0px !important;
+        }
         .stApp {
             background-color: #F6F1F3;
         }
@@ -121,15 +127,23 @@ st.markdown("""
         div[data-testid="stLayoutWrapper"]:nth-child(even) > div[data-testid="stChatMessage"]{
             width: fit-content;
         }
+        div[data-testid="stLayoutWrapper"]:nth-child(odd) > div[data-testid="stChatMessage"]{
+            width: fit-content;
+        }
         div[data-testid="stLayoutWrapper"]{
-            max-width: 100%;
+            max-width: 75%;
         }
         div[data-testid="stLayoutWrapper"]:nth-child(even) {
             padding-left: 1.5rem;
+            align-self:flex-end;
+            justify-content:flex-end
         }
         div[data-testid="stLayoutWrapper"]:nth-child(odd) {
             flex-flow: row;
             justify-content: flex-start;
+        }
+        div[data-testid="stLayoutWrapper"]:last-of-type {
+            margin-bottom: 1rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -540,7 +554,7 @@ def chat_page():
                     add_script_run_ctx(audio_thread)
                     audio_thread.start()
                     audio_thread.join()
-                    audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
+                    audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": final_welcome,
@@ -610,6 +624,8 @@ def chat_page():
 
                 final_response = stream_tokens(response_stream, message_placeholder, display_timestamp_response)
 
+                type_text(final_response, message_placeholder, timestamp=display_timestamp_response)
+
                 if audio_task_for_tts:
                     def _gen_audio():
                         script = audio_task_for_tts(final_response)
@@ -619,7 +635,7 @@ def chat_page():
                     add_script_run_ctx(audio_thread)
                     audio_thread.start()
                     audio_thread.join()
-                    audio_player(audio_container['data'], autoplay=True, placeholder=audio_placeholder)
+                    audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
 
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == final_response):

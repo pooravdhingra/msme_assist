@@ -85,7 +85,7 @@ def audio_player(
     styled_audio_html = f"""
     <div style="
         background-color: #4F285E; 
-        padding: 10px;
+        padding: 0.7rem;
         border-radius: 12px;
         margin-top: 3px;
         margin-bottom: 3px;
