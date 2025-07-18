@@ -331,7 +331,7 @@ def get_dfl_response(query, vector_store, state=None, gender=None, business_cate
     return get_rag_response(
         query,
         vector_store,
-        state=state,
+        state=None,
         gender=gender,
         business_category=business_category,
     )
