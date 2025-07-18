@@ -128,7 +128,7 @@ st.markdown("""
             width: fit-content;
         }
         div[data-testid="stLayoutWrapper"]{
-            max-width: 75%;
+            max-width: 92.5%;
         }
         div[data-testid="stLayoutWrapper"]:nth-child(even) {
             padding-left: 1.5rem;
