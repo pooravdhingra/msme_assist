@@ -65,10 +65,6 @@ if "scheme_flow_step" not in st.session_state:
     st.session_state.scheme_flow_step = None
 if "scheme_flow_data" not in st.session_state:
     st.session_state.scheme_flow_data = {}
-if "scheme_names" not in st.session_state:
-    st.session_state.scheme_names = []
-if "scheme_names_str" not in st.session_state:
-    st.session_state.scheme_names_str = ""
 
 # Generate session ID
 def generate_session_id():
