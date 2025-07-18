@@ -169,10 +169,6 @@ if "rag_cache" not in st.session_state:
     st.session_state.rag_cache = {}
 if "dfl_rag_cache" not in st.session_state:
     st.session_state.dfl_rag_cache = {}
-if "scheme_names" not in st.session_state:
-    st.session_state.scheme_names = []
-if "scheme_names_str" not in st.session_state:
-    st.session_state.scheme_names_str = ""
 if "last_response_placeholder" not in st.session_state:
     st.session_state.last_response_placeholder = None
 
