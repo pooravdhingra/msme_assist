@@ -33,6 +33,7 @@ data_manager = DataManager()
 # Initialize cached resources
 @st.cache_resource
 def init_llm():
+    """Initialise the default LLM client for all tasks except intent classification."""
     logger.info("Initializing LLM client")
     start_time = time.time()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -46,6 +47,26 @@ def init_llm():
     )
     logger.info(f"LLM initialized in {time.time() - start_time:.2f} seconds")
     return llm
+
+
+@st.cache_resource
+def init_intent_llm():
+    """Initialise a dedicated LLM client for intent classification."""
+    logger.info("Initializing Intent LLM client")
+    start_time = time.time()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set")
+    intent_llm = ChatOpenAI(
+        model="gpt-4.1",
+        api_key=api_key,
+        base_url="https://api.openai.com/v1",
+        temperature=0
+    )
+    logger.info(
+        f"Intent LLM initialized in {time.time() - start_time:.2f} seconds"
+    )
+    return intent_llm
 
 @st.cache_resource
 def init_vector_store():
@@ -85,6 +106,7 @@ def init_dfl_vector_store():
     return vector_store
 
 llm = init_llm()
+intent_llm = init_intent_llm()
 scheme_vector_store = init_vector_store()
 dfl_vector_store = init_dfl_vector_store()
 
@@ -373,7 +395,7 @@ def classify_intent(query, conversation_history=""):
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
     """
     try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
+        response = intent_llm.invoke([{"role": "user", "content": prompt}])
         return response.content.strip()
     except Exception as e:
         logger.error(f"Failed to classify intent: {str(e)}")
