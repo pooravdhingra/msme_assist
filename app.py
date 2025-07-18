@@ -34,9 +34,6 @@ data_manager = DataManager()
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        #root > div > div > div > div {
-            display:none !important;
-        }
         #root > div > div  {
             padding-bottom:0px !important;
         }
