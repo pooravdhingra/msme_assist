@@ -306,18 +306,25 @@ def get_scheme_response(
 
     if include_mudra:
         logger.info("Fetching Pradhan Mantri Mudra Yojana details")
-        mudra_rag = get_rag_response(
-            "Pradhan Mantri Mudra Yojana",
-            vector_store,
-            state=state,
-            gender=gender,
-            business_category=business_category,
-        )
+        mudra_guid = find_scheme_guid_by_query("pradhan mantri mudra yojana") or "SH0008BK"
+        mudra_docs = fetch_scheme_docs_by_guid(mudra_guid, vector_store)
+
+        if mudra_docs:
+            retriever = DocumentListRetriever(mudra_docs)
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=llm,
+                chain_type="stuff",
+                retriever=retriever,
+                return_source_documents=True,
+            )
+            result = qa_chain.invoke({"query": "Pradhan Mantri Mudra Yojana"})
+            mudra_rag = {"text": result["result"], "sources": result["source_documents"]}
+        else:
+            logger.warning("Mudra documents not found; skipping")
+            mudra_rag = {"text": "", "sources": []}
 
         if not isinstance(rag, dict):
             rag = {"text": str(rag), "sources": []}
-        if not isinstance(mudra_rag, dict):
-            mudra_rag = {"text": str(mudra_rag), "sources": []}
 
         rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
         rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
@@ -325,45 +332,44 @@ def get_scheme_response(
     return rag
 
 
-def get_dfl_response(query, vector_store, state="ALL_STATES", gender=None, business_category=None):
+def get_dfl_response(query, vector_store, state=None, gender=None, business_category=None):
     """Wrapper for DFL dataset retrieval with clearer logging."""
     logger.info("Querying DFL dataset")
     return get_rag_response(
         query,
         vector_store,
-        state=state,
+        state=None,
         gender=gender,
         business_category=business_category,
     )
 
 # Classify the intent of the user's query
-def classify_intent(query, prev_response, conversation_history=""):
+def classify_intent(query, conversation_history=""):
     """Return one of the predefined intent labels."""
 
     prompt = f"""You are an assistant for Haqdarshak. Classify the user's intent.
 
     **Input**:
     - Query: {query}
-    - Previous Assistant Response: {prev_response}
     - Conversation History: {conversation_history}
 
     **Instructions**:
     Return only one label from the following:
-       - Schemes_Know_Intent - General ambiguous queries enquiring about schemes or loans without specifics (e.g., 'loan', 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao')
-       - DFL_Intent - Digital/financial literacy queries (e.g., 'Current account', 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety')
-       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names. Generally asking for loan or scheme is NOT specific. (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp')
-       - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसआईएआई के लिए आवेदन कैसे करें?')
-       - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसआईएआई की पात्रता क्या है?')
-       - Out_of_Scope - Queries that are not relevant (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?')
-       - Contextual_Follow_Up - Follow-up queries (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye')
+       - Schemes_Know_Intent - General queries enquiring about schemes or loans without specific names (e.g., 'show me schemes', 'mere liye schemes dikhao', 'loan', 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao' etc.)
+       - DFL_Intent - Digital/financial literacy queries (e.g., 'Current account', 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'Setting up internet banking', 'Benefits of internet for business' etc.)
+       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names. Generally asking for loan or scheme is NOT specific. (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp' etc.)
+       - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसआईएआई के लिए आवेदन कैसे करें?' etc.)
+       - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसआईएआई की पात्रता क्या है?' etc.)
+       - Out_of_Scope - Queries that are not relevant to business growth or digital literacy or financial literacy (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?' etc.)
+       - Contextual_Follow_Up - Follow-up queries (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye' etc.)
        - Confirmation_New_RAG - Confirmation for initiating another RAG search (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.'))
-       - Gratitude_Intent - User expresses thanks or acknowledgement (e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद')
+       - Gratitude_Intent - User expresses thanks or acknowledgement (e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद' etc.)
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
        - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' are in scope and should be classified as Specific_Scheme_Know_Intent.
-       - For Contextual_Follow_Up, prioritize the Previous Assistant Response for context to check if the query is a follow-up.
-       - Only use conversation history for context, intent should be determined solely by current query.
+       - For Contextual_Follow_Up, prioritise the most recent query-response pair from the conversation history to check if the query is a follow-up.
+       - Use conversation history for context but intent should be determined solely by the current query.
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes. You can also refer to conversation history to see if the scheme being asked about has already been mentioned by the bot to the user first, in which case the intent is certainly Specific_Scheme_Know_Intent.
     """
     try:
@@ -374,7 +380,7 @@ def classify_intent(query, prev_response, conversation_history=""):
         return "Out_of_Scope"
 
 # Generate final response based on intent and RAG output
-def generate_response(intent, rag_response, user_info, language, context, query, scheme_guid=None, scheme_details=None, stream: bool = False):
+def generate_response(intent, rag_response, user_info, language, context, query, scheme_guid=None, stream: bool = False):
     if intent == "Out_of_Scope":
         if language == "Hindi":
             return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
@@ -419,8 +425,6 @@ def generate_response(intent, rag_response, user_info, language, context, query,
     - Business Category: {user_info.business_category}
     - Conversation Context: {context}
     - Language: {language}"""
-    if scheme_details:
-        base_prompt += f"\n    - User Provided Scheme Details: {scheme_details}"
     if scheme_guid:
         base_prompt += f"\n    - Scheme GUID: {scheme_guid}"
 
@@ -445,20 +449,20 @@ def generate_response(intent, rag_response, user_info, language, context, query,
             "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
     elif intent == "Specific_Scheme_Apply_Intent":
         intent_prompt = (
             "Share application process from **RAG Response**."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
     elif intent == "Specific_Scheme_Eligibility_Intent":
         intent_prompt = (
@@ -467,29 +471,26 @@ def generate_response(intent, rag_response, user_info, language, context, query,
             "Ask the user to verify their eligibility there."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
-            "List multiple schemes from **RAG Response** with a short one-line description for each. "
+            "List 3-4 schemes from **RAG Response** with a short one-line description for each. "
+            "Always include Pradhan Mantri Mudra Yojana as one of the schemes. "
             "Use any user provided scheme details to choose the most relevant schemes. "
-            "If no close match is found, still list the top 2-3 schemes applicable to the user that are at least in the user's state or CSS. "
+            "If no close match is found, still list the top schemes applicable to the user in their state or CSS. "
             "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
-        if scheme_details and scheme_details.get("path") == "credit":
-            intent_prompt += (
-                " Always include 'Pradhan Mantri Mudra Yojana' in the same format as the other schemes."
-            )
     elif intent == "DFL_Intent":
         intent_prompt = (
             "Use the **RAG Response** if available, augmenting with your own knowledge "
@@ -569,101 +570,6 @@ def generate_interaction_id(query, timestamp):
 
 
 # ---- Scheme personalisation helpers ----
-def ask_scheme_question(key, language):
-    questions_en = {
-        "credit_or_subsidy": "Are you looking for loans/credit or other subsidies?",
-        "loan_amount": "How much loan are you looking for?",
-        "loan_purpose": "What is the purpose of taking this loan?",
-        "turnover": "How much business do you do in a month approximately?",
-        "business_type": "What business do you do?",
-        "sc_st": "Are you SC/ST?",
-    }
-
-    questions_hi = {
-        "credit_or_subsidy": "क्या आप लोन/क्रेडिट लेना चाहते हैं या कोई सब्सिडी?",
-        "loan_amount": "आप कितने रुपये का लोन चाहते हैं?",
-        "loan_purpose": "यह लोन किस काम के लिए है?",
-        "turnover": "आप महीने में लगभग कितना व्यापार करते हैं?",
-        "business_type": "आप कौन सा व्यापार करते हैं?",
-        "sc_st": "क्या आप SC/ST हैं?",
-    }
-
-    questions_hinglish = {
-        "credit_or_subsidy": "Kya aap loan/credit chahte hain ya koi subsidy?",
-        "loan_amount": "Kitna loan chahiye?",
-        "loan_purpose": "Yeh loan kis kaam ke liye hai?",
-        "turnover": "Aap mahine mein lagbhag kitna business karte hain?",
-        "business_type": "Aap kaunsa business karte hain?",
-        "sc_st": "Kya aap SC/ST hain?",
-    }
-
-    if language == "Hindi":
-        return questions_hi.get(key, "")
-    if language == "Hinglish":
-        return questions_hinglish.get(key, "")
-    return questions_en.get(key, "")
-
-
-def monthly_to_annual_llm(amount_str: str) -> str:
-    """Use the LLM to convert a monthly amount description to an annual value."""
-    prompt = (
-        "You will be given a description of how much business a user does in a month. "
-        "Convert it to an approximate annual amount in Indian rupees. "
-        "Return only the number without commas, units, or any additional text.\n\n"
-        f"Text: {amount_str}"
-    )
-    try:
-        response = llm.invoke([{"role": "user", "content": prompt}])
-        normalized = response.content.strip().replace(",", "")
-        match = re.search(r"([0-9]+(?:\.[0-9]+)?)", normalized)
-        if match:
-            return match.group(1)
-    except Exception as e:
-        logger.error(f"LLM amount normalisation failed: {e}")
-    return amount_str
-
-
-def classify_scheme_type(query: str) -> str:
-    """Return 'credit' if query refers to loans/credit, else 'non_credit'."""
-    credit_keywords = [
-        "loan",
-        "credit",
-        "udhaar",
-        "udhar",
-        "borrow",
-        "capital",
-        "finance",
-        "fund",
-        "money",
-        "purchase",
-        "buy",
-        "\u0932\u094b\u0928",  # लोन (loan)
-        "\u0915\u0930\u094d\u091c",  # कर्ज (karz)
-        "\u0909\u0927\u093e\u0930",  # उधार (udhaar)
-        "\u090b\u0923",  # ऋण (riN)
-    ]
-    non_credit_keywords = [
-        "document",
-        "registration",
-        "legal",
-        "mentorship",
-        "training",
-        "license",
-        "certificate",
-        "\u0926\u0938\u094d\u0924\u093e\u0935\u0947\u091c",  # document in Hindi
-        "\u0930\u091c\u093f\u0938\u094d\u091f\u094d\u0930\u0947\u0936\u0928",  # registration
-        "\u0915\u093e\u0928\u0942\u0928\u0940",  # legal
-        "\u092e\u0947\u0902\u091f\u094b\u0930\u0936\u093f\u092a",  # mentorship
-        "\u092a\u094d\u0930\u0936\u093f\u0915\u094d\u0937\u0923",  # training
-        "\u0932\u093e\u0907\u0938\u0947\u0902\u0938",  # license
-        "\u092a\u094d\u0930\u092e\u093e\u0923\u092a\u0924\u094d\u0930",  # certificate
-    ]
-    q_lower = query.lower()
-    if any(kw in q_lower for kw in credit_keywords):
-        return "credit"
-    if any(kw in q_lower for kw in non_credit_keywords):
-        return "non_credit"
-    return "credit"
 
 
 def extract_scheme_names(text: str) -> list:
@@ -712,82 +618,6 @@ def resolve_scheme_reference(query: str, scheme_names: list) -> str | None:
         return None
 
 
-def handle_scheme_flow(answer, scheme_vector_store, session_id, mobile_number, user_info):
-    language = st.session_state.scheme_flow_data.get("language", detect_language(answer))
-    step = st.session_state.scheme_flow_step
-    details = st.session_state.scheme_flow_data
-    path = details.get("path")
-
-    # Determine next step based on current state
-
-    if details.get("path") == "credit":
-        if step == 1:
-            details["loan_amount"] = answer
-            st.session_state.scheme_flow_step = 2
-            return ask_scheme_question("loan_purpose", language), False
-        if step == 2:
-            details["loan_purpose"] = answer
-            st.session_state.scheme_flow_step = 3
-            return ask_scheme_question("turnover", language), False
-        if step == 3:
-            details["turnover"] = monthly_to_annual_llm(answer)
-            st.session_state.scheme_flow_step = 4
-            return ask_scheme_question("business_type", language), False
-        if step == 4:
-            details["business_type"] = answer
-            st.session_state.scheme_flow_step = 5
-            return ask_scheme_question("sc_st", language), False
-        if step == 5:
-            details["sc_st"] = answer
-            st.session_state.scheme_flow_active = False
-            st.session_state.scheme_flow_step = None
-    else:
-        if step == 1:
-            details["turnover"] = monthly_to_annual_llm(answer)
-            st.session_state.scheme_flow_step = 2
-            return ask_scheme_question("business_type", language), False
-        if step == 2:
-            details["business_type"] = answer
-            st.session_state.scheme_flow_step = 3
-            return ask_scheme_question("sc_st", language), False
-        if step == 3:
-            details["sc_st"] = answer
-            st.session_state.scheme_flow_active = False
-            st.session_state.scheme_flow_step = None
-
-    if st.session_state.scheme_flow_active:
-        return "", False
-
-    # Flow completed, fetch schemes using initial query
-    query = details.get("initial_query", "")
-    rag = get_scheme_response(
-        query,
-        scheme_vector_store,
-        state=user_info.state_id,
-        gender=user_info.gender,
-        business_category=user_info.business_category,
-        include_mudra=details.get("path") == "credit",
-        intent="Schemes_Know_Intent",
-    )
-    if isinstance(rag, dict):
-        rag_text = rag.get("text")
-    else:
-        rag_text = rag
-    response = generate_response(
-        "Schemes_Know_Intent",
-        rag_text or "",
-        user_info,
-        language,
-        "",
-        query,
-        scheme_details=details,
-    )
-    names = extract_scheme_names(response)
-    if names:
-        st.session_state.scheme_names = names
-        st.session_state.scheme_names_str = " ".join([f"{i}. {n}" for i, n in enumerate(names, 1)])
-        logger.info(f"Stored scheme names after flow: {st.session_state.scheme_names_str}")
-    return response, True
 
 def generate_hindi_audio_script(
     original_response: str,
@@ -887,52 +717,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     record("fetch_conversations", step)
     logger.info(f"User type: {user_type}")
 
-    if st.session_state.get("scheme_flow_active"):
-        step = time.time()
-        resp, _ = handle_scheme_flow(
-            query,
-            scheme_vector_store,
-            session_id,
-            mobile_number,
-            user_info,
-        )
-        record("scheme_flow", step)
-        generated_response = resp
-
-        def audio_task(final_text=None):
-            step_local = time.time()
-            hindi_audio_script = generate_hindi_audio_script(
-                generated_response,
-                user_info,
-                "",
-            )
-            record("audio_script", step_local)
-            try:
-                interaction_id = generate_interaction_id(query, datetime.utcnow())
-                messages_to_save = [
-                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                    {"role": "assistant", "content": generated_response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-                ]
-                if not any(
-                    any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-                    for conv in conversations
-                ):
-                    data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-                else:
-                    logger.debug(
-                        f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
-                    )
-            except Exception as e:
-                logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
-            log_timings()
-            return hindi_audio_script
-
-        if stream:
-            def gen():
-                for ch in generated_response:
-                    yield ch
-            return gen(), audio_task
-        return generated_response, audio_task
 
 
     # Handle welcome query
@@ -1005,7 +789,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     # Build conversation history for intent classification
     conversation_history = build_conversation_history(st.session_state.messages)
     step = time.time()
-    intent = classify_intent(query, recent_response or "", conversation_history)
+    intent = classify_intent(query, conversation_history)
     record("intent_classification", step)
 
     # Determine if the query is a follow-up based on intent
@@ -1025,11 +809,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     logger.info(f"Classified intent: {intent}")
 
     maintain_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
-    if intent not in maintain_intents:
-        st.session_state.scheme_flow_data = {}
-        st.session_state.scheme_flow_active = False
-        st.session_state.scheme_flow_step = None
-
     query_scheme_names = extract_scheme_names(query)
     if query_scheme_names:
         logger.info(f"Scheme names detected in query: {query_scheme_names}")
@@ -1070,45 +849,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                 f"{augmented_query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
             )
 
-    if intent == "Schemes_Know_Intent" and not st.session_state.scheme_flow_active:
-        st.session_state.scheme_flow_active = True
-        scheme_type = classify_scheme_type(query)
-        st.session_state.scheme_flow_step = 1
-        st.session_state.scheme_flow_data = {
-            "initial_query": query,
-            "language": query_language,
-            "path": scheme_type,
-        }
-        if scheme_type == "credit":
-            first_q = ask_scheme_question("loan_amount", query_language)
-        else:
-            first_q = ask_scheme_question("turnover", query_language)
-
-        def audio_task(final_text=None):
-            step_local = time.time()
-            hindi_audio_script = generate_hindi_audio_script(
-                first_q,
-                user_info,
-                "",
-            )
-            record("scheme_flow", step_local)
-            try:
-                interaction_id = generate_interaction_id(query, datetime.utcnow())
-                messages_to_save = [
-                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                    {"role": "assistant", "content": first_q, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-                ]
-                if not any(
-                    any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-                    for conv in conversations
-                ):
-                    data_manager.save_conversation(session_id, mobile_number, messages_to_save)
-            except Exception as e:
-                logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
-            log_timings()
-            return hindi_audio_script
-
-        return first_q, audio_task
 
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
@@ -1146,7 +886,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             state=state_id,
             gender=gender,
             business_category=business_category,
-            include_mudra=classify_scheme_type(query) == "credit",
+            include_mudra=intent == "Schemes_Know_Intent",
             intent=intent,
         )
         record("rag_retrieval", step)
@@ -1186,7 +926,6 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         context_pair,
         query,
         scheme_guid=scheme_guid,
-        scheme_details=st.session_state.scheme_flow_data if st.session_state.get("scheme_flow_data") else None,
         stream=stream,
     )
     record("generate_response", step)
