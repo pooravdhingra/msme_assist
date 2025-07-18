@@ -87,8 +87,8 @@ def audio_player(
         background-color: #4F285E; 
         padding: 0.4rem 0.4rem 0.005rem 0.4rem;
         border-radius: 12px;
-        margin-top: 0.25rem;
-        margin-bottom: 0.25rem;
+        margin-top: 0.18rem;
+        margin-bottom: 0.18rem;
     ">
         <audio {autoplay_attr} controls
             controlsList="nodownload noplaybackrate"
