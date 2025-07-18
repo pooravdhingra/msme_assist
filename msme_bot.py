@@ -1159,7 +1159,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         dfl_rag = get_dfl_response(
             query,
             dfl_vector_store,
-            state=state_id,
+            state=None,
             gender=gender,
             business_category=business_category,
         )

@@ -167,6 +167,7 @@ class PineconeRecordRetriever(BaseRetriever):
                 filter_arg = {
                     "applicability_state": {"$in": [self.state, "ALL_STATES"]}
                 }
+            logger.debug(f"Pinecone filter: {filter_arg}")
             res = self.index.query(
                 vector=embedding,
                 top_k=self.k,
