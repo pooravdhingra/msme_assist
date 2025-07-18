@@ -169,12 +169,6 @@ if "rag_cache" not in st.session_state:
     st.session_state.rag_cache = {}
 if "dfl_rag_cache" not in st.session_state:
     st.session_state.dfl_rag_cache = {}
-if "scheme_flow_active" not in st.session_state:
-    st.session_state.scheme_flow_active = False
-if "scheme_flow_step" not in st.session_state:
-    st.session_state.scheme_flow_step = None
-if "scheme_flow_data" not in st.session_state:
-    st.session_state.scheme_flow_data = {}
 if "scheme_names" not in st.session_state:
     st.session_state.scheme_names = []
 if "scheme_names_str" not in st.session_state:
@@ -406,9 +400,6 @@ def chat_page():
         st.session_state.otp_generated = False
         st.session_state.welcome_message_sent = False
         st.session_state.last_query_id = None
-        st.session_state.scheme_flow_active = False
-        st.session_state.scheme_flow_step = None
-        st.session_state.scheme_flow_data = {}
         st.query_params.clear()
         st.rerun()
         return
@@ -423,9 +414,6 @@ def chat_page():
         st.session_state.otp_generated = False
         st.session_state.welcome_message_sent = False
         st.session_state.last_query_id = None
-        st.session_state.scheme_flow_active = False
-        st.session_state.scheme_flow_step = None
-        st.session_state.scheme_flow_data = {}
         st.query_params.clear()
         st.rerun()
         return
