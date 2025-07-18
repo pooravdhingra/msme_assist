@@ -142,6 +142,14 @@ st.markdown("""
         div[data-testid="stLayoutWrapper"]:last-of-type {
             margin-bottom: 1rem;
         }
+        .sticky-audio {
+            position: fixed;
+            bottom: 7rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 75%;
+            z-index: 1000;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -182,6 +190,10 @@ if "dfl_rag_cache" not in st.session_state:
     st.session_state.dfl_rag_cache = {}
 if "last_response_placeholder" not in st.session_state:
     st.session_state.last_response_placeholder = None
+if "audio_bytes" not in st.session_state:
+    st.session_state.audio_bytes = None
+if "audio_ready" not in st.session_state:
+    st.session_state.audio_ready = False
 
 # Generate session ID
 def generate_session_id():
@@ -504,6 +516,23 @@ def chat_page():
                 </div>
                 """,unsafe_allow_html=True)
 
+    # Sticky audio player just above the chat input
+    audio_placeholder_bottom = st.empty()
+    if st.session_state.audio_ready and st.session_state.audio_bytes:
+        audio_player(
+            st.session_state.audio_bytes,
+            autoplay=False,
+            placeholder=audio_placeholder_bottom,
+            enabled=True,
+        )
+    else:
+        audio_player(
+            None,
+            autoplay=False,
+            placeholder=audio_placeholder_bottom,
+            enabled=False,
+        )
+
     # Trigger welcome message only for new users or on fresh login AFTER history is shown
     if not st.session_state.welcome_message_sent and user_type == "new":
         welcome_stream, welcome_audio_task = process_query(
@@ -519,7 +548,6 @@ def chat_page():
         if welcome_stream:
             with st.chat_message("assistant", avatar="logo.jpeg"):
                 message_placeholder = st.empty()
-                audio_placeholder = st.empty()
 
                 audio_container = {}
 
@@ -535,7 +563,14 @@ def chat_page():
                     add_script_run_ctx(audio_thread)
                     audio_thread.start()
                     audio_thread.join()
-                    audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
+                    st.session_state.audio_bytes = audio_container['data']
+                    st.session_state.audio_ready = True
+                    audio_player(
+                        st.session_state.audio_bytes,
+                        autoplay=False,
+                        placeholder=audio_placeholder_bottom,
+                        enabled=True,
+                    )
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": final_welcome,
@@ -547,6 +582,10 @@ def chat_page():
     # Chat input
     query = st.chat_input("Type your query here...")
     if query:
+        # Pause current audio and disable controls until new audio arrives
+        st.session_state.audio_ready = False
+        st.session_state.audio_bytes = None
+        audio_player(None, autoplay=False, placeholder=audio_placeholder_bottom, enabled=False)
         # Generate a unique query ID to prevent double-processing
         query_timestamp = datetime.utcnow()
         query_id = generate_query_id(query, query_timestamp)
@@ -597,8 +636,6 @@ def chat_page():
                 message_placeholder = st.empty()
                 # Store placeholder to remove it on the next query
                 st.session_state.last_response_placeholder = message_placeholder
-                audio_placeholder = st.empty()
-
                 audio_container = {}
                 
                 display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
@@ -616,8 +653,14 @@ def chat_page():
                     add_script_run_ctx(audio_thread)
                     audio_thread.start()
                     audio_thread.join()
-                    audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
-
+                    st.session_state.audio_bytes = audio_container['data']
+                    st.session_state.audio_ready = True
+                    audio_player(
+                        st.session_state.audio_bytes,
+                        autoplay=False,
+                        placeholder=audio_placeholder_bottom,
+                        enabled=True,
+                    )
             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == final_response):
                 st.session_state.messages.append({
