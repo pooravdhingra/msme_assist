@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 SCHEME_KEYWORDS: Dict[str, List[str]] = {
     "SH0008BK": ["pradhan mantri mudra yojana", "mudra", "mudra loan", "pmmy"],
     "SH000B51": ["pm vishwakarma scheme", "pm vishwakarma", "vishwakarma yojana", "vishwakarma", "vishwakarma scheme"],
-    "SH000BGH": ["prime minister employment generation program", "pmegp"],
+    "SH0009RA": ["prime minister employment generation program", "pmegp"],
     "SH000889": ["stand up india", "standup india", "standup", "standupindia"],
     "SH00088L": ["credit guarantee fund for micro units", "cgfmu"],
     "DC0008R0": ["udyam registration", "udyam"],
