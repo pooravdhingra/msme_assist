@@ -449,20 +449,20 @@ def generate_response(intent, rag_response, user_info, language, context, query,
             "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
     elif intent == "Specific_Scheme_Apply_Intent":
         intent_prompt = (
             "Share application process from **RAG Response**."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
     elif intent == "Specific_Scheme_Eligibility_Intent":
         intent_prompt = (
@@ -471,10 +471,10 @@ def generate_response(intent, rag_response, user_info, language, context, query,
             "Ask the user to verify their eligibility there."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
@@ -486,10 +486,10 @@ def generate_response(intent, rag_response, user_info, language, context, query,
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
         intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you get this document "
-            f"for Only ₹99. Click: {link}' (English), 'Haqdarshak aapko yeh document sirf ₹99 mein "
-            f"dilane mein madad kar sakta hai. Click: {link}' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"केवल ₹99 में दिलाने में मदद कर सकता है। क्लिक करें: {link}' (Hindi)."
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
         )
     elif intent == "DFL_Intent":
         intent_prompt = (
