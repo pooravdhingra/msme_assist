@@ -12,7 +12,6 @@ from scheme_lookup import (
     DocumentListRetriever,
 )
 from utils import extract_scheme_guid
-import streamlit as st
 from data import DataManager
 import re
 import os
@@ -31,7 +30,9 @@ load_dotenv()
 data_manager = DataManager()
 
 # Initialize cached resources
-@st.cache_resource
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
 def init_llm():
     """Initialise the default LLM client for all tasks except intent classification."""
     logger.info("Initializing LLM client")
@@ -49,7 +50,7 @@ def init_llm():
     return llm
 
 
-@st.cache_resource
+@lru_cache(maxsize=1)
 def init_intent_llm():
     """Initialise a dedicated LLM client for intent classification."""
     logger.info("Initializing Intent LLM client")
@@ -68,7 +69,7 @@ def init_intent_llm():
     )
     return intent_llm
 
-@st.cache_resource
+@lru_cache(maxsize=1)
 def init_vector_store():
     logger.info("Loading vector store")
     start_time = time.time()
@@ -84,7 +85,7 @@ def init_vector_store():
     logger.info(f"Vector store loaded in {time.time() - start_time:.2f} seconds")
     return vector_store
 
-@st.cache_resource
+@lru_cache(maxsize=1)
 def init_dfl_vector_store():
     logger.info("Loading DFL vector store")
     start_time = time.time()
@@ -120,7 +121,16 @@ class UserContext:
     business_category: str
     gender: str
 
-# Retrieve user information from Streamlit session state
+
+class SessionData:
+    """Simple container for per-session information."""
+    def __init__(self, user=None):
+        self.user = user
+        self.messages = []
+        self.rag_cache = {}
+        self.dfl_rag_cache = {}
+
+# Retrieve user information from the session data
 def get_user_context(session_state):
     try:
         user = session_state.user
@@ -644,7 +654,7 @@ def generate_hindi_audio_script(
             return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।" # Error generating audio script.
 
 # Main function to process query
-def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, user_language=None, stream: bool = False):
+def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, session_data: SessionData, user_language=None, stream: bool = False):
     start_time = time.time()
     timings = {}
 
@@ -661,7 +671,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     # Retrieve user data from session state using helper
     step = time.time()
-    user_info = get_user_context(st.session_state)
+    user_info = get_user_context(session_data)
     record("user_context", step)
     logger.info(f"User context in process_query: {user_info}")
     if not user_info:
@@ -739,25 +749,25 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     scheme_rag = None
     dfl_rag = None
     related_prev_query = None
-    session_cache = st.session_state.rag_cache.get(session_id, {})
-    dfl_session_cache = st.session_state.dfl_rag_cache.get(session_id, {})
+    session_cache = session_data.rag_cache
+    dfl_session_cache = session_data.dfl_rag_cache
 
     # Get the most recent query-response pair from the current session
     recent_query = None
     recent_response = None
-    if st.session_state.messages:
-        for msg in reversed(st.session_state.messages):
+    if session_data.messages:
+        for msg in reversed(session_data.messages):
             if msg["role"] == "assistant" and "Welcome" not in msg["content"]:
                 recent_response = msg["content"]
-                msg_index = st.session_state.messages.index(msg)
-                if msg_index > 0 and st.session_state.messages[msg_index - 1]["role"] == "user":
-                    recent_query = st.session_state.messages[msg_index - 1]["content"]
+                msg_index = session_data.messages.index(msg)
+                if msg_index > 0 and session_data.messages[msg_index - 1]["role"] == "user":
+                    recent_query = session_data.messages[msg_index - 1]["content"]
                 break
 
 
 
     # Build conversation history for intent classification
-    conversation_history = build_conversation_history(st.session_state.messages)
+    conversation_history = build_conversation_history(session_data.messages)
     step = time.time()
     intent = classify_intent(query, conversation_history)
     record("intent_classification", step)
@@ -832,9 +842,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             intent=intent,
         )
         record("rag_retrieval", step)
-        if session_id not in st.session_state.rag_cache:
-            st.session_state.rag_cache[session_id] = {}
-        st.session_state.rag_cache[session_id][query] = scheme_rag
+        session_data.rag_cache[query] = scheme_rag
 
     if dfl_rag is None and intent in dfl_intents:
         step = time.time()
@@ -846,9 +854,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
             business_category=business_category,
         )
         record("rag_retrieval", step)
-        if session_id not in st.session_state.dfl_rag_cache:
-            st.session_state.dfl_rag_cache[session_id] = {}
-        st.session_state.dfl_rag_cache[session_id][query] = dfl_rag
+        session_data.dfl_rag_cache[query] = dfl_rag
 
     rag_response = scheme_rag if intent in scheme_intents else dfl_rag
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response

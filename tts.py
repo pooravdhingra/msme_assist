@@ -1,7 +1,6 @@
 import base64
 import json
 import os
-import streamlit as st
 from google.cloud import texttospeech
 from google.oauth2 import service_account
 from typing import Optional
@@ -68,43 +67,3 @@ def synthesize(text: str, language: str) -> bytes:
         audio_config=audio_config,
     )
     return response.audio_content
-
-
-def autoplay(audio_bytes: bytes) -> None:
-    """Autoplay MP3 audio in Streamlit."""
-    audio_player(audio_bytes, autoplay=True)
-
-
-def audio_player(
-    audio_bytes: bytes, autoplay: bool = False, placeholder: Optional[st.delta_generator.DeltaGenerator] = None
-) -> None:
-    """Render an HTML audio player with optional autoplay."""
-    b64 = base64.b64encode(audio_bytes).decode("utf-8")
-    autoplay_attr = "autoplay" if autoplay else ""
-    
-    styled_audio_html = f"""
-    <div style="
-        background-color: #4F285E; 
-        padding: 0.4rem 0.4rem 0.005rem 0.4rem;
-        border-radius: 12px;
-        margin-top: 0.18rem;
-        margin-bottom: 0.18rem;
-    ">
-        <audio {autoplay_attr} controls
-            controlsList="nodownload noplaybackrate"
-            style="
-                width: 100%;
-                outline: none;
-                border-radius: 8px;
-                background-color: #FFF;
-            ">
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            Your browser does not support the audio element.
-        </audio>
-    </div>
-    """
-
-    if placeholder is None:
-        st.markdown(styled_audio_html, unsafe_allow_html=True)
-    else:
-        placeholder.markdown(styled_audio_html, unsafe_allow_html=True)

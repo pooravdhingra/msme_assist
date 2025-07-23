@@ -5,7 +5,7 @@ from datetime import datetime
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure
 from dotenv import load_dotenv
-import streamlit as st
+from functools import lru_cache
 from urllib.parse import quote_plus, urlparse, urlunparse
 
 # Set up logging
@@ -64,7 +64,7 @@ STATE_NAME_TO_ID = {v: k for k, v in STATE_MAPPING.items()}
 # Map gender codes from the Citizen API to full labels
 GENDER_MAPPING = {"M": "Male", "F": "Female", "O": "Other"}
 
-@st.cache_resource
+@lru_cache(maxsize=None)
 def get_mongo_client():
     """Initialize and cache MongoDB client."""
     logger.info("Initializing MongoDB client")

@@ -1,6 +1,6 @@
 # MSME Assist
 
-This application provides a Streamlit interface for interacting with the MSME assistant bot.
+This repository now exposes a FastAPI backend that can be consumed by a custom React frontend.
 
 *Create Virtual Environment*
 
@@ -22,6 +22,12 @@ The application will create the indexes automatically on the first run using Pin
 
 Run the application once to automatically download data and populate the Pinecone indexes. Subsequent runs will reuse the stored data.
 
-*Run the app*
+*Run the API server*
 
-streamlit run app.py
+uvicorn api_server:app --reload
+
+*Available Endpoints*
+
+- `POST /auth/token` – authenticate using a provided token and start a new session.
+- `GET /history/{session_id}` – retrieve past conversation history for the authenticated user.
+- `POST /chat` – process a user query. Tokens are streamed using Server Sent Events and an additional `audio` event is sent once the TTS audio is ready.
