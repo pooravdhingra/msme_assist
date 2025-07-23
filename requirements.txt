@@ -6,7 +6,6 @@ pydantic
 python-dotenv
 pandas
 gdown
-streamlit
 numpy
 pymongo
 openpyxl
@@ -16,3 +15,7 @@ faiss-cpu
 google-cloud-texttospeech
 pinecone
 langchain-pinecone
+fastapi
+uvicorn[standard]
+sse-starlette
+sseclient-py
