@@ -18,3 +18,4 @@ langchain-pinecone
 fastapi
 uvicorn[standard]
 sse-starlette
+sseclient-py

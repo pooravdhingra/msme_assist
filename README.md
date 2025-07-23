@@ -31,3 +31,19 @@ uvicorn api_server:app --reload
 - `POST /auth/token` – authenticate using a provided token and start a new session.
 - `GET /history/{session_id}` – retrieve past conversation history for the authenticated user.
 - `POST /chat` – process a user query. Tokens are streamed using Server Sent Events and an additional `audio` event is sent once the TTS audio is ready.
+
+*Testing the API*
+
+A helper script `test_api.py` is included for quick verification. First run the server:
+
+```
+uvicorn api_server:app --reload
+```
+
+In another terminal, install the test dependencies and run:
+
+```
+python test_api.py <YOUR_TOKEN> "Hello"
+```
+
+This will authenticate, send the query, stream tokens from `/chat`, save the audio to `response.mp3`, and finally print the conversation history.
