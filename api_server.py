@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 import uuid
 import os
@@ -15,6 +16,15 @@ from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
 from tts import synthesize
 
 app = FastAPI()
+
+# Enable CORS so a separate React frontend can call the API without issues
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 data_manager = DataManager()
 
