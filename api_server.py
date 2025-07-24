@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
+from fastapi import Query
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
+from datetime import datetime, timezone
 import uuid
 import os
 import requests
@@ -24,6 +26,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 data_manager = DataManager()
@@ -80,7 +83,22 @@ def get_history(session_id: str):
     messages = []
     for conv in convos:
         for msg in conv.get("messages", []):
-            messages.append({"role": msg["role"], "content": msg["content"], "timestamp": msg.get("timestamp")})
+            messages.append(msg)                       # keep the original dict
+
+    def _to_epoch(t):
+        """Return a numeric epoch regardless of the stored type."""
+        if isinstance(t, datetime):
+            return t.timestamp()
+        if isinstance(t, (int, float)):
+            return float(t)
+        if isinstance(t, str):
+            try:                                       
+                return datetime.fromisoformat(t).timestamp()
+            except ValueError:
+                return 0                                
+        return 0
+
+    messages.sort(key=lambda m: _to_epoch(m.get("timestamp")))
     return {"messages": messages}
 
 @app.post("/chat")
@@ -93,7 +111,8 @@ def chat(payload: Dict[str, str]):
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
     # append user message
-    session.messages.append({"role": "user", "content": query, "timestamp": uuid.uuid4().hex})
+    user_msg = {"role": "user", "content": query, "timestamp": uuid.uuid4().hex}
+    session.messages.append(user_msg)
 
     stream, audio_task = process_query(
         query,
@@ -108,17 +127,116 @@ def chat(payload: Dict[str, str]):
 
     async def event_generator():
         final_text = ""
-        for token in stream:
-            final_text += token
-            yield {"data": token}
-        audio_bytes = None
-        if audio_task:
-            script = audio_task(final_text)
-            audio_bytes = synthesize(script, "Hindi")
-            b64_audio = base64.b64encode(audio_bytes).decode()
-        session.messages.append({"role": "assistant", "content": final_text})
-        if audio_bytes:
-            yield {"event": "audio", "data": b64_audio}
+        try:
+            for token in stream:
+                final_text += token
+                yield {"data": token}
+            audio_bytes = None
+            if audio_task:
+                script = audio_task(final_text)
+                audio_bytes = synthesize(script, "Hindi")
+                b64_audio = base64.b64encode(audio_bytes).decode()
+            # after streaming is done
+            assistant_msg = {
+                "role": "assistant",
+                "content": final_text,
+                "timestamp": uuid.uuid4().hex
+            }
+            session.messages.append(user_msg)
 
-    return EventSourceResponse(event_generator())
+            # ② make the write idempotent for this session
+            data_manager.save_conversation(
+                session_id,
+                session.user["mobile_number"],
+                [user_msg, assistant_msg],
+            )
 
+            if audio_bytes:
+                yield {"event": "audio", "data": b64_audio}
+            
+            yield {"event": "done", "data": ""}
+
+        except Exception as e:
+            # If you want to debug server-side errors
+            print("SSE error:", e)
+
+    # Explicit CORS headers here
+    sse_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+
+    return EventSourceResponse(event_generator(), headers=sse_headers)
+
+@app.get("/chat")
+async def chat_get(session_id: str, query: str):
+    sess = sessions.get(session_id)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    if not isinstance(sess, SessionData):
+        import inspect, logging
+        logging.error(f"sess is {type(sess)}: {sess}  (callable? {callable(sess)})  source: {inspect.getsource(sess) if callable(sess) else ''}")
+        raise HTTPException(500, "Corrupt session object")
+
+    # Always push a timestamp
+    user_msg = {"role": "user", "content": query, "timestamp": uuid.uuid4().hex}
+    sess.messages.append(user_msg)
+
+    token_stream, make_audio = process_query(
+        query,
+        scheme_vector_store,
+        dfl_vector_store,
+        session_id,
+        sess.user["mobile_number"],
+        sess,                                 # <— make sure this is SessionData
+        user_language=sess.user.get("language"),
+        stream=True,
+    )
+
+    async def event_generator():
+        final_text = ""
+        try:
+            for token in token_stream:
+                final_text += token
+                yield {"data": token}
+
+            # audio
+            if make_audio:
+                script = make_audio(final_text)  # <- returns Hindi script
+                audio_bytes = synthesize(script, "Hindi")
+                b64_audio = base64.b64encode(audio_bytes).decode()
+                yield {"event": "audio", "data": b64_audio}
+
+            # save assistant message w/ timestamp
+            assistant_msg = {
+                "role": "assistant",
+                "content": final_text,
+                "timestamp": uuid.uuid4().hex
+            }
+            sess.messages.append(assistant_msg)
+
+            # ② make the write idempotent for this session
+            data_manager.save_conversation(
+                session_id,
+                sess.user["mobile_number"],
+                [user_msg, assistant_msg],
+            )
+
+            yield {"event": "done", "data": ""}
+
+        except Exception as e:
+            # Optional: send an error event to client
+            import traceback, logging
+            logging.error("SSE gen error: %s\n%s", e, traceback.format_exc())
+
+    return EventSourceResponse(
+        event_generator(),
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
