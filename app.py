@@ -16,7 +16,7 @@ from msme_bot import (
 from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
 import numpy as np
 import logging
-from tts import synthesize, audio_player
+from tts import synthesize
 import requests
 from typing import Optional
 import requests
