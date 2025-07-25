@@ -471,7 +471,7 @@ def generate_response(intent, rag_response, user_info, language, context, query,
     Prioritise the **Current Query** over the **Conversation Context** when determining the response.
     """
 
-    special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST"]
+    special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST", "Mudra", "PMEGP", "PMFME", "CMEGP", "Yuva Udyami", "PMSBY", "PMJJBY", "PMJAY (Ayushman Bharat)"]
     link = "https://haqdarshak.com/contact"
 
     if intent == "Specific_Scheme_Know_Intent":
@@ -522,7 +522,7 @@ def generate_response(intent, rag_response, user_info, language, context, query,
             f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
             f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
             f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi). Add this only in the description for the applicable scheme/s, not under the entire list."
         )
     elif intent == "DFL_Intent":
         intent_prompt = (
