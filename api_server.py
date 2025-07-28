@@ -79,12 +79,7 @@ def get_history(session_id: str):
     session = sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
-    convos = data_manager.get_conversations(session.user["mobile_number"])
-    messages = []
-    for conv in convos:
-        for msg in conv.get("messages", []):
-            messages.append(msg)                       # keep the original dict
-
+    
     def _to_epoch(t):
         """Return a numeric epoch regardless of the stored type."""
         if isinstance(t, datetime):
@@ -92,11 +87,17 @@ def get_history(session_id: str):
         if isinstance(t, (int, float)):
             return float(t)
         if isinstance(t, str):
-            try:                                       
+            try:
                 return datetime.fromisoformat(t).timestamp()
             except ValueError:
-                return 0                                
+                return 0
         return 0
+
+    convos = data_manager.get_conversations(session.user["mobile_number"])
+    messages = []
+    for conv in reversed(convos):  # reverse conversations: oldest first
+        conv_msgs = sorted(conv.get("messages", []), key=lambda m: _to_epoch(m.get("timestamp")))
+        messages.extend(conv_msgs)                       # keep the original dict
 
     messages.sort(key=lambda m: _to_epoch(m.get("timestamp")))
     return {"messages": messages}
@@ -143,13 +144,6 @@ def chat(payload: Dict[str, str]):
                 "timestamp": uuid.uuid4().hex
             }
             session.messages.append(user_msg)
-
-            # ② make the write idempotent for this session
-            data_manager.save_conversation(
-                session_id,
-                session.user["mobile_number"],
-                [user_msg, assistant_msg],
-            )
 
             if audio_bytes:
                 yield {"event": "audio", "data": b64_audio}
@@ -218,11 +212,6 @@ async def chat_get(session_id: str, query: str):
             sess.messages.append(assistant_msg)
 
             # ② make the write idempotent for this session
-            data_manager.save_conversation(
-                session_id,
-                sess.user["mobile_number"],
-                [user_msg, assistant_msg],
-            )
 
             yield {"event": "done", "data": ""}
 
@@ -240,3 +229,37 @@ async def chat_get(session_id: str, query: str):
             "X-Accel-Buffering": "no",
         },
     )
+
+@app.get("/welcome/{session_id}")
+def get_welcome(session_id: str):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    mobile = session.user["mobile_number"]
+    conversations = data_manager.get_conversations(mobile)
+
+    if any("welcome" in (msg["content"] or "").lower() for conv in conversations for msg in conv["messages"]):
+        return {"welcome": None, "audio": None}
+
+    response_text, audio_task = process_query(
+        "welcome",
+        scheme_vector_store,
+        dfl_vector_store,
+        session_id,
+        mobile,
+        session,
+        user_language=session.user.get("language"),
+        stream=False
+    )
+
+    b64_audio = None
+    if audio_task:
+        script = audio_task(response_text)
+        audio_bytes = synthesize(script, "Hindi")
+        b64_audio = base64.b64encode(audio_bytes).decode()
+
+    return {
+        "welcome": response_text,
+        "audio": b64_audio
+    }
