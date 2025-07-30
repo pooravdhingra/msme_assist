@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi import Query
+from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from datetime import datetime, timezone
@@ -36,6 +37,24 @@ sessions: Dict[str, SessionData] = {}
 
 HQ_BASE_URL = os.getenv("HQ_API_URL", "https://customer-admin-test.haqdarshak.com")
 HQ_ENDPOINT = "/person/get/citizen-details"
+
+def _load_session(session_id: str) -> SessionData | None:
+    """Return SessionData from cache or rebuild it from Mongo if needed."""
+    sess = sessions.get(session_id)
+    if sess:
+        return sess
+
+    doc = data_manager.db.sessions.find_one({"session_id": session_id})
+    if not doc:
+        return None                       # real 404 – never authenticated
+
+    user = data_manager.find_user(doc["mobile_number"])
+    if not user:
+        return None                       # stale session record
+
+    sess = SessionData(user=user)
+    sessions[session_id] = sess          # cache for next call
+    return sess
 
 @app.post("/auth/token")
 def auth_token(payload: Dict[str, str]):
@@ -76,7 +95,7 @@ def auth_token(payload: Dict[str, str]):
 
 @app.get("/history/{session_id}")
 def get_history(session_id: str):
-    session = sessions.get(session_id)
+    session = _load_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
     
@@ -108,7 +127,7 @@ def chat(payload: Dict[str, str]):
     query = payload.get("query")
     if not session_id or not query:
         raise HTTPException(status_code=400, detail="session_id and query required")
-    session = sessions.get(session_id)
+    session = _load_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
     # append user message
@@ -166,7 +185,7 @@ def chat(payload: Dict[str, str]):
 
 @app.get("/chat")
 async def chat_get(session_id: str, query: str):
-    sess = sessions.get(session_id)
+    sess = _load_session(session_id)
     if not sess:
         raise HTTPException(404, "session not found")
     if not isinstance(sess, SessionData):
@@ -232,7 +251,7 @@ async def chat_get(session_id: str, query: str):
 
 @app.get("/welcome/{session_id}")
 def get_welcome(session_id: str):
-    session = sessions.get(session_id)
+    session = _load_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
 
