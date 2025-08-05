@@ -1,687 +1,669 @@
-# import os
-# import streamlit as st
-# import random
-# import string
-# import threading
-# from streamlit.runtime.scriptrunner import add_script_run_ctx
-# import time
-# from datetime import datetime, timedelta
-# from msme_bot import (
-#     load_rag_data,
-#     load_dfl_data,
-#     process_query,
-#     welcome_user,
-#     detect_language,
-# )
-# from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
-# import numpy as np
-# import logging
-# from tts import synthesize
-# import requests
-# from typing import Optional
-# import requests
+import os
+import streamlit as st
+import random
+import string
+import threading
+from streamlit.runtime.scriptrunner import add_script_run_ctx
+import time
+from datetime import datetime, timedelta
+from msme_bot import (
+    load_rag_data,
+    load_dfl_data,
+    process_query,
+    welcome_user,
+    detect_language,
+)
+from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
+import numpy as np
+import logging
+from tts import synthesize
+import requests
+from typing import Optional
+import requests
 
-# # Set up logging
-# logging.basicConfig(level=logging.DEBUG,
-#                     format='%(asctime)s - %(levelname)s - %(message)s',
-#                     force=True)
-# logger = logging.getLogger(__name__)
-# logging.getLogger("pymongo").setLevel(logging.WARNING)
+# Set up logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    force=True)
+logger = logging.getLogger(__name__)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
-# # Initialize DataManager
-# data_manager = DataManager()
+# Initialize DataManager
+data_manager = DataManager()
 
-# st.markdown("""
-#     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-#     <style>
-#         #root > div > div  {
-#             padding-bottom:0px !important;
-#         }
-#         .stApp {
-#             background-color: #F6F1F3;
-#         }
-#         .stMarkdown {
-#             font-family: 'Poppins, sans-serif';
-#             color: #2F343A;
-#             font-size: 1rem;
-#         }
-#         h3 {
-#             font-size: 1.4rem !important;
-#         }
-#         .userChat {
-#             background-color: #FFF;
-#             padding: 10px;
-#             border-radius: 12px;
-#             font-size: 1rem;
-#             color: #4F285E;
-#             font-family: "Poppins", sans-serif;
-#         }
-#         .assistanceChat {
-#             background-color: #4F285E;
-#             padding: 10px;
-#             border-radius: 12px;
-#             font-size: 1rem;
-#             color: #FFF;
-#             font-family: "Poppins", sans-serif;
-#         }
-#         section[data-testid="stAppScrollToBottomContainer"] {
-#             scrollbar-width: none;
-#         }
-#         div[data-testid="stBottomBlockContainer"]{
-#             height: 6rem;
-#             background-color: #F6F1F3;
-#         }
-#         textarea[data-testid="stChatInputTextArea"]{
-#             max-height: 6rem !important;
-#             height: 3.5rem;
-#             background-color: #fff;
-#             text-align: left;
-#             padding: 1rem 0.6rem;
-#             color:#4F285E;
-#         }
-#         textarea[data-testid="stChatInputTextArea"]:hover{
-#             scrollbar-width: none;
-#         }
-#         div[data-testid="stChatMessageAvatar"] {
-#             display: none !important;
-#         }
-#         div[data-testid="stChatMessageAvatarUser"] {
-#             display: none !important;
-#         }
-#         div[data-testid="stChatMessageAvatarAssistant"] {
-#             display: none !important;
-#         }
-#         .e1togvvn1{
-#             max-height: 6rem !important;
-#             padding: 0px;
-#             height:3.5rem;
-#             border-radius: 1.0rem;
-#             border-width: 0px;
-#             box-shadow:0px 0px 0px 2px rgba(0,0,0,0.1);
-#         }
-#         .e1togvvn1:focus-within{
-#             border-color: #4F285E
-#         }
-#         .elbt1zu3{
-#             background-color: #F6F1F3;
-#         }
-#         .e1togvvn1 div:last-child:{
-#             align-items: center !important;
-#         }
-#         button[data-testid="stChatInputSubmitButton"]{
-#             align-self: center
-#         }
-#         button[data-testid="stChatInputSubmitButton"]:hover{
-#             color: #4F285E
-#         }
-#         button:not(:disabled){
-#             color: #4F285E
-#         }
-#         div[data-testid="stChatMessage"]{
-#             max-width: 100%;
-#             padding: 0.5rem 0px !important;
-#         }
-#         div[data-testid="stLayoutWrapper"]:nth-child(even) > div[data-testid="stChatMessage"]{
-#             width: fit-content;
-#         }
-#         div[data-testid="stLayoutWrapper"]:nth-child(odd) > div[data-testid="stChatMessage"]{
-#             width: fit-content;
-#         }
-#         div[data-testid="stLayoutWrapper"]{
-#             max-width: 92.5%;
-#         }
-#         div[data-testid="stLayoutWrapper"]:nth-child(even) {
-#             padding-left: 1.5rem;
-#             align-self:flex-end;
-#             justify-content:flex-end
-#         }
-#         div[data-testid="stLayoutWrapper"]:nth-child(odd) {
-#             flex-flow: row;
-#             justify-content: flex-start;
-#         }
-#         div[data-testid="stLayoutWrapper"]:last-of-type {
-#             margin-bottom: 1rem;
-#         }
-#     </style>
-# """, unsafe_allow_html=True)
-
-
-# # Initialize Streamlit session state
-# if "scheme_vector_store" not in st.session_state:
-#     st.session_state.scheme_vector_store = load_rag_data()
-# if "dfl_vector_store" not in st.session_state:
-#     st.session_state.dfl_vector_store = load_dfl_data()
-
-# if "page" not in st.session_state:
-#     st.session_state.page = "login"
-
-# if "user" not in st.session_state:
-#     st.session_state.user = None
-
-# if "otp" not in st.session_state:
-#     st.session_state.otp = None
-
-# if "session_id" not in st.session_state:
-#     st.session_state.session_id = None
-
-# if "messages" not in st.session_state:
-#     st.session_state.messages = []
-
-# if "otp_generated" not in st.session_state:
-#     st.session_state.otp_generated = False
-
-# if "welcome_message_sent" not in st.session_state:
-#     st.session_state.welcome_message_sent = False
-
-# if "last_query_id" not in st.session_state:
-#     st.session_state.last_query_id = None
-
-# if "rag_cache" not in st.session_state:
-#     st.session_state.rag_cache = {}
-# if "dfl_rag_cache" not in st.session_state:
-#     st.session_state.dfl_rag_cache = {}
-# if "last_response_placeholder" not in st.session_state:
-#     st.session_state.last_response_placeholder = None
-
-# # Generate session ID
-# def generate_session_id():
-#     return ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-
-# # Generate unique query ID
-# def generate_query_id(query, timestamp):
-#     return f"{query[:50]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
-
-# # Animate text typing effect
+st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        #root > div > div  {
+            padding-bottom:0px !important;
+        }
+        .stApp {
+            background-color: #F6F1F3;
+        }
+        .stMarkdown {
+            font-family: 'Poppins, sans-serif';
+            color: #2F343A;
+            font-size: 1rem;
+        }
+        h3 {
+            font-size: 1.4rem !important;
+        }
+        .userChat {
+            background-color: #FFF;
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 1rem;
+            color: #4F285E;
+            font-family: "Poppins", sans-serif;
+        }
+        .assistanceChat {
+            background-color: #4F285E;
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 1rem;
+            color: #FFF;
+            font-family: "Poppins", sans-serif;
+        }
+        section[data-testid="stAppScrollToBottomContainer"] {
+            scrollbar-width: none;
+        }
+        div[data-testid="stBottomBlockContainer"]{
+            height: 6rem;
+            background-color: #F6F1F3;
+        }
+        textarea[data-testid="stChatInputTextArea"]{
+            max-height: 6rem !important;
+            height: 3.5rem;
+            background-color: #fff;
+            text-align: left;
+            padding: 1rem 0.6rem;
+            color:#4F285E;
+        }
+        textarea[data-testid="stChatInputTextArea"]:hover{
+            scrollbar-width: none;
+        }
+        div[data-testid="stChatMessageAvatar"] {
+            display: none !important;
+        }
+        div[data-testid="stChatMessageAvatarUser"] {
+            display: none !important;
+        }
+        div[data-testid="stChatMessageAvatarAssistant"] {
+            display: none !important;
+        }
+        .e1togvvn1{
+            max-height: 6rem !important;
+            padding: 0px;
+            height:3.5rem;
+            border-radius: 1.0rem;
+            border-width: 0px;
+            box-shadow:0px 0px 0px 2px rgba(0,0,0,0.1);
+        }
+        .e1togvvn1:focus-within{
+            border-color: #4F285E
+        }
+        .elbt1zu3{
+            background-color: #F6F1F3;
+        }
+        .e1togvvn1 div:last-child:{
+            align-items: center !important;
+        }
+        button[data-testid="stChatInputSubmitButton"]{
+            align-self: center
+        }
+        button[data-testid="stChatInputSubmitButton"]:hover{
+            color: #4F285E
+        }
+        button:not(:disabled){
+            color: #4F285E
+        }
+        div[data-testid="stChatMessage"]{
+            max-width: 100%;
+            padding: 0.5rem 0px !important;
+        }
+        div[data-testid="stLayoutWrapper"]:nth-child(even) > div[data-testid="stChatMessage"]{
+            width: fit-content;
+        }
+        div[data-testid="stLayoutWrapper"]:nth-child(odd) > div[data-testid="stChatMessage"]{
+            width: fit-content;
+        }
+        div[data-testid="stLayoutWrapper"]{
+            max-width: 92.5%;
+        }
+        div[data-testid="stLayoutWrapper"]:nth-child(even) {
+            padding-left: 1.5rem;
+            align-self:flex-end;
+            justify-content:flex-end
+        }
+        div[data-testid="stLayoutWrapper"]:nth-child(odd) {
+            flex-flow: row;
+            justify-content: flex-start;
+        }
+        div[data-testid="stLayoutWrapper"]:last-of-type {
+            margin-bottom: 1rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 
-# def type_text(text, placeholder, timestamp=None, delay=0.015):
-#     typed = ""
-#     for char in text:
-#         typed += char
-#         placeholder.markdown(f"""
-#         <div class="assistanceChat">
-#             {typed}▌
-#         </div>
-#         """, unsafe_allow_html=True)
-#         time.sleep(delay)
+# Initialize Streamlit session state
+if "scheme_vector_store" not in st.session_state:
+    st.session_state.scheme_vector_store = load_rag_data()
+if "dfl_vector_store" not in st.session_state:
+    st.session_state.dfl_vector_store = load_dfl_data()
 
-#     final_text = typed if timestamp is None else f"{typed}"
-#     placeholder.markdown(f"""
-#     <div class="assistanceChat">
-#         {final_text}
-#     </div>
-#     """, unsafe_allow_html=True)
+if "page" not in st.session_state:
+    st.session_state.page = "login"
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if "otp" not in st.session_state:
+    st.session_state.otp = None
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = None
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "otp_generated" not in st.session_state:
+    st.session_state.otp_generated = False
+
+if "welcome_message_sent" not in st.session_state:
+    st.session_state.welcome_message_sent = False
+
+if "last_query_id" not in st.session_state:
+    st.session_state.last_query_id = None
+
+if "rag_cache" not in st.session_state:
+    st.session_state.rag_cache = {}
+if "dfl_rag_cache" not in st.session_state:
+    st.session_state.dfl_rag_cache = {}
+if "last_response_placeholder" not in st.session_state:
+    st.session_state.last_response_placeholder = None
+
+# Generate session ID
+def generate_session_id():
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+
+# Generate unique query ID
+def generate_query_id(query, timestamp):
+    return f"{query[:50]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
+
+# Animate text typing effect
 
 
+def type_text(text, placeholder, timestamp=None, delay=0.015):
+    typed = ""
+    for char in text:
+        typed += char
+        placeholder.markdown(f"""
+        <div class="assistanceChat">
+            {typed}▌
+        </div>
+        """, unsafe_allow_html=True)
+        time.sleep(delay)
 
-# def stream_tokens(token_generator, placeholder, timestamp: Optional[str] = None):
-#     """Stream tokens from the LLM and display them inside the chat bubble."""
-#     typed = ""
-#     for token in token_generator:
-#         typed += token
-#         placeholder.markdown(
-#             f"""
-#         <div class="assistanceChat">
-#             {typed}▌
-#         </div>
-#         """,
-#             unsafe_allow_html=True,
-#         )
-#     final_text = typed if timestamp is None else f"{typed}"
-#     placeholder.markdown(
-#         f"""
-#     <div class="assistanceChat">
-#         {final_text}
-#     </div>
-#     """,
-#         unsafe_allow_html=True,
-#     )
-#     return typed
-
-# # Restore session from URL query parameters
-# def restore_session_from_url():
-#     query_params = st.query_params
-#     session_id = query_params.get("session_id")
-#     if session_id and not st.session_state.session_id:
-#         # Check if session_id exists in MongoDB and is active
-#         session = data_manager.db.sessions.find_one({"session_id": session_id, "end_time": {"$exists": False}})
-#         if session:
-#             mobile_number = session.get("mobile_number")
-#             user = data_manager.find_user(mobile_number)
-#             if user:
-#                 st.session_state.session_id = session_id
-#                 st.session_state.user = {
-#                     "fname": user.get("fname"),
-#                     "lname": user.get("lname"),
-#                     "mobile_number": user.get("mobile_number"),
-#                     "state_id": user.get("state_id", "Unknown"),
-#                     "state_name": user.get("state_name", "Unknown"),
-#                     "business_name": user.get("business_name"),
-#                     "business_category": user.get("business_category"),
-#                     "language": user.get("language", "English"),
-#                     "gender": user.get("gender"),
-#                 }
-#                 st.session_state.page = "chat"
-#                 # Restore messages from MongoDB, but do NOT include audio_script
-#                 conversations = data_manager.get_conversations(mobile_number)
-#                 all_messages = []
-#                 for conv in conversations:
-#                     for msg in conv["messages"]:
-#                         if "content" not in msg or "role" not in msg or "timestamp" not in msg:
-#                             logger.warning(f"Skipping malformed message in MongoDB: {msg}")
-#                             continue
-#                         all_messages.append({
-#                             "role": msg["role"],
-#                             "content": msg["content"],
-#                             "timestamp": msg["timestamp"],
-#                             # Do NOT retrieve audio_script
-#                         })
-#                 st.session_state.messages = all_messages
-#                 logger.info(f"Restored session {session_id} for user {mobile_number}")
-#                 return True
-#     return False
+    final_text = typed if timestamp is None else f"{typed}"
+    placeholder.markdown(f"""
+    <div class="assistanceChat">
+        {final_text}
+    </div>
+    """, unsafe_allow_html=True)
 
 
 
-# # token authentication function
-# def token_authentication():
-#     query_params = st.query_params
-#     token = query_params.get("token", [None])
-#     if token:
-#         BASE_URL = os.getenv("HQ_API_URL", "https://customer-admin-test.haqdarshak.com")
-#         ENDPOINT = "/person/get/citizen-details"
-#         API_URL = f"{BASE_URL}{ENDPOINT}"
+def stream_tokens(token_generator, placeholder, timestamp: Optional[str] = None):
+    """Stream tokens from the LLM and display them inside the chat bubble."""
+    typed = ""
+    for token in token_generator:
+        typed += token
+        placeholder.markdown(
+            f"""
+        <div class="assistanceChat">
+            {typed}▌
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+    final_text = typed if timestamp is None else f"{typed}"
+    placeholder.markdown(
+        f"""
+    <div class="assistanceChat">
+        {final_text}
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+    return typed
+
+# Restore session from URL query parameters
+def restore_session_from_url():
+    query_params = st.query_params
+    session_id = query_params.get("session_id")
+    if session_id and not st.session_state.session_id:
+        # Check if session_id exists in MongoDB and is active
+        session = data_manager.db.sessions.find_one({"session_id": session_id, "end_time": {"$exists": False}})
+        if session:
+            mobile_number = session.get("mobile_number")
+            user = data_manager.find_user(mobile_number)
+            if user:
+                st.session_state.session_id = session_id
+                st.session_state.user = {
+                    "fname": user.get("fname"),
+                    "lname": user.get("lname"),
+                    "mobile_number": user.get("mobile_number"),
+                    "state_id": user.get("state_id", "Unknown"),
+                    "state_name": user.get("state_name", "Unknown"),
+                    "business_name": user.get("business_name"),
+                    "business_category": user.get("business_category"),
+                    "language": user.get("language", "English"),
+                    "gender": user.get("gender"),
+                }
+                st.session_state.page = "chat"
+                # Restore messages from MongoDB, but do NOT include audio_script
+                conversations = data_manager.get_conversations(mobile_number)
+                all_messages = []
+                for conv in conversations:
+                    for msg in conv["messages"]:
+                        if "content" not in msg or "role" not in msg or "timestamp" not in msg:
+                            logger.warning(f"Skipping malformed message in MongoDB: {msg}")
+                            continue
+                        all_messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"],
+                            "timestamp": msg["timestamp"],
+                            # Do NOT retrieve audio_script
+                        })
+                st.session_state.messages = all_messages
+                logger.info(f"Restored session {session_id} for user {mobile_number}")
+                return True
+    return False
+
+
+
+# token authentication function
+def token_authentication():
+    query_params = st.query_params
+    token = query_params.get("token", [None])
+    if token:
+        BASE_URL = os.getenv("HQ_API_URL", "https://customer-admin-test.haqdarshak.com")
+        ENDPOINT = "/person/get/citizen-details"
+        API_URL = f"{BASE_URL}{ENDPOINT}"
         
-#         try:
-#             response = requests.get(API_URL, headers={"Authorization": f"Bearer {token}"})
-#             if response.status_code == 200:
-#                 data = response.json()
+        try:
+            response = requests.get(API_URL, headers={"Authorization": f"Bearer {token}"})
+            if response.status_code == 200:
+                data = response.json()
 
-#                 if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
-#                     result = data["result"]
+                if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
+                    result = data["result"]
 
-#                     logger.debug(f"Citizen API result: {result}")
-#                     gender_raw = result.get("gender", "") or ""
-#                     gender = GENDER_MAPPING.get(gender_raw.upper(), gender_raw)
-#                     state_name = result.get("state", "")
+                    logger.debug(f"Citizen API result: {result}")
+                    gender_raw = result.get("gender", "") or ""
+                    gender = GENDER_MAPPING.get(gender_raw.upper(), gender_raw)
+                    state_name = result.get("state", "")
 
-#                     st.session_state.user = {
-#                         "fname": result.get("firstName", ""),
-#                         "lname": result.get("lastName", ""),
-#                         "mobile_number": result.get("contactNumber", ""),
-#                         "gender": gender,
-#                         "state_name": state_name,
-#                         "dob": result.get("dob", ""),
-#                         "pincode": result.get("pincode", ""),
-#                         "business_name": result.get("bussinessName", ""),
-#                         "business_category": result.get("employmentType", ""),
-#                         "language": "English",
-#                         "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown")
-#                     }
-#                     logger.info(f"Fetched user details from token: {st.session_state.user}")
-
-
-#                     # Generate session_id
-#                     if not st.session_state.session_id:
-#                         st.session_state.session_id = generate_session_id()
-#                         data_manager.start_session(
-#                             st.session_state.user["mobile_number"],
-#                             st.session_state.session_id,
-#                             st.session_state.user
-#                         )
-
-#                     st.session_state.messages = []
-#                     st.session_state.page = "chat"
-#                     st.session_state.welcome_message_sent = False
-#                     st.query_params["session_id"] = st.session_state.session_id
-#                     st.success("Login successful via token!")
-#                     st.rerun()
-#                     st.session_state.page = "chat"
-#                     return True
-#                 else:
-#                     st.error("Token is invalid or user details not found.")
-#             else:
-#                 st.error(f"API call failed: {response.status_code}")
-#         except Exception as e:
-#             st.error("Error contacting citizen API.")
-#             logger.exception("Citizen API call failed")
-#         return
-
-#     # Try to restore session from URL
-#     if restore_session_from_url():
-#         st.rerun()
-#         return
-
-#     st.title("Login")
-#     st.markdown("Enter your mobile number to log in.")
-
-#     mobile_number = st.text_input("Mobile Number (10 digits)")
-#     if st.button("Generate OTP"):
-#         if not mobile_number.isdigit() or len(mobile_number) != 10:
-#             st.error("Mobile number must be 10 digits.")
-#         else:
-#             user = data_manager.find_user(mobile_number)
-#             if not user:
-#                 st.error("Mobile number not registered. Please register first.")
-#             else:
-#                 st.session_state.otp = str(random.randint(100000, 999999))
-#                 st.session_state.temp_mobile = mobile_number
-#                 st.session_state.otp_generated = True
-#                 st.info(f"Simulated OTP sent: {st.session_state.otp}")
-
-#     if st.session_state.otp_generated:
-#         otp_input = st.text_input("Enter OTP", type="password")
-#         if st.button("Verify OTP"):
-#             if otp_input == st.session_state.otp:
-#                 user = data_manager.find_user(st.session_state.temp_mobile)
-#                 # Store user data including state_id, state_name, and language in session state
-#                 st.session_state.user = {
-#                     "fname": user.get("fname"),
-#                     "lname": user.get("lname"),
-#                     "mobile_number": user.get("mobile_number"),
-#                     "state_id": user.get("state_id", "Unknown"),
-#                     "state_name": user.get("state_name", "Unknown"),
-#                     "business_name": user.get("business_name"),
-#                     "business_category": user.get("business_category"),
-#                     "language": user.get("language", "English"),
-#                     "gender": user.get("gender"),
-#                 }
-#                 # Generate session_id only if not already set
-#                 if not st.session_state.session_id:
-#                     st.session_state.session_id = generate_session_id()
-#                     # Always pass user_data, as it's optional in start_session
-#                     logger.debug(f"Calling start_session with mobile: {st.session_state.temp_mobile}, session_id: {st.session_state.session_id}, user_data: {st.session_state.user}")
-#                     data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, st.session_state.user)
-#                 st.session_state.messages = [] # Clear messages on successful login
-#                 st.session_state.page = "chat"
-#                 st.session_state.otp_generated = False
-#                 st.session_state.otp = None
-#                 st.session_state.last_query_id = None
-#                 st.session_state.welcome_message_sent = False # Ensure welcome message is sent on fresh login
-#                 # Add session_id to URL
-#                 st.query_params["session_id"] = st.session_state.session_id
-#                 st.success("Login successful!")
-#                 st.rerun()
-#             else:
-#                 st.error("Invalid OTP. Please try again.")
-
-# # Chat page
-# def chat_page():
-#     # Verify session validity
-#     if not st.session_state.session_id or not st.session_state.user:
-#         # Try to restore session from URL
-#         if restore_session_from_url():
-#             st.rerun()
-#             return
-#         # If restoration fails, redirect to login
-#         st.session_state.page = "login"
-#         st.session_state.user = None
-#         st.session_state.session_id = None
-#         st.session_state.messages = []
-#         st.session_state.otp_generated = False
-#         st.session_state.welcome_message_sent = False
-#         st.session_state.last_query_id = None
-#         st.query_params.clear()
-#         st.rerun()
-#         return
-
-#     # Check MongoDB session validity
-#     session = data_manager.db.sessions.find_one({"session_id": st.session_state.session_id, "end_time": {"$exists": False}})
-#     if not session:
-#         st.session_state.page = "login"
-#         st.session_state.user = None
-#         st.session_state.session_id = None
-#         st.session_state.messages = []
-#         st.session_state.otp_generated = False
-#         st.session_state.welcome_message_sent = False
-#         st.session_state.last_query_id = None
-#         st.query_params.clear()
-#         st.rerun()
-#         return
-
-#     col1, col2 = st.columns([1, 1])
-#     with col1:
-
-#         st.markdown(f"""
-#                 <h2 style="
-#                     position: fixed;
-#                     top: 0;
-#                     left: 0;
-#                     width: 100%;
-#                     background-color: white;
-#                     padding: 1rem;
-#                     font-size: 1.5rem;
-#                     color: #4F285E;
-#                     text-align: center;
-#                     z-index: 9999;
-#                     border-bottom: 1.5px solid #4f285e;
-#                     box-shadow: 0px 2px 10px;
-#                 ">
-#                     Vyapaar Saathi
-#                 </h2>
-#                 """,unsafe_allow_html=True)    
-
-#     # Ensure session_id is in URL
-#     if "session_id" not in st.query_params or st.query_params["session_id"] != st.session_state.session_id:
-#         st.query_params["session_id"] = st.session_state.session_id
-
-#     # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
-#     conversations = data_manager.get_conversations(
-#         st.session_state.user["mobile_number"]
-#     )
-#     user_type = "returning" if conversations else "new"
-
-#     # Combine past conversations from MongoDB and current session messages
-#     all_messages = []
-#     for conv in conversations:
-#         for msg in conv["messages"]:
-#             if "content" not in msg or "role" not in msg or "timestamp" not in msg:
-#                 logger.warning(f"Skipping malformed message in MongoDB: {msg}")
-#                 continue
-#             all_messages.append({
-#                 "role": msg["role"],
-#                 "content": msg["content"],
-#                 "timestamp": msg["timestamp"],
-#             })
-
-#     # Add current session messages - DO NOT include audio_script when adding to all_messages
-#     for msg in st.session_state.messages:
-#         # Check for content, role, and timestamp for uniqueness
-#         if not any(m["role"] == msg["role"] and m["content"] == msg["content"] for m in all_messages):
-#             all_messages.append({
-#                 "role": msg["role"],
-#                 "content": msg["content"],
-#                 "timestamp": msg["timestamp"],
-#             })
-#             logger.debug(f"Added session message to all_messages: {msg['role']} - {msg['content']} ({msg['timestamp']})")
-
-#     # Sort all messages by timestamp
-#     all_messages.sort(key=lambda x: x["timestamp"])
-
-#     # Display all messages. Audio player is only for the latest response in the chat input.
-#     for msg in all_messages:
-#         with st.chat_message(msg["role"]):
-#             if msg["role"] == "user":
-#                 full_content = msg["content"]
-#                 display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
-#                 st.markdown(f"""
-#                 <div class="userChat">
-#                     {full_content}
-#                 </div>
-#                 """,unsafe_allow_html=True)
-#             else:  # Assistant messages
-#                 full_content = msg["content"]
-#                 display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
-#                 st.markdown(f"""
-#                 <div class="assistanceChat">
-#                     {full_content}
-#                 </div>
-#                 """,unsafe_allow_html=True)
-
-#     # Trigger welcome message only for new users or on fresh login AFTER history is shown
-#     if not st.session_state.welcome_message_sent and user_type == "new":
-#         welcome_stream, welcome_audio_task = process_query(
-#             "welcome",
-#             st.session_state.scheme_vector_store,
-#             st.session_state.dfl_vector_store,
-#             st.session_state.session_id,
-#             st.session_state.user["mobile_number"],
-#             user_language=st.session_state.user["language"],
-#             stream=True
-#         )
-
-#         if welcome_stream:
-#             with st.chat_message("assistant", avatar="logo.jpeg"):
-#                 message_placeholder = st.empty()
-#                 audio_placeholder = st.empty()
-
-#                 audio_container = {}
-
-#                 welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-#                 final_welcome = stream_tokens(welcome_stream, message_placeholder, welcome_timestamp)
-
-#                 if welcome_audio_task:
-#                     def _gen_audio():
-#                         script = welcome_audio_task(final_welcome)
-#                         audio_container['data'] = synthesize(script, "Hindi")
-
-#                     audio_thread = threading.Thread(target=_gen_audio)
-#                     add_script_run_ctx(audio_thread)
-#                     audio_thread.start()
-#                     audio_thread.join()
-#                     audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
-#             st.session_state.messages.append({
-#                 "role": "assistant",
-#                 "content": final_welcome,
-#                 "timestamp": datetime.utcnow(),
-#             })
-#             st.session_state.welcome_message_sent = True
+                    st.session_state.user = {
+                        "fname": result.get("firstName", ""),
+                        "lname": result.get("lastName", ""),
+                        "mobile_number": result.get("contactNumber", ""),
+                        "gender": gender,
+                        "state_name": state_name,
+                        "dob": result.get("dob", ""),
+                        "pincode": result.get("pincode", ""),
+                        "business_name": result.get("bussinessName", ""),
+                        "business_category": result.get("employmentType", ""),
+                        "language": "English",
+                        "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown")
+                    }
+                    logger.info(f"Fetched user details from token: {st.session_state.user}")
 
 
-#     # Chat input
-#     query = st.chat_input("Type your query here...")
-#     if query:
-#         # Generate a unique query ID to prevent double-processing
-#         query_timestamp = datetime.utcnow()
-#         query_id = generate_query_id(query, query_timestamp)
-#         if query_id != st.session_state.last_query_id:
-#             st.session_state.last_query_id = query_id
-#             # Append user query if not already in session state
-#             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
-#             if not last_msg or not (last_msg["role"] == "user" and last_msg["content"] == query):
-#                 st.session_state.messages.append({
-#                     "role": "user",
-#                     "content": query,
-#                     "timestamp": query_timestamp
-#                 })
-#                 with st.chat_message("user"):
-#                     query = query
-#                     query_timestamp = query_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-#                     st.markdown(f"""
-#                 <div class="userChat">
-#                     {query} 
-#                 </div>
-#                 """,unsafe_allow_html=True)
-#                 logger.debug(f"Appended user query to session state: {query} (ID: {query_id})")
+                    # Generate session_id
+                    if not st.session_state.session_id:
+                        st.session_state.session_id = generate_session_id()
+                        data_manager.start_session(
+                            st.session_state.user["mobile_number"],
+                            st.session_state.session_id,
+                            st.session_state.user
+                        )
 
-#             # Display typing indicator while generating response
-#             # Clear previous assistant placeholder if it exists
-#             if st.session_state.last_response_placeholder is not None:
-#                 try:
-#                     st.session_state.last_response_placeholder.empty()
-#                 except Exception:
-#                     pass
-#                 st.session_state.last_response_placeholder = None
+                    st.session_state.messages = []
+                    st.session_state.page = "chat"
+                    st.session_state.welcome_message_sent = False
+                    st.query_params["session_id"] = st.session_state.session_id
+                    st.success("Login successful via token!")
+                    st.rerun()
+                    st.session_state.page = "chat"
+                    return True
+                else:
+                    st.error("Token is invalid or user details not found.")
+            else:
+                st.error(f"API call failed: {response.status_code}")
+        except Exception as e:
+            st.error("Error contacting citizen API.")
+            logger.exception("Citizen API call failed")
+        return
 
-#             with st.chat_message("assistant"):
-#                 with st.spinner("Assistant is typing..."):
+    # Try to restore session from URL
+    if restore_session_from_url():
+        st.rerun()
+        return
 
-#                     response_stream, audio_task_for_tts = process_query(
+    st.title("Login")
+    st.markdown("Enter your mobile number to log in.")
 
-#                         query,
-#                         st.session_state.scheme_vector_store,
-#                         st.session_state.dfl_vector_store,
-#                         st.session_state.session_id,
-#                         st.session_state.user["mobile_number"],
-#                         user_language=st.session_state.user["language"],
-#                         stream=True
-#                     )
-#                 response_timestamp = datetime.utcnow()
+    mobile_number = st.text_input("Mobile Number (10 digits)")
+    if st.button("Generate OTP"):
+        if not mobile_number.isdigit() or len(mobile_number) != 10:
+            st.error("Mobile number must be 10 digits.")
+        else:
+            user = data_manager.find_user(mobile_number)
+            if not user:
+                st.error("Mobile number not registered. Please register first.")
+            else:
+                st.session_state.otp = str(random.randint(100000, 999999))
+                st.session_state.temp_mobile = mobile_number
+                st.session_state.otp_generated = True
+                st.info(f"Simulated OTP sent: {st.session_state.otp}")
 
-#                 message_placeholder = st.empty()
-#                 # Store placeholder to remove it on the next query
-#                 st.session_state.last_response_placeholder = message_placeholder
-#                 audio_placeholder = st.empty()
+    if st.session_state.otp_generated:
+        otp_input = st.text_input("Enter OTP", type="password")
+        if st.button("Verify OTP"):
+            if otp_input == st.session_state.otp:
+                user = data_manager.find_user(st.session_state.temp_mobile)
+                # Store user data including state_id, state_name, and language in session state
+                st.session_state.user = {
+                    "fname": user.get("fname"),
+                    "lname": user.get("lname"),
+                    "mobile_number": user.get("mobile_number"),
+                    "state_id": user.get("state_id", "Unknown"),
+                    "state_name": user.get("state_name", "Unknown"),
+                    "business_name": user.get("business_name"),
+                    "business_category": user.get("business_category"),
+                    "language": user.get("language", "English"),
+                    "gender": user.get("gender"),
+                }
+                # Generate session_id only if not already set
+                if not st.session_state.session_id:
+                    st.session_state.session_id = generate_session_id()
+                    # Always pass user_data, as it's optional in start_session
+                    logger.debug(f"Calling start_session with mobile: {st.session_state.temp_mobile}, session_id: {st.session_state.session_id}, user_data: {st.session_state.user}")
+                    data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, st.session_state.user)
+                st.session_state.messages = [] # Clear messages on successful login
+                st.session_state.page = "chat"
+                st.session_state.otp_generated = False
+                st.session_state.otp = None
+                st.session_state.last_query_id = None
+                st.session_state.welcome_message_sent = False # Ensure welcome message is sent on fresh login
+                # Add session_id to URL
+                st.query_params["session_id"] = st.session_state.session_id
+                st.success("Login successful!")
+                st.rerun()
+            else:
+                st.error("Invalid OTP. Please try again.")
 
-#                 audio_container = {}
+# Chat page
+def chat_page():
+    # Verify session validity
+    if not st.session_state.session_id or not st.session_state.user:
+        # Try to restore session from URL
+        if restore_session_from_url():
+            st.rerun()
+            return
+        # If restoration fails, redirect to login
+        st.session_state.page = "login"
+        st.session_state.user = None
+        st.session_state.session_id = None
+        st.session_state.messages = []
+        st.session_state.otp_generated = False
+        st.session_state.welcome_message_sent = False
+        st.session_state.last_query_id = None
+        st.query_params.clear()
+        st.rerun()
+        return
+
+    # Check MongoDB session validity
+    session = data_manager.db.sessions.find_one({"session_id": st.session_state.session_id, "end_time": {"$exists": False}})
+    if not session:
+        st.session_state.page = "login"
+        st.session_state.user = None
+        st.session_state.session_id = None
+        st.session_state.messages = []
+        st.session_state.otp_generated = False
+        st.session_state.welcome_message_sent = False
+        st.session_state.last_query_id = None
+        st.query_params.clear()
+        st.rerun()
+        return
+
+    col1, col2 = st.columns([1, 1])
+    with col1:
+
+        st.markdown(f"""
+                <h2 style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    background-color: white;
+                    padding: 1rem;
+                    font-size: 1.5rem;
+                    color: #4F285E;
+                    text-align: center;
+                    z-index: 9999;
+                    border-bottom: 1.5px solid #4f285e;
+                    box-shadow: 0px 2px 10px;
+                ">
+                    Vyapaar Saathi
+                </h2>
+                """,unsafe_allow_html=True)    
+
+    # Ensure session_id is in URL
+    if "session_id" not in st.query_params or st.query_params["session_id"] != st.session_state.session_id:
+        st.query_params["session_id"] = st.session_state.session_id
+
+    # Fetch past conversations from MongoDB - DO NOT retrieve audio_script
+    conversations = data_manager.get_conversations(
+        st.session_state.user["mobile_number"]
+    )
+    user_type = "returning" if conversations else "new"
+
+    # Combine past conversations from MongoDB and current session messages
+    all_messages = []
+    for conv in conversations:
+        for msg in conv["messages"]:
+            if "content" not in msg or "role" not in msg or "timestamp" not in msg:
+                logger.warning(f"Skipping malformed message in MongoDB: {msg}")
+                continue
+            all_messages.append({
+                "role": msg["role"],
+                "content": msg["content"],
+                "timestamp": msg["timestamp"],
+            })
+
+    # Add current session messages - DO NOT include audio_script when adding to all_messages
+    for msg in st.session_state.messages:
+        # Check for content, role, and timestamp for uniqueness
+        if not any(m["role"] == msg["role"] and m["content"] == msg["content"] for m in all_messages):
+            all_messages.append({
+                "role": msg["role"],
+                "content": msg["content"],
+                "timestamp": msg["timestamp"],
+            })
+            logger.debug(f"Added session message to all_messages: {msg['role']} - {msg['content']} ({msg['timestamp']})")
+
+    # Sort all messages by timestamp
+    all_messages.sort(key=lambda x: x["timestamp"])
+
+    # Display all messages. Audio player is only for the latest response in the chat input.
+    for msg in all_messages:
+        with st.chat_message(msg["role"]):
+            if msg["role"] == "user":
+                full_content = msg["content"]
+                display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
+                st.markdown(f"""
+                <div class="userChat">
+                    {full_content}
+                </div>
+                """,unsafe_allow_html=True)
+            else:  # Assistant messages
+                full_content = msg["content"]
+                display_timestamp = msg["timestamp"].strftime('%Y-%m-%d %H:%M:%S')
+                st.markdown(f"""
+                <div class="assistanceChat">
+                    {full_content}
+                </div>
+                """,unsafe_allow_html=True)
+
+    # Trigger welcome message only for new users or on fresh login AFTER history is shown
+    if not st.session_state.welcome_message_sent and user_type == "new":
+        welcome_stream, welcome_audio_task = process_query(
+            "welcome",
+            st.session_state.scheme_vector_store,
+            st.session_state.dfl_vector_store,
+            st.session_state.session_id,
+            st.session_state.user["mobile_number"],
+            user_language=st.session_state.user["language"],
+            stream=True
+        )
+
+        if welcome_stream:
+            with st.chat_message("assistant", avatar="logo.jpeg"):
+                message_placeholder = st.empty()
+                audio_placeholder = st.empty()
+
+                audio_container = {}
+
+                welcome_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                final_welcome = stream_tokens(welcome_stream, message_placeholder, welcome_timestamp)
+
+                if welcome_audio_task:
+                    def _gen_audio():
+                        script = welcome_audio_task(final_welcome)
+                        audio_container['data'] = synthesize(script, "Hindi")
+
+                    audio_thread = threading.Thread(target=_gen_audio)
+                    add_script_run_ctx(audio_thread)
+                    audio_thread.start()
+                    audio_thread.join()
+                    audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": final_welcome,
+                "timestamp": datetime.utcnow(),
+            })
+            st.session_state.welcome_message_sent = True
+
+
+    # Chat input
+    query = st.chat_input("Type your query here...")
+    if query:
+        # Generate a unique query ID to prevent double-processing
+        query_timestamp = datetime.utcnow()
+        query_id = generate_query_id(query, query_timestamp)
+        if query_id != st.session_state.last_query_id:
+            st.session_state.last_query_id = query_id
+            # Append user query if not already in session state
+            last_msg = st.session_state.messages[-1] if st.session_state.messages else None
+            if not last_msg or not (last_msg["role"] == "user" and last_msg["content"] == query):
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": query,
+                    "timestamp": query_timestamp
+                })
+                with st.chat_message("user"):
+                    query = query
+                    query_timestamp = query_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                    st.markdown(f"""
+                <div class="userChat">
+                    {query} 
+                </div>
+                """,unsafe_allow_html=True)
+                logger.debug(f"Appended user query to session state: {query} (ID: {query_id})")
+
+            # Display typing indicator while generating response
+            # Clear previous assistant placeholder if it exists
+            if st.session_state.last_response_placeholder is not None:
+                try:
+                    st.session_state.last_response_placeholder.empty()
+                except Exception:
+                    pass
+                st.session_state.last_response_placeholder = None
+
+            with st.chat_message("assistant"):
+                with st.spinner("Assistant is typing..."):
+
+                    response_stream, audio_task_for_tts = process_query(
+
+                        query,
+                        st.session_state.scheme_vector_store,
+                        st.session_state.dfl_vector_store,
+                        st.session_state.session_id,
+                        st.session_state.user["mobile_number"],
+                        user_language=st.session_state.user["language"],
+                        stream=True
+                    )
+                response_timestamp = datetime.utcnow()
+
+                message_placeholder = st.empty()
+                # Store placeholder to remove it on the next query
+                st.session_state.last_response_placeholder = message_placeholder
+                audio_placeholder = st.empty()
+
+                audio_container = {}
                 
-#                 display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                display_timestamp_response = response_timestamp.strftime('%Y-%m-%d %H:%M:%S')
 
-#                 final_response = stream_tokens(
-#                     response_stream,
-#                     message_placeholder,
-#                     display_timestamp_response,
-#                 )
+                final_response = stream_tokens(
+                    response_stream,
+                    message_placeholder,
+                    display_timestamp_response,
+                )
 
-#                 if audio_task_for_tts:
-#                     def _gen_audio():
-#                         script = audio_task_for_tts(final_response)
-#                         audio_container['data'] = synthesize(script, "Hindi")
+                if audio_task_for_tts:
+                    def _gen_audio():
+                        script = audio_task_for_tts(final_response)
+                        audio_container['data'] = synthesize(script, "Hindi")
 
-#                     audio_thread = threading.Thread(target=_gen_audio)
-#                     add_script_run_ctx(audio_thread)
-#                     audio_thread.start()
-#                     audio_thread.join()
-#                     audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
+                    audio_thread = threading.Thread(target=_gen_audio)
+                    add_script_run_ctx(audio_thread)
+                    audio_thread.start()
+                    audio_thread.join()
+                    audio_player(audio_container['data'], autoplay=False, placeholder=audio_placeholder)
 
-#             last_msg = st.session_state.messages[-1] if st.session_state.messages else None
-#             if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == final_response):
-#                 st.session_state.messages.append({
-#                     "role": "assistant",
-#                     "content": final_response,
-#                     "timestamp": response_timestamp,
-#                 })
-#                 logger.debug(f"Appended bot response to session state: {final_response} (Query ID: {query_id})")
-#                 logger.debug("Bot response appended")
+            last_msg = st.session_state.messages[-1] if st.session_state.messages else None
+            if not last_msg or not (last_msg["role"] == "assistant" and last_msg["content"] == final_response):
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": final_response,
+                    "timestamp": response_timestamp,
+                })
+                logger.debug(f"Appended bot response to session state: {final_response} (Query ID: {query_id})")
+                logger.debug("Bot response appended")
 
-# # Main app logic
-# # Check for session restoration first
-# restore_session_from_url()
+# Main app logic
+# Check for session restoration first
+restore_session_from_url()
 
-# if not st.session_state.get("user"):
+if not st.session_state.get("user"):
+    token_authentication()
+
+# if st.session_state.page == "login":
 #     token_authentication()
+# elif st.session_state.page == "register":
+#     registration_page()
+if st.session_state.page == "chat":
+    chat_page()
 
-# # if st.session_state.page == "login":
-# #     token_authentication()
-# # elif st.session_state.page == "register":
-# #     registration_page()
-# if st.session_state.page == "chat":
-#     chat_page()
+# Link to registration
+# if st.session_state.page == "login":
+#     if st.button("New User? Register Here"):
+#         st.session_state.page = "register"
+#         st.query_params.clear()
+#         st.rerun()
 
-# # Link to registration
-# # if st.session_state.page == "login":
-# #     if st.button("New User? Register Here"):
-# #         st.session_state.page = "register"
-# #         st.query_params.clear()
-# #         st.rerun()
-
-# # Update existing users to include state_id and state_name
-# data_manager.update_existing_users_state()
-
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
-
-app = FastAPI()
-
-class ChatRequest(BaseModel):
-    message: str
-
-@app.get("/")
-async def root():
-    return {"message": "Hello from FastAPI"}
-
-@app.post("/chat")
-async def chat(request: ChatRequest):
-    user_message = request.message
-    reply = f"You said: {user_message}"  # Placeholder logic
-    return {"reply": reply}
+# Update existing users to include state_id and state_name
+data_manager.update_existing_users_state()
