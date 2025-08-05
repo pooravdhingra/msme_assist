@@ -1,9 +1,9 @@
 import os
-import streamlit as st
+# import streamlit as st
 import random
 import string
 import threading
-from streamlit.runtime.scriptrunner import add_script_run_ctx
+# from streamlit.runtime.scriptrunner import add_script_run_ctx
 import time
 from datetime import datetime, timedelta
 from msme_bot import (
@@ -31,157 +31,157 @@ logging.getLogger("pymongo").setLevel(logging.WARNING)
 # Initialize DataManager
 data_manager = DataManager()
 
-st.markdown("""
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        #root > div > div  {
-            padding-bottom:0px !important;
-        }
-        .stApp {
-            background-color: #F6F1F3;
-        }
-        .stMarkdown {
-            font-family: 'Poppins, sans-serif';
-            color: #2F343A;
-            font-size: 1rem;
-        }
-        h3 {
-            font-size: 1.4rem !important;
-        }
-        .userChat {
-            background-color: #FFF;
-            padding: 10px;
-            border-radius: 12px;
-            font-size: 1rem;
-            color: #4F285E;
-            font-family: "Poppins", sans-serif;
-        }
-        .assistanceChat {
-            background-color: #4F285E;
-            padding: 10px;
-            border-radius: 12px;
-            font-size: 1rem;
-            color: #FFF;
-            font-family: "Poppins", sans-serif;
-        }
-        section[data-testid="stAppScrollToBottomContainer"] {
-            scrollbar-width: none;
-        }
-        div[data-testid="stBottomBlockContainer"]{
-            height: 6rem;
-            background-color: #F6F1F3;
-        }
-        textarea[data-testid="stChatInputTextArea"]{
-            max-height: 6rem !important;
-            height: 3.5rem;
-            background-color: #fff;
-            text-align: left;
-            padding: 1rem 0.6rem;
-            color:#4F285E;
-        }
-        textarea[data-testid="stChatInputTextArea"]:hover{
-            scrollbar-width: none;
-        }
-        div[data-testid="stChatMessageAvatar"] {
-            display: none !important;
-        }
-        div[data-testid="stChatMessageAvatarUser"] {
-            display: none !important;
-        }
-        div[data-testid="stChatMessageAvatarAssistant"] {
-            display: none !important;
-        }
-        .e1togvvn1{
-            max-height: 6rem !important;
-            padding: 0px;
-            height:3.5rem;
-            border-radius: 1.0rem;
-            border-width: 0px;
-            box-shadow:0px 0px 0px 2px rgba(0,0,0,0.1);
-        }
-        .e1togvvn1:focus-within{
-            border-color: #4F285E
-        }
-        .elbt1zu3{
-            background-color: #F6F1F3;
-        }
-        .e1togvvn1 div:last-child:{
-            align-items: center !important;
-        }
-        button[data-testid="stChatInputSubmitButton"]{
-            align-self: center
-        }
-        button[data-testid="stChatInputSubmitButton"]:hover{
-            color: #4F285E
-        }
-        button:not(:disabled){
-            color: #4F285E
-        }
-        div[data-testid="stChatMessage"]{
-            max-width: 100%;
-            padding: 0.5rem 0px !important;
-        }
-        div[data-testid="stLayoutWrapper"]:nth-child(even) > div[data-testid="stChatMessage"]{
-            width: fit-content;
-        }
-        div[data-testid="stLayoutWrapper"]:nth-child(odd) > div[data-testid="stChatMessage"]{
-            width: fit-content;
-        }
-        div[data-testid="stLayoutWrapper"]{
-            max-width: 92.5%;
-        }
-        div[data-testid="stLayoutWrapper"]:nth-child(even) {
-            padding-left: 1.5rem;
-            align-self:flex-end;
-            justify-content:flex-end
-        }
-        div[data-testid="stLayoutWrapper"]:nth-child(odd) {
-            flex-flow: row;
-            justify-content: flex-start;
-        }
-        div[data-testid="stLayoutWrapper"]:last-of-type {
-            margin-bottom: 1rem;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# st.markdown("""
+#     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+#     <style>
+#         #root > div > div  {
+#             padding-bottom:0px !important;
+#         }
+#         .stApp {
+#             background-color: #F6F1F3;
+#         }
+#         .stMarkdown {
+#             font-family: 'Poppins, sans-serif';
+#             color: #2F343A;
+#             font-size: 1rem;
+#         }
+#         h3 {
+#             font-size: 1.4rem !important;
+#         }
+#         .userChat {
+#             background-color: #FFF;
+#             padding: 10px;
+#             border-radius: 12px;
+#             font-size: 1rem;
+#             color: #4F285E;
+#             font-family: "Poppins", sans-serif;
+#         }
+#         .assistanceChat {
+#             background-color: #4F285E;
+#             padding: 10px;
+#             border-radius: 12px;
+#             font-size: 1rem;
+#             color: #FFF;
+#             font-family: "Poppins", sans-serif;
+#         }
+#         section[data-testid="stAppScrollToBottomContainer"] {
+#             scrollbar-width: none;
+#         }
+#         div[data-testid="stBottomBlockContainer"]{
+#             height: 6rem;
+#             background-color: #F6F1F3;
+#         }
+#         textarea[data-testid="stChatInputTextArea"]{
+#             max-height: 6rem !important;
+#             height: 3.5rem;
+#             background-color: #fff;
+#             text-align: left;
+#             padding: 1rem 0.6rem;
+#             color:#4F285E;
+#         }
+#         textarea[data-testid="stChatInputTextArea"]:hover{
+#             scrollbar-width: none;
+#         }
+#         div[data-testid="stChatMessageAvatar"] {
+#             display: none !important;
+#         }
+#         div[data-testid="stChatMessageAvatarUser"] {
+#             display: none !important;
+#         }
+#         div[data-testid="stChatMessageAvatarAssistant"] {
+#             display: none !important;
+#         }
+#         .e1togvvn1{
+#             max-height: 6rem !important;
+#             padding: 0px;
+#             height:3.5rem;
+#             border-radius: 1.0rem;
+#             border-width: 0px;
+#             box-shadow:0px 0px 0px 2px rgba(0,0,0,0.1);
+#         }
+#         .e1togvvn1:focus-within{
+#             border-color: #4F285E
+#         }
+#         .elbt1zu3{
+#             background-color: #F6F1F3;
+#         }
+#         .e1togvvn1 div:last-child:{
+#             align-items: center !important;
+#         }
+#         button[data-testid="stChatInputSubmitButton"]{
+#             align-self: center
+#         }
+#         button[data-testid="stChatInputSubmitButton"]:hover{
+#             color: #4F285E
+#         }
+#         button:not(:disabled){
+#             color: #4F285E
+#         }
+#         div[data-testid="stChatMessage"]{
+#             max-width: 100%;
+#             padding: 0.5rem 0px !important;
+#         }
+#         div[data-testid="stLayoutWrapper"]:nth-child(even) > div[data-testid="stChatMessage"]{
+#             width: fit-content;
+#         }
+#         div[data-testid="stLayoutWrapper"]:nth-child(odd) > div[data-testid="stChatMessage"]{
+#             width: fit-content;
+#         }
+#         div[data-testid="stLayoutWrapper"]{
+#             max-width: 92.5%;
+#         }
+#         div[data-testid="stLayoutWrapper"]:nth-child(even) {
+#             padding-left: 1.5rem;
+#             align-self:flex-end;
+#             justify-content:flex-end
+#         }
+#         div[data-testid="stLayoutWrapper"]:nth-child(odd) {
+#             flex-flow: row;
+#             justify-content: flex-start;
+#         }
+#         div[data-testid="stLayoutWrapper"]:last-of-type {
+#             margin-bottom: 1rem;
+#         }
+#     </style>
+# """, unsafe_allow_html=True)
 
 
-# Initialize Streamlit session state
-if "scheme_vector_store" not in st.session_state:
-    st.session_state.scheme_vector_store = load_rag_data()
-if "dfl_vector_store" not in st.session_state:
-    st.session_state.dfl_vector_store = load_dfl_data()
+# # Initialize Streamlit session state
+# if "scheme_vector_store" not in st.session_state:
+#     st.session_state.scheme_vector_store = load_rag_data()
+# if "dfl_vector_store" not in st.session_state:
+#     st.session_state.dfl_vector_store = load_dfl_data()
 
-if "page" not in st.session_state:
-    st.session_state.page = "login"
+# if "page" not in st.session_state:
+#     st.session_state.page = "login"
 
-if "user" not in st.session_state:
-    st.session_state.user = None
+# if "user" not in st.session_state:
+#     st.session_state.user = None
 
-if "otp" not in st.session_state:
-    st.session_state.otp = None
+# if "otp" not in st.session_state:
+#     st.session_state.otp = None
 
-if "session_id" not in st.session_state:
-    st.session_state.session_id = None
+# if "session_id" not in st.session_state:
+#     st.session_state.session_id = None
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# if "messages" not in st.session_state:
+#     st.session_state.messages = []
 
-if "otp_generated" not in st.session_state:
-    st.session_state.otp_generated = False
+# if "otp_generated" not in st.session_state:
+#     st.session_state.otp_generated = False
 
-if "welcome_message_sent" not in st.session_state:
-    st.session_state.welcome_message_sent = False
+# if "welcome_message_sent" not in st.session_state:
+#     st.session_state.welcome_message_sent = False
 
-if "last_query_id" not in st.session_state:
-    st.session_state.last_query_id = None
+# if "last_query_id" not in st.session_state:
+#     st.session_state.last_query_id = None
 
-if "rag_cache" not in st.session_state:
-    st.session_state.rag_cache = {}
-if "dfl_rag_cache" not in st.session_state:
-    st.session_state.dfl_rag_cache = {}
-if "last_response_placeholder" not in st.session_state:
-    st.session_state.last_response_placeholder = None
+# if "rag_cache" not in st.session_state:
+#     st.session_state.rag_cache = {}
+# if "dfl_rag_cache" not in st.session_state:
+#     st.session_state.dfl_rag_cache = {}
+# if "last_response_placeholder" not in st.session_state:
+#     st.session_state.last_response_placeholder = None
 
 # Generate session ID
 def generate_session_id():
