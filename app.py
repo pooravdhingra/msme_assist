@@ -300,7 +300,7 @@ def token_authentication():
                 if data.get("responseCode") == "OK" and data["params"]["status"] == "successful":
                     result = data["result"]
 
-                    logger.debug(f"Citizen API result: {result}")
+                    # logger.debug(f"Citizen API result: {result}")
                     gender_raw = result.get("gender", "") or ""
                     gender = GENDER_MAPPING.get(gender_raw.upper(), gender_raw)
                     state_name = result.get("state", "")
@@ -318,7 +318,7 @@ def token_authentication():
                         "language": "English",
                         "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown")
                     }
-                    logger.info(f"Fetched user details from token: {st.session_state.user}")
+                    # logger.info(f"Fetched user details from token: {st.session_state.user}")
 
 
                     # Generate session_id
@@ -390,7 +390,7 @@ def token_authentication():
                 if not st.session_state.session_id:
                     st.session_state.session_id = generate_session_id()
                     # Always pass user_data, as it's optional in start_session
-                    logger.debug(f"Calling start_session with mobile: {st.session_state.temp_mobile}, session_id: {st.session_state.session_id}, user_data: {st.session_state.user}")
+                    # logger.debug(f"Calling start_session with mobile: {st.session_state.temp_mobile}, session_id: {st.session_state.session_id}, user_data: {st.session_state.user}")
                     data_manager.start_session(st.session_state.temp_mobile, st.session_state.session_id, st.session_state.user)
                 st.session_state.messages = [] # Clear messages on successful login
                 st.session_state.page = "chat"
@@ -493,7 +493,7 @@ def chat_page():
                 "content": msg["content"],
                 "timestamp": msg["timestamp"],
             })
-            logger.debug(f"Added session message to all_messages: {msg['role']} - {msg['content']} ({msg['timestamp']})")
+            # logger.debug(f"Added session message to all_messages: {msg['role']} - {msg['content']} ({msg['timestamp']})")
 
     # Sort all messages by timestamp
     all_messages.sort(key=lambda x: x["timestamp"])
@@ -531,7 +531,7 @@ def chat_page():
         )
 
         if welcome_stream:
-            with st.chat_message("assistant", avatar="logo.jpeg"):
+            with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 audio_placeholder = st.empty()
 
@@ -582,7 +582,7 @@ def chat_page():
                     {query} 
                 </div>
                 """,unsafe_allow_html=True)
-                logger.debug(f"Appended user query to session state: {query} (ID: {query_id})")
+                # logger.debug(f"Appended user query to session state: {query} (ID: {query_id})")
 
             # Display typing indicator while generating response
             # Clear previous assistant placeholder if it exists
@@ -641,8 +641,8 @@ def chat_page():
                     "content": final_response,
                     "timestamp": response_timestamp,
                 })
-                logger.debug(f"Appended bot response to session state: {final_response} (Query ID: {query_id})")
-                logger.debug("Bot response appended")
+                # logger.debug(f"Appended bot response to session state: {final_response} (Query ID: {query_id})")
+                # logger.debug("Bot response appended")
 
 # Main app logic
 # Check for session restoration first

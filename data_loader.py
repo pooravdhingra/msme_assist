@@ -46,7 +46,7 @@ def get_index_by_host(host: str):
         return _index_cache[host]
     if not pc:
         raise ValueError("Pinecone client not initialized")
-    logger.info(f"Connecting to Pinecone index at {host}")
+    # logger.info(f"Connecting to Pinecone index at {host}")
     index = pc.Index(host=host)
     _index_cache[host] = index
     return index
@@ -152,8 +152,8 @@ class PineconeRecordRetriever(BaseRetriever):
 
     def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
 
-        logger.debug(f"Pinecone query text: {query}")
-        logger.debug(f"Top K: {self.k}")
+        # logger.debug(f"Pinecone query text: {query}")
+        # logger.debug(f"Top K: {self.k}")
 
         try:
             embedding = pc.inference.embed(
@@ -161,13 +161,13 @@ class PineconeRecordRetriever(BaseRetriever):
                 inputs=query,
                 parameters={"input_type": "query"},
             ).data[0]["values"]
-            logger.debug(f"Query embedding sample: {embedding[:5]}")
+            # logger.debug(f"Query embedding sample: {embedding[:5]}")
             filter_arg = None
             if self.state:
                 filter_arg = {
                     "applicability_state": {"$in": [self.state, "ALL_STATES"]}
                 }
-            logger.debug(f"Pinecone filter: {filter_arg}")
+            # logger.debug(f"Pinecone filter: {filter_arg}")
             res = self.index.query(
                 vector=embedding,
                 top_k=self.k,
@@ -181,7 +181,7 @@ class PineconeRecordRetriever(BaseRetriever):
 
   
         hits = res.get("matches", [])
-        logger.debug(f"Number of matches returned: {len(hits)}")
+        # logger.debug(f"Number of matches returned: {len(hits)}")
         docs = []
         for hit in hits:
             metadata = getattr(hit, "metadata", {}) or {}
@@ -216,9 +216,9 @@ def load_rag_data(
                 with open(cached_file_path, "rb") as cf:
                     cached_hash = hashlib.md5(cf.read()).hexdigest()
                 if cached_hash == stored_hash:
-                    logger.info(
-                        f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
-                    )
+                    # logger.info(
+                    #     f"Using existing Pinecone index {index_name} with cached file hash {stored_hash}"
+                    # )
                     try:
                         records = parse_scheme_excel(cached_file_path)
                         register_scheme_docs(records)
@@ -231,9 +231,9 @@ def load_rag_data(
     # Download the Google Sheet as an Excel file
     download_url = f"https://docs.google.com/spreadsheets/d/{google_drive_file_id}/export?format=xlsx"
     temp_file_path = cached_file_path
-    logger.info(
-        f"Downloading Google Sheet from Google Drive (File ID: {google_drive_file_id}) to {temp_file_path}"
-    )
+    # logger.info(
+    #     f"Downloading Google Sheet from Google Drive (File ID: {google_drive_file_id}) to {temp_file_path}"
+    # )
     try:
         gdown.download(download_url, temp_file_path, quiet=False)
         logger.info("Download completed")
@@ -244,7 +244,7 @@ def load_rag_data(
     # Compute file hash
     with open(temp_file_path, "rb") as f:
         file_hash = hashlib.md5(f.read()).hexdigest()
-    logger.info(f"Computed file hash: {file_hash}")
+    # logger.info(f"Computed file hash: {file_hash}")
 
     # If index exists and hash matches, skip processing
     if pc and pinecone_has_index(index_name) and os.path.exists(version_file):
@@ -320,7 +320,7 @@ def load_dfl_data(
         response.raise_for_status()
         text = response.text
         file_hash = hashlib.md5(text.encode("utf-8")).hexdigest()
-        logger.info(f"Downloaded document and computed hash {file_hash}")
+        # logger.info(f"Downloaded document and computed hash {file_hash}")
     except Exception as e:
         logger.error(f"Failed to download Google Doc: {str(e)}")
         raise

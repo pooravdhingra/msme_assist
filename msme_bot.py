@@ -37,7 +37,7 @@ from functools import lru_cache
 def init_llm():
     """Initialise the default LLM client for all tasks except intent classification."""
     logger.info("Initializing LLM client")
-    start_time = time.time()
+    start_time = time.time() 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
@@ -60,7 +60,7 @@ def init_intent_llm():
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
     intent_llm = ChatOpenAI(
-        model="gpt-4.1",
+        model="gpt-3.5",
         api_key=api_key,
         base_url="https://api.openai.com/v1",
         temperature=0
@@ -263,7 +263,7 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
         if details:
             full_query = f"{full_query}. {' '.join(details)}"
 
-        logger.debug(f"Processing query: {full_query}")
+        # logger.debug(f"Processing query: {full_query}")
         retriever = PineconeRecordRetriever(
             index=vector_store, state=state, gender=gender, k=5
         )
@@ -283,10 +283,10 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
             logger.warning(f"No documents retrieved for query: {full_query}")
         else:
             logger.info(f"Retrieved {len(sources)} documents for query: {full_query}")
-            for i, doc in enumerate(sources):
-                logger.debug(f"Document {i+1}:")
-                logger.debug(f"  Content: {doc.page_content}")
-                logger.debug(f"  Metadata: {doc.metadata}")
+            # for i, doc in enumerate(sources):
+                # logger.debug(f"Document {i+1}:")
+                # logger.debug(f"  Content: {doc.page_content}")
+                # logger.debug(f"  Metadata: {doc.metadata}")
         return {"text": response, "sources": sources}
     except Exception as e:
         logger.error(
@@ -639,7 +639,7 @@ def generate_hindi_audio_script(
     try:
         response = llm.invoke([{"role": "user", "content": prompt}])
         hindi_script = response.content.strip()
-        logger.info(f"Generated Hindi audio script: {hindi_script}")
+        # logger.info(f"Generated Hindi audio script: {hindi_script}")
         return hindi_script
     except Exception as e:
         logger.error(f"Failed to generate Hindi audio script: {str(e)}")
@@ -648,7 +648,7 @@ def generate_hindi_audio_script(
             translation_prompt = f"Translate the following text into simple Hindi (Devanagari script), removing all punctuation and hyphens for a smooth audio output: {original_response}"
             translation_response = llm.invoke([{"role": "user", "content": translation_prompt}])
             hindi_script = translation_response.content.strip()
-            logger.warning(f"Falling back to direct translation for Hindi audio script: {hindi_script}")
+            # logger.warning(f"Falling back to direct translation for Hindi audio script: {hindi_script}")
             return hindi_script
         except Exception as inner_e:
             logger.error(f"Failed to fall back to direct translation: {str(inner_e)}")
@@ -923,7 +923,12 @@ def generate_hindi_audio_script(
 #         return gen_result, audio_task
 #     return generated_response, audio_task
 
+# 
+
 def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, session_data: SessionData, user_language=None, stream: bool = False, background_tasks: BackgroundTasks = None):
+    import time
+    from datetime import datetime
+    
     start_time = time.time()
     timings = {}
 
@@ -936,11 +941,12 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
         summary += f"\nTotal: {total:.2f}s"
         logger.info("Query processing timings:\n" + summary)
 
-    logger.info(f"Starting query processing for: {query}")
+    # logger.info(f"Starting query processing for: {query}")
 
     step = time.time()
     user_info = get_user_context(session_data)
     record("user_context", step)
+
     if not user_info:
         log_timings()
         return "Error: User not logged in.", None
@@ -956,45 +962,18 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     record("language_detection", step)
 
     step = time.time()
+    CONVERSATION_CACHE={}
     conversations = CONVERSATION_CACHE.get(mobile_number)
     if not conversations:
         conversations = data_manager.get_conversations(mobile_number)
         CONVERSATION_CACHE[mobile_number] = conversations
-    user_type = "returning" if conversations else "new"
     record("fetch_conversations", step)
 
-    if query.lower() == "welcome" and user_type == "new":
-        response = welcome_user(state_name, user_name, query_language)
+    step = time.time()
+    intent = classify_intent(query, build_conversation_history(session_data.messages))
+    record("intent_classification", step)
 
-        def audio_task(final_text=None):
-            step_local = time.time()
-            script = generate_hindi_audio_script(response, user_info, "")
-            record("audio_script", step_local)
-
-            def save():
-                interaction_id = generate_interaction_id(response, datetime.utcnow())
-                if not any(msg["role"] == "assistant" and msg["content"] == response for conv in conversations for msg in conv["messages"]):
-                    data_manager.save_conversation(session_id, mobile_number, [{"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": script}])
-
-            if background_tasks:
-                background_tasks.add_task(save)
-            else:
-                save()
-
-            log_timings()
-            return script
-
-        if stream:
-            def gen():
-                for ch in response:
-                    yield ch
-            return gen(), audio_task
-
-        return response, audio_task
-
-    session_cache = session_data.rag_cache
-    dfl_session_cache = session_data.dfl_rag_cache
-
+    follow_up_intents = {"Contextual_Follow_Up", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent", "Confirmation_New_RAG"}
     recent_query, recent_response = None, None
     if session_data.messages:
         for msg in reversed(session_data.messages):
@@ -1005,67 +984,67 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
                     recent_query = session_data.messages[idx - 1]["content"]
                 break
 
-    conversation_history = build_conversation_history(session_data.messages)
-    step = time.time()
-    intent = classify_intent(query, conversation_history)
-    record("intent_classification", step)
-
-    follow_up = intent in {"Contextual_Follow_Up", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent", "Confirmation_New_RAG"}
-    context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
-    augmented_query = f"{query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}" if follow_up and recent_query and recent_response else query
+    context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if intent in follow_up_intents else ""
+    augmented_query = f"{query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}" if intent in follow_up_intents and recent_query else query
 
     scheme_rag, dfl_rag = None, None
-    if intent in {"Specific_Scheme_Know_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent"}:
-        scheme_rag = session_cache.get(query)
-        if not scheme_rag:
-            step = time.time()
-            scheme_rag = get_scheme_response(augmented_query, scheme_vector_store, state=state_id, gender=gender, business_category=business_category, include_mudra=intent == "Schemes_Know_Intent", intent=intent)
-            record("rag_retrieval", step)
-            session_cache[query] = scheme_rag
 
-    if intent in {"DFL_Intent", "Non_Scheme_Know_Intent"}:
-        dfl_rag = dfl_session_cache.get(query)
-        if not dfl_rag:
-            step = time.time()
-            dfl_rag = get_dfl_response(query, dfl_vector_store, state=state_id, gender=gender, business_category=business_category)
-            record("rag_retrieval", step)
-            dfl_session_cache[query] = dfl_rag
+    if intent in {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}:
+        step = time.time()
+        scheme_rag = get_scheme_response(
+            augmented_query,
+            scheme_vector_store,
+            state=state_id,
+            gender=gender,
+            business_category=business_category,
+            include_mudra=intent == "Schemes_Know_Intent",
+            intent=intent,
+        )
+        record("rag_retrieval", step)
+        session_data.rag_cache[query] = scheme_rag
+    elif intent in {"DFL_Intent", "Non_Scheme_Know_Intent"}:
+        step = time.time()
+        dfl_rag = get_dfl_response(
+            query,
+            dfl_vector_store,
+            state=state_id,
+            gender=gender,
+            business_category=business_category,
+        )
+        record("rag_retrieval", step)
+        session_data.dfl_rag_cache[query] = dfl_rag
 
-    rag_response = scheme_rag if scheme_rag else dfl_rag
-    rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response or ""
-    scheme_guid = extract_scheme_guid(rag_response.get("sources", [])) if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent" else None
+    rag_text = (scheme_rag or dfl_rag or {}).get("text") if isinstance((scheme_rag or dfl_rag), dict) else (scheme_rag or dfl_rag)
+
+    scheme_guid = extract_scheme_guid(scheme_rag.get("sources", [])) if intent == "Specific_Scheme_Eligibility_Intent" and isinstance(scheme_rag, dict) else None
 
     step = time.time()
-    gen_result = generate_response(intent, rag_text, user_info, query_language, context_pair, query, scheme_guid=scheme_guid, stream=stream)
+    gen_result = generate_response(
+        intent,
+        rag_text or "",
+        user_info,
+        query_language,
+        context_pair,
+        query,
+        scheme_guid=scheme_guid,
+        stream=stream,
+    )
     record("generate_response", step)
 
-    if not stream:
-        generated_response = gen_result
-
     def audio_task(final_text=None):
-        text = final_text if stream else generated_response
         step_local = time.time()
-        script = generate_hindi_audio_script(text, user_info, rag_text)
+        text_for_use = final_text if stream else gen_result
+        hindi_audio_script = generate_hindi_audio_script(text_for_use, user_info, rag_text or "")
         record("audio_script", step_local)
 
-        def save():
-            interaction_id = generate_interaction_id(query, datetime.utcnow())
-            if not any(any(msg.get("interaction_id") == interaction_id for msg in conv["messages"]) for conv in conversations):
-                step_db = time.time()
-                data_manager.save_conversation(session_id, mobile_number, [
-                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                    {"role": "assistant", "content": text, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": script}
-                ])
-                record("save_conversation", step_db)
-
         if background_tasks:
-            background_tasks.add_task(save)
-        else:
-            save()
-
+            background_tasks.add_task(data_manager.save_conversation, session_id, mobile_number, [
+                {"role": "user", "content": query, "timestamp": datetime.utcnow()},
+                {"role": "assistant", "content": text_for_use, "timestamp": datetime.utcnow(), "audio_script": hindi_audio_script},
+            ])
         log_timings()
-        return script
+        return hindi_audio_script
 
     if stream:
         return gen_result, audio_task
-    return generated_response, audio_task
+    return gen_result, audio_task
