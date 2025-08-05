@@ -283,7 +283,7 @@ def get_rag_response(query, vector_store, state="ALL_STATES", gender=None, busin
             logger.warning(f"No documents retrieved for query: {full_query}")
         else:
             logger.info(f"Retrieved {len(sources)} documents for query: {full_query}")
-            # for i, doc in enumerate(sources):
+            for i, doc in enumerate(sources):
                 # logger.debug(f"Document {i+1}:")
                 # logger.debug(f"  Content: {doc.page_content}")
                 # logger.debug(f"  Metadata: {doc.metadata}")
