@@ -94,7 +94,7 @@ def find_scheme_guid_by_query(query: str) -> Optional[str]:
     for guid, keywords in SCHEME_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
-                logger.debug(f"Matched keyword '{kw}' for guid {guid}")
+                # logger.debug(f"Matched keyword '{kw}' for guid {guid}")
                 return guid
     return None
 
