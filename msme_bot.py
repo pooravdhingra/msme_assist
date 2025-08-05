@@ -15,6 +15,7 @@ from utils import extract_scheme_guid
 from data import DataManager
 import re
 import os
+from fastapi import BackgroundTasks 
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG,
