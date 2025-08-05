@@ -955,6 +955,7 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
     record("language_detection", step)
 
     step = time.time()
+    CONVERSATION_CACHE={}
     conversations = CONVERSATION_CACHE.get(mobile_number)
     if not conversations:
         conversations = data_manager.get_conversations(mobile_number)
