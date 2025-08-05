@@ -654,7 +654,275 @@ def generate_hindi_audio_script(
             return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।" # Error generating audio script.
 
 # Main function to process query
-def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, session_data: SessionData, user_language=None, stream: bool = False):
+# def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, session_data: SessionData, user_language=None, stream: bool = False):
+#     start_time = time.time()
+#     timings = {}
+
+#     def record(step_name, start):
+#         timings[step_name] = time.time() - start
+
+#     def log_timings():
+#         total = time.time() - start_time
+#         summary = "\n".join(f"{k}: {v:.2f}s" for k, v in timings.items())
+#         summary += f"\nTotal: {total:.2f}s"
+#         logger.info("Query processing timings:\n" + summary)
+
+#     logger.info(f"Starting query processing for: {query}")
+
+#     # Retrieve user data from session state using helper
+#     step = time.time()
+#     user_info = get_user_context(session_data)
+#     record("user_context", step)
+#     logger.info(f"User context in process_query: {user_info}")
+#     if not user_info:
+#         log_timings()
+#         return "Error: User not logged in.", None  # Return tuple
+#     user_name = user_info.name
+#     state_id = user_info.state_id
+#     state_name = user_info.state_name
+#     business_category = user_info.business_category
+#     gender = user_info.gender
+
+
+#     # Use user_language for welcome message, otherwise detect query language
+#     step = time.time()
+#     query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
+#     record("language_detection", step)
+#     logger.info(f"Using query language: {query_language}")
+
+#     # Check user type and fetch recent conversations once
+#     step = time.time()
+#     conversations = data_manager.get_conversations(mobile_number)
+#     user_type = "returning" if conversations else "new"
+#     record("fetch_conversations", step)
+#     logger.info(f"User type: {user_type}")
+
+
+
+#     # Handle welcome query
+#     if query.lower() == "welcome":
+#         if user_type == "new":
+#             response = welcome_user(state_name, user_name, query_language)
+
+#             def audio_task(final_text=None):
+#                 step_local = time.time()
+#                 hindi_audio_script = generate_hindi_audio_script(
+#                     response,
+#                     user_info,
+#                     "",
+#                 )
+#                 record("audio_script", step_local)
+#                 try:
+#                     interaction_id = generate_interaction_id(response, datetime.utcnow())
+#                     if not any(
+#                         msg["role"] == "assistant" and msg["content"] == response
+#                         for conv in conversations for msg in conv["messages"]
+#                     ):
+#                         data_manager.save_conversation(
+#                             session_id,
+#                             mobile_number,
+#                             [
+#                                 {"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script}
+#                             ]
+#                         )
+#                         logger.info(f"Saved welcome message for new user in session {session_id} (Interaction ID: {interaction_id})")
+#                     else:
+#                         logger.debug(f"Skipped saving duplicate welcome message: {response}")
+#                 except Exception as e:
+#                     logger.error(f"Failed to save welcome message for new user in session {session_id}: {str(e)}")
+#                 log_timings()
+#                 return hindi_audio_script
+
+#             logger.info(f"Generated welcome response for new user in {time.time() - start_time:.2f} seconds: {response}")
+#             if stream:
+#                 def gen():
+#                     for ch in response:
+#                         yield ch
+#                 return gen(), audio_task
+#             return response, audio_task
+#         else:
+#             logger.info(f"No welcome message for returning user")
+#             log_timings()
+#             return None, None
+
+#     # Check if query is related to any previous query in the session
+#     scheme_rag = None
+#     dfl_rag = None
+#     related_prev_query = None
+#     session_cache = session_data.rag_cache
+#     dfl_session_cache = session_data.dfl_rag_cache
+
+#     # Get the most recent query-response pair from the current session
+#     recent_query = None
+#     recent_response = None
+#     if session_data.messages:
+#         for msg in reversed(session_data.messages):
+#             if msg["role"] == "assistant" and "Welcome" not in msg["content"]:
+#                 recent_response = msg["content"]
+#                 msg_index = session_data.messages.index(msg)
+#                 if msg_index > 0 and session_data.messages[msg_index - 1]["role"] == "user":
+#                     recent_query = session_data.messages[msg_index - 1]["content"]
+#                 break
+
+
+
+#     # Build conversation history for intent classification
+#     conversation_history = build_conversation_history(session_data.messages)
+#     step = time.time()
+#     intent = classify_intent(query, conversation_history)
+#     record("intent_classification", step)
+
+#     # Determine if the query is a follow-up based on intent
+#     follow_up_intents = {
+#         "Contextual_Follow_Up",
+#         "Specific_Scheme_Eligibility_Intent",
+#         "Specific_Scheme_Apply_Intent",
+#         "Confirmation_New_RAG",
+#     }
+#     follow_up = intent in follow_up_intents
+
+#     # Use conversation context only when the query is a follow-up
+#     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
+
+#     augmented_query = query
+#     logger.info(f"Using conversation context: {context_pair}")
+#     logger.info(f"Classified intent: {intent}")
+
+
+#     # Append previous interaction for context when required
+#     if intent in {
+#         "Contextual_Follow_Up",
+#         "Specific_Scheme_Eligibility_Intent",
+#         "Specific_Scheme_Apply_Intent",
+#         "Confirmation_New_RAG",
+#     }:
+#         if recent_query and recent_response:
+#             augmented_query = (
+#                 f"{augmented_query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
+#             )
+
+
+#     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
+#     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
+
+#     if intent in scheme_intents:
+#         if intent == "Specific_Scheme_Know_Intent":
+#             step = time.time()
+#             scheme_rag = get_scheme_response(
+#                 query,
+#                 scheme_vector_store,
+#                 state=None,
+#                 gender=None,
+#                 business_category=None,
+#                 include_mudra=False,
+#                 intent=intent,
+#             )
+#             record("rag_retrieval", step)
+#         else:
+#             scheme_rag = session_cache.get(query)
+#     elif intent in dfl_intents:
+#         dfl_rag = dfl_session_cache.get(query)
+
+#     if follow_up and recent_query and recent_response:
+#         if intent in scheme_intents:
+#             scheme_rag = session_cache.get(recent_query, scheme_rag)
+#         elif intent in dfl_intents:
+#             dfl_rag = dfl_session_cache.get(recent_query, dfl_rag)
+#         related_prev_query = recent_query
+
+#     if scheme_rag is None and intent in scheme_intents:
+#         step = time.time()
+#         scheme_rag = get_scheme_response(
+#             augmented_query,
+#             scheme_vector_store,
+#             state=state_id,
+#             gender=gender,
+#             business_category=business_category,
+#             include_mudra=intent == "Schemes_Know_Intent",
+#             intent=intent,
+#         )
+#         record("rag_retrieval", step)
+#         session_data.rag_cache[query] = scheme_rag
+
+#     if dfl_rag is None and intent in dfl_intents:
+#         step = time.time()
+#         dfl_rag = get_dfl_response(
+#             query,
+#             dfl_vector_store,
+#             state=state_id,
+#             gender=gender,
+#             business_category=business_category,
+#         )
+#         record("rag_retrieval", step)
+#         session_data.dfl_rag_cache[query] = dfl_rag
+
+#     rag_response = scheme_rag if intent in scheme_intents else dfl_rag
+#     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
+#     if intent == "DFL_Intent" and (
+#         rag_text is None or "No relevant" in rag_text
+#     ):
+#         rag_text = ""
+#     scheme_guid = None
+#     if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
+#         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
+#     step = time.time()
+#     gen_result = generate_response(
+#         intent,
+#         rag_text or "",
+#         user_info,
+#         query_language,
+#         context_pair,
+#         query,
+#         scheme_guid=scheme_guid,
+#         stream=stream,
+#     )
+#     record("generate_response", step)
+
+#     if not stream:
+#         generated_response = gen_result
+
+#     def audio_task(final_text=None):
+#         text_for_use = final_text if stream else generated_response
+#         step_local = time.time()
+#         hindi_audio_script = generate_hindi_audio_script(
+#             text_for_use,
+#             user_info,
+#             rag_text or "",
+#         )
+#         record("audio_script", step_local)
+
+
+#         try:
+#             interaction_id = generate_interaction_id(query, datetime.utcnow())
+#             messages_to_save = [
+#                 {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+#                 {"role": "assistant", "content": text_for_use, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
+#             ]
+#             if not any(
+#                 any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
+#                 for conv in conversations
+#             ):
+#                 step_db = time.time()
+#                 data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+#                 record("save_conversation", step_db)
+#                 logger.info(
+#                     f"Saved conversation for session {session_id}: {query} -> {text_for_use} (Interaction ID: {interaction_id})"
+#                 )
+#             else:
+#                 logger.debug(
+#                     f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
+#                 )
+#         except Exception as e:
+#             logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+
+#         log_timings()
+#         return hindi_audio_script
+
+#     if stream:
+#         return gen_result, audio_task
+#     return generated_response, audio_task
+
+def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, session_data: SessionData, user_language=None, stream: bool = False, background_tasks: BackgroundTasks = None):
     start_time = time.time()
     timings = {}
 
@@ -669,254 +937,133 @@ def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobi
 
     logger.info(f"Starting query processing for: {query}")
 
-    # Retrieve user data from session state using helper
     step = time.time()
     user_info = get_user_context(session_data)
     record("user_context", step)
-    logger.info(f"User context in process_query: {user_info}")
     if not user_info:
         log_timings()
-        return "Error: User not logged in.", None  # Return tuple
+        return "Error: User not logged in.", None
+
     user_name = user_info.name
     state_id = user_info.state_id
     state_name = user_info.state_name
     business_category = user_info.business_category
     gender = user_info.gender
 
-
-    # Use user_language for welcome message, otherwise detect query language
     step = time.time()
     query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
     record("language_detection", step)
-    logger.info(f"Using query language: {query_language}")
 
-    # Check user type and fetch recent conversations once
     step = time.time()
-    conversations = data_manager.get_conversations(mobile_number)
+    conversations = CONVERSATION_CACHE.get(mobile_number)
+    if not conversations:
+        conversations = data_manager.get_conversations(mobile_number)
+        CONVERSATION_CACHE[mobile_number] = conversations
     user_type = "returning" if conversations else "new"
     record("fetch_conversations", step)
-    logger.info(f"User type: {user_type}")
 
+    if query.lower() == "welcome" and user_type == "new":
+        response = welcome_user(state_name, user_name, query_language)
 
+        def audio_task(final_text=None):
+            step_local = time.time()
+            script = generate_hindi_audio_script(response, user_info, "")
+            record("audio_script", step_local)
 
-    # Handle welcome query
-    if query.lower() == "welcome":
-        if user_type == "new":
-            response = welcome_user(state_name, user_name, query_language)
+            def save():
+                interaction_id = generate_interaction_id(response, datetime.utcnow())
+                if not any(msg["role"] == "assistant" and msg["content"] == response for conv in conversations for msg in conv["messages"]):
+                    data_manager.save_conversation(session_id, mobile_number, [{"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": script}])
 
-            def audio_task(final_text=None):
-                step_local = time.time()
-                hindi_audio_script = generate_hindi_audio_script(
-                    response,
-                    user_info,
-                    "",
-                )
-                record("audio_script", step_local)
-                try:
-                    interaction_id = generate_interaction_id(response, datetime.utcnow())
-                    if not any(
-                        msg["role"] == "assistant" and msg["content"] == response
-                        for conv in conversations for msg in conv["messages"]
-                    ):
-                        data_manager.save_conversation(
-                            session_id,
-                            mobile_number,
-                            [
-                                {"role": "assistant", "content": response, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script}
-                            ]
-                        )
-                        logger.info(f"Saved welcome message for new user in session {session_id} (Interaction ID: {interaction_id})")
-                    else:
-                        logger.debug(f"Skipped saving duplicate welcome message: {response}")
-                except Exception as e:
-                    logger.error(f"Failed to save welcome message for new user in session {session_id}: {str(e)}")
-                log_timings()
-                return hindi_audio_script
+            if background_tasks:
+                background_tasks.add_task(save)
+            else:
+                save()
 
-            logger.info(f"Generated welcome response for new user in {time.time() - start_time:.2f} seconds: {response}")
-            if stream:
-                def gen():
-                    for ch in response:
-                        yield ch
-                return gen(), audio_task
-            return response, audio_task
-        else:
-            logger.info(f"No welcome message for returning user")
             log_timings()
-            return None, None
+            return script
 
-    # Check if query is related to any previous query in the session
-    scheme_rag = None
-    dfl_rag = None
-    related_prev_query = None
+        if stream:
+            def gen():
+                for ch in response:
+                    yield ch
+            return gen(), audio_task
+
+        return response, audio_task
+
     session_cache = session_data.rag_cache
     dfl_session_cache = session_data.dfl_rag_cache
 
-    # Get the most recent query-response pair from the current session
-    recent_query = None
-    recent_response = None
+    recent_query, recent_response = None, None
     if session_data.messages:
         for msg in reversed(session_data.messages):
             if msg["role"] == "assistant" and "Welcome" not in msg["content"]:
                 recent_response = msg["content"]
-                msg_index = session_data.messages.index(msg)
-                if msg_index > 0 and session_data.messages[msg_index - 1]["role"] == "user":
-                    recent_query = session_data.messages[msg_index - 1]["content"]
+                idx = session_data.messages.index(msg)
+                if idx > 0 and session_data.messages[idx - 1]["role"] == "user":
+                    recent_query = session_data.messages[idx - 1]["content"]
                 break
 
-
-
-    # Build conversation history for intent classification
     conversation_history = build_conversation_history(session_data.messages)
     step = time.time()
     intent = classify_intent(query, conversation_history)
     record("intent_classification", step)
 
-    # Determine if the query is a follow-up based on intent
-    follow_up_intents = {
-        "Contextual_Follow_Up",
-        "Specific_Scheme_Eligibility_Intent",
-        "Specific_Scheme_Apply_Intent",
-        "Confirmation_New_RAG",
-    }
-    follow_up = intent in follow_up_intents
-
-    # Use conversation context only when the query is a follow-up
+    follow_up = intent in {"Contextual_Follow_Up", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent", "Confirmation_New_RAG"}
     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up else ""
+    augmented_query = f"{query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}" if follow_up and recent_query and recent_response else query
 
-    augmented_query = query
-    logger.info(f"Using conversation context: {context_pair}")
-    logger.info(f"Classified intent: {intent}")
-
-
-    # Append previous interaction for context when required
-    if intent in {
-        "Contextual_Follow_Up",
-        "Specific_Scheme_Eligibility_Intent",
-        "Specific_Scheme_Apply_Intent",
-        "Confirmation_New_RAG",
-    }:
-        if recent_query and recent_response:
-            augmented_query = (
-                f"{augmented_query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
-            )
-
-
-    scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
-    dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
-
-    if intent in scheme_intents:
-        if intent == "Specific_Scheme_Know_Intent":
+    scheme_rag, dfl_rag = None, None
+    if intent in {"Specific_Scheme_Know_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG", "Specific_Scheme_Eligibility_Intent", "Specific_Scheme_Apply_Intent"}:
+        scheme_rag = session_cache.get(query)
+        if not scheme_rag:
             step = time.time()
-            scheme_rag = get_scheme_response(
-                query,
-                scheme_vector_store,
-                state=None,
-                gender=None,
-                business_category=None,
-                include_mudra=False,
-                intent=intent,
-            )
+            scheme_rag = get_scheme_response(augmented_query, scheme_vector_store, state=state_id, gender=gender, business_category=business_category, include_mudra=intent == "Schemes_Know_Intent", intent=intent)
             record("rag_retrieval", step)
-        else:
-            scheme_rag = session_cache.get(query)
-    elif intent in dfl_intents:
+            session_cache[query] = scheme_rag
+
+    if intent in {"DFL_Intent", "Non_Scheme_Know_Intent"}:
         dfl_rag = dfl_session_cache.get(query)
+        if not dfl_rag:
+            step = time.time()
+            dfl_rag = get_dfl_response(query, dfl_vector_store, state=state_id, gender=gender, business_category=business_category)
+            record("rag_retrieval", step)
+            dfl_session_cache[query] = dfl_rag
 
-    if follow_up and recent_query and recent_response:
-        if intent in scheme_intents:
-            scheme_rag = session_cache.get(recent_query, scheme_rag)
-        elif intent in dfl_intents:
-            dfl_rag = dfl_session_cache.get(recent_query, dfl_rag)
-        related_prev_query = recent_query
+    rag_response = scheme_rag if scheme_rag else dfl_rag
+    rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response or ""
+    scheme_guid = extract_scheme_guid(rag_response.get("sources", [])) if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent" else None
 
-    if scheme_rag is None and intent in scheme_intents:
-        step = time.time()
-        scheme_rag = get_scheme_response(
-            augmented_query,
-            scheme_vector_store,
-            state=state_id,
-            gender=gender,
-            business_category=business_category,
-            include_mudra=intent == "Schemes_Know_Intent",
-            intent=intent,
-        )
-        record("rag_retrieval", step)
-        session_data.rag_cache[query] = scheme_rag
-
-    if dfl_rag is None and intent in dfl_intents:
-        step = time.time()
-        dfl_rag = get_dfl_response(
-            query,
-            dfl_vector_store,
-            state=state_id,
-            gender=gender,
-            business_category=business_category,
-        )
-        record("rag_retrieval", step)
-        session_data.dfl_rag_cache[query] = dfl_rag
-
-    rag_response = scheme_rag if intent in scheme_intents else dfl_rag
-    rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
-    if intent == "DFL_Intent" and (
-        rag_text is None or "No relevant" in rag_text
-    ):
-        rag_text = ""
-    scheme_guid = None
-    if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
-        scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
     step = time.time()
-    gen_result = generate_response(
-        intent,
-        rag_text or "",
-        user_info,
-        query_language,
-        context_pair,
-        query,
-        scheme_guid=scheme_guid,
-        stream=stream,
-    )
+    gen_result = generate_response(intent, rag_text, user_info, query_language, context_pair, query, scheme_guid=scheme_guid, stream=stream)
     record("generate_response", step)
 
     if not stream:
         generated_response = gen_result
 
     def audio_task(final_text=None):
-        text_for_use = final_text if stream else generated_response
+        text = final_text if stream else generated_response
         step_local = time.time()
-        hindi_audio_script = generate_hindi_audio_script(
-            text_for_use,
-            user_info,
-            rag_text or "",
-        )
+        script = generate_hindi_audio_script(text, user_info, rag_text)
         record("audio_script", step_local)
 
-
-        try:
+        def save():
             interaction_id = generate_interaction_id(query, datetime.utcnow())
-            messages_to_save = [
-                {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
-                {"role": "assistant", "content": text_for_use, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": hindi_audio_script},
-            ]
-            if not any(
-                any(msg.get("interaction_id") == interaction_id for msg in conv["messages"])
-                for conv in conversations
-            ):
+            if not any(any(msg.get("interaction_id") == interaction_id for msg in conv["messages"]) for conv in conversations):
                 step_db = time.time()
-                data_manager.save_conversation(session_id, mobile_number, messages_to_save)
+                data_manager.save_conversation(session_id, mobile_number, [
+                    {"role": "user", "content": query, "timestamp": datetime.utcnow(), "interaction_id": interaction_id},
+                    {"role": "assistant", "content": text, "timestamp": datetime.utcnow(), "interaction_id": interaction_id, "audio_script": script}
+                ])
                 record("save_conversation", step_db)
-                logger.info(
-                    f"Saved conversation for session {session_id}: {query} -> {text_for_use} (Interaction ID: {interaction_id})"
-                )
-            else:
-                logger.debug(
-                    f"Skipped saving duplicate conversation for query: {query} (Interaction ID: {interaction_id})"
-                )
-        except Exception as e:
-            logger.error(f"Failed to save conversation for session {session_id}: {str(e)}")
+
+        if background_tasks:
+            background_tasks.add_task(save)
+        else:
+            save()
 
         log_timings()
-        return hindi_audio_script
+        return script
 
     if stream:
         return gen_result, audio_task
