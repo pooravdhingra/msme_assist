@@ -1937,7 +1937,7 @@ async def process_query_optimized(
                 logger.error(f"Background task failed: {e}")
                 return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
         
-        audio_task = background_audio_task
+        audio_task = background_audio_task()
 
     tracker.log_summary()
     logger.info(f"Query processing completed for: {query}")
