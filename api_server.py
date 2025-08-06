@@ -18,6 +18,15 @@ from msme_bot import (
 from data import DataManager, STATE_NAME_TO_ID, GENDER_MAPPING
 from tts import synthesize
 import time
+import logging
+
+logging.getLogger("sse_starlette.sse").setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)          # <─ defined exactly once
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(name)s — %(message)s",
+)
 
 app = FastAPI()
 
@@ -399,6 +408,7 @@ async def chat_get(session_id: str, query: str):
                 script = make_audio(final_text)
                 audio_bytes = synthesize(script, "Hindi")
                 b64_audio = base64.b64encode(audio_bytes).decode()
+                logger.info("Audio event generated – %d bytes", len(audio_bytes))
                 yield {"event": "audio", "data": b64_audio}
 
             assistant_msg = {
