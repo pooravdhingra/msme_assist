@@ -653,7 +653,7 @@ def generate_hindi_audio_script(
             logger.error(f"Failed to fall back to direct translation: {str(inner_e)}")
             return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।" # Error generating audio script.
 
-Main function to process query
+# Main function to process query
 def process_query(query, scheme_vector_store, dfl_vector_store, session_id, mobile_number, session_data: SessionData, user_language=None, stream: bool = False):
     start_time = time.time()
     timings = {}
