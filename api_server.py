@@ -398,7 +398,7 @@ def get_welcome(session_id: str):
     if any("welcome" in (msg["content"] or "").lower() for conv in conversations for msg in conv["messages"]):
         return {"welcome": None, "audio": None}
 
-    response_text, audio_task = process_query(
+    response_text, audio_task = process_query_optimized(
         "welcome",
         scheme_vector_store,
         dfl_vector_store,
