@@ -580,6 +580,143 @@ async def performance_middleware(request, call_next):
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
+# UPDATED ENDPOINT with enhanced audio handling
+@app.get("/chat")
+async def chat_get_with_reliable_audio(session_id: str, query: str):
+    """Enhanced chat endpoint with reliable audio generation"""
+    start_time = time.perf_counter()
+    
+    # Fast session loading
+    sess = await _load_session_optimized(session_id)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    
+    if not isinstance(sess, SessionData):
+        raise HTTPException(500, "invalid session")
+
+    # Add user message
+    user_msg = {
+        "role": "user", 
+        "content": query, 
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    sess.messages.append(user_msg)
+    
+    logger.info(f"⚡ Session loaded: {time.perf_counter() - start_time:.3f}s")
+    
+    # Process query
+    token_stream, audio_task = await process_query_optimized(
+        query,
+        session_id,
+        sess.user["mobile_number"],
+        sess,
+        user_language=sess.user.get("language"),
+        stream=True,
+    )
+    
+    logger.info(f"⚡ Query processed: {time.perf_counter() - start_time:.3f}s")
+
+    async def enhanced_event_generator():
+        final_text = ""
+        token_count = 0
+        stream_start = time.perf_counter()
+        
+        try:
+            # Stream response tokens
+            if hasattr(token_stream, '__aiter__'):
+                batch = ""
+                batch_size = 3
+                
+                async for token in token_stream:
+                    final_text += token
+                    batch += token
+                    token_count += 1
+                    
+                    if len(batch) >= batch_size or token_count % 5 == 0:
+                        yield {"data": batch}
+                        batch = ""
+                
+                if batch:
+                    yield {"data": batch}
+                    
+            else:
+                final_text = str(token_stream)
+                yield {"data": final_text}
+            
+            logger.info(f"⚡ Streaming: {time.perf_counter() - stream_start:.3f}s ({token_count} tokens)")
+
+            # Enhanced audio generation with session tracking
+            if audio_task and final_text.strip():
+                audio_start = time.perf_counter()
+                
+                try:
+                    # Generate audio script with session ID
+                    script_task = asyncio.create_task(audio_task(final_text))
+                    script = await asyncio.wait_for(script_task, timeout=4.0)
+                    
+                    if script and script.strip():
+                        logger.info(f"🔊 Audio script ready for session {session_id}")
+                        
+                        # Generate audio with enhanced handling
+                        audio_success, b64_audio = await handle_audio_in_endpoint(
+                            script, session_id, timeout=5.0
+                        )
+                        
+                        if audio_success and b64_audio:
+                            elapsed_audio = time.perf_counter() - audio_start
+                            logger.info(f"⚡ Audio complete: {elapsed_audio:.3f}s")
+                            yield {"event": "audio", "data": b64_audio}
+                        else:
+                            logger.warning(f"🔊 Audio generation failed for session {session_id}")
+                    else:
+                        logger.warning(f"🔊 No audio script generated for session {session_id}")
+                        
+                except asyncio.TimeoutError:
+                    logger.warning(f"🔊 Audio generation timeout for session {session_id}")
+                except Exception as e:
+                    logger.error(f"🔊 Audio error for session {session_id}: {e}")
+
+            # Update session messages
+            assistant_msg = {
+                "role": "assistant",
+                "content": final_text,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            sess.messages.append(assistant_msg)
+
+            # Final event with audio stats
+            total_time = time.perf_counter() - start_time
+            yield {"event": "done", "data": f"completed in {total_time:.2f}s"}
+
+        except Exception as e:
+            logger.error(f"Event generation error: {e}")
+            yield {"event": "error", "data": str(e)}
+
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Content-Type": "text/event-stream",
+    }
+
+    return EventSourceResponse(
+        enhanced_event_generator(),
+        headers=headers,
+        ping=30
+    )
+
+# Monitoring function to check audio system health
+async def get_audio_stats():
+    """Get audio system statistics for monitoring"""
+    return {
+        "active_requests": len(audio_tracker.active_requests),
+        "stats": audio_tracker.stats,
+        "semaphore_available": audio_semaphore._value,
+        "thread_pool_active": audio_executor._threads
+    }
+
+    
 if __name__ == "__main__":
     import uvicorn
     
