@@ -233,6 +233,7 @@ async def auth_token_optimized(payload: Dict[str, str]):
         raise HTTPException(status_code=401, detail="invalid token")
     
     result = data.get("result", {})
+    print(f"result novfal: {result}")
     gender_raw = result.get("gender", "") or ""
     gender = GENDER_MAPPING.get(gender_raw.upper(), gender_raw)
     state_name = result.get("state", "")
@@ -249,6 +250,7 @@ async def auth_token_optimized(payload: Dict[str, str]):
         "business_category": result.get("employmentType", ""),
         "language": "English",
         "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown"),
+        "user_type": result.get("user_type",1),  # Default to 1 if not set
     }
     
     session_id = uuid.uuid4().hex
@@ -459,7 +461,7 @@ async def get_welcome_optimized(session_id: str):
         raise HTTPException(status_code=404, detail="session not found")
 
     mobile = session.user["mobile_number"]
-    
+    user_type = session.user["user_type"] 
     try:
         # Quick check for existing conversations
         loop = asyncio.get_event_loop()
@@ -492,7 +494,8 @@ async def get_welcome_optimized(session_id: str):
         mobile,
         session,
         user_language=session.user.get("language"),
-        stream=False
+        stream=False,
+        user_type=user_type
     )
     
     logger.info(f"⚡ Welcome generated: {time.perf_counter() - start_time:.3f}s")
@@ -523,7 +526,7 @@ async def get_welcome_optimized(session_id: str):
 
     return {
         "welcome": response_text,
-        "audio": b64_audio
+        "audio": b64_audio,
     }
 
 @app.get("/health")
@@ -716,7 +719,7 @@ async def get_audio_stats():
         "thread_pool_active": audio_executor._threads
     }
 
-    
+
 if __name__ == "__main__":
     import uvicorn
     

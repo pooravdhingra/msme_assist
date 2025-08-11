@@ -463,11 +463,22 @@ def build_conversation_history(messages):
     
     return "\n".join(f"{role}: {content}" for role, content in reversed(relevant_msgs))
 
-def welcome_user(state_name, user_name, query_language):
-    """Quick welcome message generation"""
+# def welcome_user(state_name, user_name, query_language,user_type):
+#     """Quick welcome message generation"""
+#     if query_language == "Hindi":
+#         return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। मैं {state_name} की योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
+#     return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! I'll help with schemes from {state_name}. How can I assist you today?"
+
+def welcome_user(state_name, user_name, query_language, user_type):
+    """Optimized quick welcome message generation based on user type"""
+
+    # Scheme type based on user_type
     if query_language == "Hindi":
-        return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। मैं {state_name} की योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
-    return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! I'll help with schemes from {state_name}. How can I assist you today?"
+        scheme_type = "MSME योजनाओं" if user_type == 1 else "सामान्य योजनाओं"
+        return f"नमस्ते {user_name}! हकदर्शक चैटबॉट में आपका स्वागत है। मैं {state_name} की {scheme_type} में मदद करूँगा। आज कैसे सहायता करूँ?"
+    else:
+        scheme_type = "MSME schemes" if user_type == 1 else "general schemes"
+        return f"Hi {user_name}! Welcome to Haqdarshak Chatbot! I'll help you with {scheme_type} from {state_name}. How can I assist you today?"
 
 def generate_interaction_id(query, timestamp):
     return hashlib.md5(f"{query[:100]}_{timestamp.strftime('%Y%m%d%H%M%S')}".encode()).hexdigest()[:12]
@@ -1165,7 +1176,8 @@ async def process_query_ultra_optimized(
     mobile_number: str,
     session_data: SessionData,
     user_language: str = None,
-    stream: bool = False
+    stream: bool = False,
+    user_type: int = 1
 ) -> Tuple[Any, callable]:
     """
     Ultra-optimized query processing - FIXED VERSION
@@ -1190,18 +1202,19 @@ async def process_query_ultra_optimized(
 
     # Step 2: Handle welcome (early return)
     if query.lower() == "welcome":
+        print(f"Welcome query detected kittu for {mobile_number} in {query_language} type {user_type}")
         # Start background conversation check
         conversations_task = asyncio.create_task(
             data_manager.get_conversations_async(mobile_number)
         )
         
         # Don't wait for it - assume new user for speed
-        response = welcome_user(user_info.state_name, user_info.name, query_language)
+        response = welcome_user(user_info.state_name, user_info.name, query_language,user_type)
         
         # Fire-and-forget welcome save
         asyncio.create_task(save_conversation_background(session_id, mobile_number, "welcome", response))
         
-        audio_task = create_audio_task_background(response, user_info)
+        # audio_task = create_audio_task_background(response, user_info)
         audio_task = create_optimized_audio_task(response, user_info, session_id)
 
         tracker.log_summary()
