@@ -1,3 +1,4 @@
+# msme_bot.py
 import logging
 import time
 import asyncio
@@ -13,7 +14,7 @@ from scheme_lookup import (
     find_scheme_guid_by_query,
     fetch_scheme_docs_by_guid,
     DocumentListRetriever,
-    initialize_xlsx_manager,  # Add this import
+    initialize_fast_xlsx_manager,  # Add this import
     search_schemes_by_query,  # Add this import
     XLSXSchemeRetriever,     # Add this import
 )
@@ -37,7 +38,7 @@ logging.getLogger("pymongo").setLevel(logging.WARNING)
 load_dotenv()
 
 # Thread pool for CPU-intensive operations
-executor = ThreadPoolExecutor(max_workers=4)
+executor = ThreadPoolExecutor(max_workers=8)
 
 # Enhanced Cache Manager
 class CacheManager:
@@ -135,27 +136,13 @@ cache_manager = CacheManager()
 
 def init_fast_xlsx_scheme_manager():
     """Initialize fast XLSX scheme manager"""
-    logger.info("Initializing fast XLSX scheme manager")
-    xlsx_file_path = os.getenv("SCHEME_XLSX_PATH")
-    if not xlsx_file_path:
-        raise ValueError("SCHEME_XLSX_PATH environment variable not set")
-    
-    if not os.path.exists(xlsx_file_path):
-        raise FileNotFoundError(f"XLSX file not found: {xlsx_file_path}")
-    
-    # Use the new fast manager
-    from scheme_lookup import initialize_fast_xlsx_manager
-    initialize_fast_xlsx_manager(xlsx_file_path)
-    logger.info("Fast XLSX scheme manager initialized")
-    return True
-
-# Initialize fast XLSX manager
-try:
-    init_fast_xlsx_scheme_manager()
-    FAST_XLSX_AVAILABLE = True
-except Exception as e:
-    logger.error(f"Failed to initialize fast XLSX manager: {e}")
-    FAST_XLSX_AVAILABLE = False
+    try:
+        from scheme_lookup import initialize_fast_xlsx_manager
+        initialize_fast_xlsx_manager(os.getenv("SCHEME_XLSX_PATH"))
+        FAST_XLSX_AVAILABLE = True
+    except Exception as e:
+     logger.error(f"Failed to initialize fast XLSX manager: {e}")
+     FAST_XLSX_AVAILABLE = False
 
 
 # Initialize DataManager - make it async capable
@@ -286,7 +273,12 @@ def detect_language(query):
     hindi_words = [
         "kya", "kaise", "ke", "mein", "hai", "kaun", "kahan", "kab",
         "batao", "sarkari", "yojana", "paise", "karobar", "dukaan", "nayi", "naye", "chahiye", "madad", "karo",
-        # ... rest of your hindi words list
+        "dikhao", "samjhao", "tarika", "aur", "arey", "bhi", "kya", "hai", "hoga", "hogi", "ho", "hoon", "magar", "lekin", "par", 
+        "toh", "ab", "phir", "kuch", "thoda", "zyada", "sab", "koi", "kuchh", "aap", "tum", "main",
+        "hum", "unhe", "unko", "unse", "yeh", "woh", "aisa", "aisi", "aise", "bataiye", "achha", "acha", "accha", "theek", "theekh", 
+        "thik", "thikk", "idhar", "udhar", "yahan", "wahan", "waha", "bhai", "bhaiya", "bhaiyya", 
+        "bhiya", "bahut", "bahot", "bohot", "bahuut", "zara", "jara", "mat", "maat", "matlab", "matlb", "fir", "phirr", "phhir", "phir", 
+        "main", "aap", "aapke", "yojanaen", "liye", "kar", "sakte", "hain", "tak"
     ]
     query_lower = query.lower()
     hindi_word_count = sum(1 for word in hindi_words if word in query_lower)
@@ -298,7 +290,9 @@ def detect_language(query):
     return "English"
 
 def get_system_prompt(language, user_name="User", word_limit=200):
-    """Keep your existing system prompt logic"""
+
+    """Return tone and style instructions."""
+
     system_rules = f"""1. **Language Handling**:
        - The query language is provided as {language} (English, Hindi, or Hinglish).
        - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
@@ -317,10 +311,12 @@ def get_system_prompt(language, user_name="User", word_limit=200):
        - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
        - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
 
-    return system_rules.format(language=language, user_name=user_name)
+    system_prompt = system_rules.format(language=language, user_name=user_name)
+    return system_prompt
 
+
+# Build conversation history from stored messages for intent classification
 def build_conversation_history(messages):
-    """Keep your existing conversation history logic"""
     conversation_history = ""
     session_messages = []
     for msg in messages[-10:]:
@@ -332,12 +328,37 @@ def build_conversation_history(messages):
         conversation_history += f"{role.capitalize()}: {content}\n"
     return conversation_history
 
+# Welcome user
 def welcome_user(state_name, user_name, query_language):
-    """Keep your existing welcome user logic but make it async"""
-    # Your existing implementation but convert to async if needed
-    if query_language == "Hindi":
-        return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
-    return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
+    """Generate a welcome message in the user's chosen language."""
+    prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a new user named {user_name} from {state_name}.
+
+    **Input**:
+    - Query Language: {query_language}
+
+    **Instructions**:
+    - Generate a welcome message for a new user in the specified language ({query_language}).
+    - For Hindi, use Devanagari script with simple, clear words suitable for micro business owners with low Hindi proficiency.
+    - For English, use simple English with a friendly tone.
+    - The message should welcome the user, and offer assistance with schemes and documents applicable to their state and all central government schemes or help with digital/financial literacy and business growth.
+    - Response must be ≤70 words.
+    - Start the response with 'Hi {user_name}!' (English) or 'नमस्ते {user_name}!' (Hindi).
+
+    **Output**:
+    - Return only the welcome message in the specified language.
+    """
+
+    try:
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        generated_response = response.content.strip()
+        logger.info(f"Generated welcome message in {query_language}: {generated_response}")
+        return generated_response
+    except Exception as e:
+        logger.error(f"Failed to generate welcome message: {str(e)}")
+        # Fallback to default messages
+        if query_language == "Hindi":
+            return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
+        return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
 
 def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
@@ -359,15 +380,23 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
 
     **Instructions**:
     Return only one label from the following:
-       - Schemes_Know_Intent - General queries enquiring about schemes or loans without specific names
-       - DFL_Intent - Digital/financial literacy queries
-       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names
-       - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes
-       - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes
-       - Out_of_Scope - Queries that are not relevant to business growth or digital literacy
-       - Contextual_Follow_Up - Follow-up queries
-       - Confirmation_New_RAG - Confirmation for initiating another RAG search
-       - Gratitude_Intent - User expresses thanks or acknowledgement
+       - Schemes_Know_Intent - General queries enquiring about schemes or loans without specific names (e.g., 'show me schemes', 'mere liye schemes dikhao', 'loan', 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao' etc.)
+       - DFL_Intent - Digital/financial literacy queries (e.g., 'Current account', 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'Setting up internet banking', 'Benefits of internet for business' etc.)
+       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names. Generally asking for loan or scheme is NOT specific. (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp' etc.)
+       - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसआईएआई के लिए आवेदन कैसे करें?' etc.)
+       - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसआईएआई की पात्रता क्या है?' etc.)
+       - Out_of_Scope - Queries that are not relevant to business growth or digital literacy or financial literacy (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?' etc.)
+       - Contextual_Follow_Up - Follow-up queries (e.g., 'Tell me more', 'Aur batao', 'और बताएं', 'iske baare mein aur jaankaari chahiye' etc.)
+       - Confirmation_New_RAG - Confirmation for initiating another RAG search (Only to be chosen when user query is confirmation for initating another RAG search ("Yes", "Haan batao", "Haan dikhao", "Yes search again") AND previous assistant response says that the bot needs to fetch more details about some scheme. ('I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.'))
+       - Gratitude_Intent - User expresses thanks or acknowledgement (e.g., 'ok thanks', 'got it', 'theek hai', 'accha', 'thank you', 'शुक्रिया', 'धन्यवाद' etc.)
+
+    **Tips**:
+       - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
+       - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' are in scope and should be classified as Specific_Scheme_Know_Intent.
+       - For Contextual_Follow_Up, prioritise the most recent query-response pair from the conversation history to check if the query is a follow-up.
+       - Use conversation history for context but intent should be determined solely by the current query.
+       - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes.
+       - If some scheme name is mentioned in the query, then classify it as Specific_Scheme_Know_Intent.
     """
     
     try:
@@ -499,7 +528,6 @@ async def get_scheme_response_async(
         
         def run_xlsx_search():
             # Search schemes in XLSX
-            print(f"Searching schemes by query: {query} with limit 5")
             logger.info(f"Searching schemes by query: {query} with limit 5")
             logger.info("novfal")
             docs = search_schemes_by_query(query, limit=5)
@@ -628,7 +656,7 @@ async def get_dfl_response_async(query, vector_store, state=None, gender=None, b
         business_category=business_category,
     )
 
-
+# @lru_cache(maxsize=100)
 async def generate_response_async(
     intent: str, 
     rag_response: str, 
@@ -643,13 +671,11 @@ async def generate_response_async(
     
     # Handle non-streaming cases first (these return strings)
     if intent == "Out_of_Scope":
-        response = ""
         if language == "Hindi":
-            response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
-        elif language == "Hinglish":
-            response = "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
-        else:
-            response = "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+            return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
+        if language == "Hinglish":
+            return "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
+        return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
         
         if stream:
             async def stream_response():
@@ -716,7 +742,6 @@ async def generate_response_async(
     - Business Category: {user_info.business_category}
     - Conversation Context: {context}
     - Language: {language}"""
-    
     if scheme_guid:
         base_prompt += f"\n    - Scheme GUID: {scheme_guid}"
 
@@ -730,15 +755,37 @@ async def generate_response_async(
     Prioritise the **Current Query** over the **Conversation Context** when determining the response.
     """
 
-    # Add intent-specific logic
     special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST", "Mudra", "PMEGP", "PMFME", "CMEGP", "Yuva Udyami", "PMSBY", "PMJJBY", "PMJAY (Ayushman Bharat)"]
-    
+    link = "https://haqdarshak.com/contact"
+
     if intent == "Specific_Scheme_Know_Intent":
         intent_prompt = (
             "Share scheme name, purpose, benefits and other fetched relevant details in a structured format from **RAG Response**. "
             "Ask: 'Want details on eligibility or how to apply?' "
             "(English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' "
             "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
+        )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
+        )
+    elif intent == "Specific_Scheme_Apply_Intent":
+        intent_prompt = (
+            "Share application process from **RAG Response**."
+        )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
+        )
+    elif intent == "Specific_Scheme_Eligibility_Intent":
+        intent_prompt = (
+            "Summarize eligibility rules from **RAG Response** and provide a link "
+            f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
+            "Ask the user to verify their eligibility there."
         )
         intent_prompt += (
             f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
@@ -755,15 +802,44 @@ async def generate_response_async(
             "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
             "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi). Add this only in the description for the applicable scheme/s, not under the entire list."
+        )
+    elif intent == "DFL_Intent":
+        intent_prompt = (
+            "Use the **RAG Response** if available, augmenting with your own knowledge "
+            "where relevant. If the RAG Response is empty or not relevant, do not mention that to user and provide a helpful answer "
+            "smoothly from your own knowledge in simple language "
+            "with helpful examples."
+        )
+    elif intent == "Contextual_Follow_Up":
+        intent_prompt = (
+            "Use the Previous Assistant Response and Conversation Context to identify the topic. "
+            "If the RAG Response does not match the referenced scheme, indicate a new RAG search "
+            "is needed. Provide a relevant follow-up response using the RAG Response, "
+            "filtering for schemes where 'applicability' includes state_id or 'scheme type' is "
+            "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., "
+            "'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?')."
+        )
+    elif intent == "Confirmation_New_RAG":
+        intent_prompt = (
+            "If the user confirms to initiate a new RAG search, respond with the details of the "
+            "scheme they are interested in, refer to conversation context for details."
+        )
     else:
         intent_prompt = ""
 
     output_prompt = """
     **Output**:
-       - Return only the final response in the query's language (no intent label or intermediate steps).
-       - If RAG Response is empty and query is contextual follow-up, indicate new RAG search needed.
+       - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed for schemes, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
+       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don't have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
        - Do not mention any other scheme when a specific scheme is being talked about.
-       - Scheme answers must come only from scheme data.
+       - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
+       - No need to mention user profile details in every response, only include where contextually relevant.
+       - Scheme answers must come only from scheme data. For DFL answers, use the DFL document supplemented by your own knowledge when possible, but rely on your own knowledge if nothing relevant is found.
     """
 
     prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
@@ -828,7 +904,10 @@ def generate_hindi_audio_script(
     user_info: UserContext,
     rag_response: str = "",
 ) -> str:
-    """Keep your existing hindi audio script generation logic"""
+    """
+    Generates a summarized, human-like Hindi script for text-to-speech from the original bot response.
+    The script should avoid punctuation marks and focus on natural flow.
+    """
     prompt = f"""You are an assistant for Haqdarshak. Your task is to summarize the provided text into a concise, human-like script
     in natural Hindi (Devanagari script) for a text-to-speech system.
     
@@ -1049,131 +1128,71 @@ async def process_query_optimized(
     
     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up and recent_query and recent_response else ""
     
-   
 
-    # Step 10: RAG retrieval with XLSX support
+
+    # Replace Step 10 with this optimized version:
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
     
     rag_response = None
-    
     if intent in scheme_intents:
         tracker.start_timer("rag_retrieval")
         
-        # Check session cache first
-        cache_key = query if not follow_up else recent_query
-        if cache_key and cache_key in session_data.rag_cache:
-            rag_response = session_data.rag_cache[cache_key]
-            logger.info("Using session cache for scheme response")
-        else:
-            # Check distributed cache
-            cache_context = {
+        # Check all caches in parallel
+        cache_tasks = []
+        cache_context = {
                 "state": user_info.state_id,
                 "gender": user_info.gender,
                 "business_category": user_info.business_category,
                 "intent": intent,
                  "use_xlsx": True
-            }
+        }
+        if not follow_up:
+            cache_tasks.append(asyncio.create_task(cache_manager.get_rag_cache(query, cache_context)))
+        
+        # Start RAG retrieval immediately if no cache hit expected
+        if intent == "Specific_Scheme_Know_Intent":
+            # Use fast XLSX path for specific schemes
+            loop = asyncio.get_event_loop()
+
+            guid_task = loop.run_in_executor(executor, find_scheme_guid_by_query, query)
+            search_task = loop.run_in_executor(executor, search_schemes_by_query, query, 5)
+
+            guid_result, search_result = await asyncio.gather(guid_task, search_task)
             
-            rag_response = await cache_manager.get_rag_cache(query, cache_context)
+            # Wait for faster result
+            done, pending = await asyncio.wait(
+                [guid_task, search_task], 
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=1.0  # 1 second timeout
+            )
             
-            if not rag_response:
-                # Actual RAG retrieval with XLSX support
-                augmented_query = query
-                if follow_up and recent_query and recent_response:
-                    augmented_query = f"{query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
-                
-                rag_response = await get_scheme_response_async(
-                    augmented_query,
-                    scheme_vector_store,
-                    state=user_info.state_id,
-                    gender=user_info.gender,
-                    business_category=user_info.business_category,
-                    include_mudra=intent == "Schemes_Know_Intent",
-                    intent=intent,
-                    # use_xlsx=use_xlsx,  # Pass the XLSX flag
-                )
-                
-                # Cache the response
-                session_data.rag_cache[query] = rag_response
-                
+            # Cancel slower task
+            for task in pending:
+                task.cancel()
+            
+            # Process fastest result
+            for task in done:
+                try:
+                    result = await task
+                    if isinstance(result, str) and result:  # GUID found
+                        docs = await loop.run_in_executor(
+                            executor, fetch_scheme_docs_by_guid, result, None, True
+                        )
+                        if docs:
+                            rag_response = await loop.run_in_executor(
+                                executor, run_qa_chain_fast, docs, query
+                            )
+                    elif isinstance(result, list) and result:  # Search results found
+                        rag_response = await loop.run_in_executor(
+                            executor, run_qa_chain_fast, result, query
+                        )
+                    break
+                except Exception as e:
+                    continue
+        
         tracker.end_timer("rag_retrieval")
 
-    # # Step 11: Generate response
-    # tracker.start_timer("generate_response")
-    # rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
-    # if intent == "DFL_Intent" and (rag_text is None or "No relevant" in rag_text):
-    #     rag_text = ""
-    
-    # scheme_guid = None
-    # if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
-    #     scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
-    
-    # response_result = await generate_response_async(
-    #     intent,
-    #     rag_text or "",
-    #     user_info,
-    #     query_language,
-    #     context_pair,
-    #     query,
-    #     scheme_guid=scheme_guid,
-    #     stream=stream,
-    # )
-    # tracker.end_timer("generate_response")
-
-    # # Step 12: Create background tasks (non-blocking)
-    # if stream:
-    # # For streaming, create a background task factory
-    #     def create_streaming_audio_task():
-    #         async def streaming_audio_task(final_text: str) -> str:
-    #             # Start background tasks
-    #             audio_script_task = asyncio.create_task(
-    #                 generate_audio_script_background(final_text, user_info, rag_text or "")
-    #             )
-    #             save_task = asyncio.create_task(
-    #                 save_conversation_background(session_id, mobile_number, query, final_text)
-    #             )
-                
-    #             # Wait for audio script, but don't wait for save
-    #             try:
-    #                 hindi_script = await audio_script_task
-    #                 # Fire and forget the save task - don't wait for it
-    #                 return hindi_script
-    #             except Exception as e:
-    #                 logger.error(f"Audio script generation failed: {e}")
-    #                 return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
-            
-    #         return streaming_audio_task
-    
-    #     audio_task = create_streaming_audio_task()
-    # else:
-    #     response_text = response_result
-        
-    #     # Create background task that handles both audio and save
-    #     async def background_audio_task(final_text: str = None) -> str:
-    #         text_to_use = final_text or response_text
-            
-    #         # Start audio task
-    #         try:
-    #             hindi_script = await generate_audio_script_background(text_to_use, user_info, rag_text or "")
-    #         except Exception as e:
-    #             logger.error(f"Audio script generation failed: {e}")
-    #             hindi_script = "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
-            
-    #         # Start save task in fire-and-forget mode
-    #         asyncio.create_task(
-    #             save_conversation_background(session_id, mobile_number, query, text_to_use)
-    #         )
-            
-    #         return hindi_script
-        
-    #     audio_task = background_audio_task
-
-    # # The rest of your function remains the same
-    # tracker.log_summary()
-    # logger.info(f"Query processing completed for: {query}")
-
-    # return response_result, audio_task
     # Step 11: Generate response (this is where the fix is important)
     tracker.start_timer("generate_response")
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
@@ -1243,70 +1262,14 @@ async def process_query_optimized(
     return response_result, audio_task
 
 
-
-
- # # Step 10: RAG retrieval with caching
-    # scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
-    # dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
-    
-    # rag_response = None
-    
-    # if intent in scheme_intents:
-    #     tracker.start_timer("rag_retrieval")
-        
-    #     # Check session cache first
-    #     cache_key = query if not follow_up else recent_query
-    #     if cache_key and cache_key in session_data.rag_cache:
-    #         rag_response = session_data.rag_cache[cache_key]
-    #         logger.info("Using session cache for scheme response")
-    #     else:
-    #         # Check distributed cache
-    #         cache_context = {
-    #             "state": user_info.state_id,
-    #             "gender": user_info.gender,
-    #             "business_category": user_info.business_category,
-    #             "intent": intent
-    #         }
-            
-    #         rag_response = await cache_manager.get_rag_cache(query, cache_context)
-            
-    #         if not rag_response:
-    #             # Actual RAG retrieval
-    #             augmented_query = query
-    #             if follow_up and recent_query and recent_response:
-    #                 augmented_query = f"{query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
-                
-    #             rag_response = await get_scheme_response_async(
-    #                 augmented_query,
-    #                 scheme_vector_store,
-    #                 state=user_info.state_id,
-    #                 gender=user_info.gender,
-    #                 business_category=user_info.business_category,
-    #                 include_mudra=intent == "Schemes_Know_Intent",
-    #                 intent=intent,
-    #             )
-                
-    #             # Cache the response
-    #             session_data.rag_cache[query] = rag_response
-                
-    #     tracker.end_timer("rag_retrieval")
-        
-    # elif intent in dfl_intents:
-    #     tracker.start_timer("rag_retrieval")
-        
-    #     # Check session cache first
-    #     cache_key = query if not follow_up else recent_query
-    #     if cache_key and cache_key in session_data.dfl_rag_cache:
-    #         rag_response = session_data.dfl_rag_cache[cache_key]
-    #         logger.info("Using session cache for DFL response")
-    #     else:
-    #         rag_response = await get_dfl_response_async(
-    #             query,
-    #             dfl_vector_store,
-    #             state=user_info.state_id,
-    #             gender=user_info.gender,
-    #             business_category=user_info.business_category,
-    #         )
-    #         session_data.dfl_rag_cache[query] = rag_response
-            
-    #     tracker.end_timer("rag_retrieval")
+def run_qa_chain_fast(docs, query):
+    """Fast QA chain execution"""
+    retriever = DocumentListRetriever(docs)
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=retriever,
+        return_source_documents=True,
+    )
+    result = qa_chain.invoke({"query": query})
+    return {"text": result["result"], "sources": result["source_documents"]}
