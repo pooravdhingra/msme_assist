@@ -13,6 +13,9 @@ from scheme_lookup import (
     find_scheme_guid_by_query,
     fetch_scheme_docs_by_guid,
     DocumentListRetriever,
+    initialize_xlsx_manager,  # Add this import
+    search_schemes_by_query,  # Add this import
+    XLSXSchemeRetriever,     # Add this import
 )
 from utils import extract_scheme_guid
 from data import DataManager
@@ -128,6 +131,32 @@ class CacheManager:
 
 # Initialize cache manager
 cache_manager = CacheManager()
+
+
+def init_fast_xlsx_scheme_manager():
+    """Initialize fast XLSX scheme manager"""
+    logger.info("Initializing fast XLSX scheme manager")
+    xlsx_file_path = os.getenv("SCHEME_XLSX_PATH")
+    if not xlsx_file_path:
+        raise ValueError("SCHEME_XLSX_PATH environment variable not set")
+    
+    if not os.path.exists(xlsx_file_path):
+        raise FileNotFoundError(f"XLSX file not found: {xlsx_file_path}")
+    
+    # Use the new fast manager
+    from scheme_lookup import initialize_fast_xlsx_manager
+    initialize_fast_xlsx_manager(xlsx_file_path)
+    logger.info("Fast XLSX scheme manager initialized")
+    return True
+
+# Initialize fast XLSX manager
+try:
+    init_fast_xlsx_scheme_manager()
+    FAST_XLSX_AVAILABLE = True
+except Exception as e:
+    logger.error(f"Failed to initialize fast XLSX manager: {e}")
+    FAST_XLSX_AVAILABLE = False
+
 
 # Initialize DataManager - make it async capable
 class AsyncDataManager(DataManager):
@@ -403,8 +432,9 @@ async def get_scheme_response_async(
     business_category=None,
     include_mudra=False,
     intent=None,
+    use_xlsx=True,  # Add this parameter
 ):
-    """Async version of get_scheme_response"""
+    """Async version of get_scheme_response with XLSX support"""
     logger.info("Querying scheme dataset")
 
     # Check cache first
@@ -413,7 +443,8 @@ async def get_scheme_response_async(
         "gender": gender,
         "business_category": business_category,
         "include_mudra": include_mudra,
-        "intent": intent
+        "intent": intent,
+         "use_xlsx": True
     }
     
     cached_response = await cache_manager.get_rag_cache(query, cache_context)
@@ -422,18 +453,58 @@ async def get_scheme_response_async(
         return cached_response
 
     guid = None
-    if intent == "Specific_Scheme_Know_Intent":
-        # Run in thread pool since this might be CPU intensive
+    rag = None
+    
+    # For specific scheme queries, try direct XLSX lookup first
+    if intent == "Specific_Scheme_Know_Intent" and use_xlsx and FAST_XLSX_AVAILABLE:
+        logger.info("Using XLSX for specific scheme lookup")
+        
+        # First, try to find GUID
         loop = asyncio.get_event_loop()
         guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query)
-
-    if guid:
-        logger.info(f"Directly fetching scheme details for GUID {guid}")
-        loop = asyncio.get_event_loop()
-        docs = await loop.run_in_executor(executor, fetch_scheme_docs_by_guid, guid, vector_store)
         
-        if docs:
-            def run_qa_chain():
+        if guid:
+            logger.info(f"Found GUID {guid} for query: {query}")
+            # Fetch docs directly from XLSX
+            docs = await loop.run_in_executor(
+                executor, 
+                fetch_scheme_docs_by_guid, 
+                guid, 
+                None,  # index parameter (not needed for XLSX)
+                True   # use_xlsx parameter
+            )
+            
+            if docs:
+                def run_qa_chain():
+                    retriever = DocumentListRetriever(docs)
+                    qa_chain = RetrievalQA.from_chain_type(
+                        llm=llm,
+                        chain_type="stuff",
+                        retriever=retriever,
+                        return_source_documents=True,
+                    )
+                    return qa_chain.invoke({"query": query})
+                
+                result = await loop.run_in_executor(executor, run_qa_chain)
+                rag = {"text": result["result"], "sources": result["source_documents"]}
+                logger.info("Successfully retrieved scheme data from XLSX")
+            else:
+                logger.warning("No documents found in XLSX for GUID; falling back to search")
+    
+    # If direct GUID lookup didn't work, try XLSX search
+    if not rag and use_xlsx and FAST_XLSX_AVAILABLE:
+        logger.info("Using XLSX search for scheme lookup")
+        
+        loop = asyncio.get_event_loop()
+        
+        def run_xlsx_search():
+            # Search schemes in XLSX
+            print(f"Searching schemes by query: {query} with limit 5")
+            logger.info(f"Searching schemes by query: {query} with limit 5")
+            logger.info("novfal")
+            docs = search_schemes_by_query(query, limit=5)
+            
+            if docs:
                 retriever = DocumentListRetriever(docs)
                 qa_chain = RetrievalQA.from_chain_type(
                     llm=llm,
@@ -442,27 +513,81 @@ async def get_scheme_response_async(
                     return_source_documents=True,
                 )
                 return qa_chain.invoke({"query": query})
-            
-            result = await loop.run_in_executor(executor, run_qa_chain)
+            return None
+        
+        result = await loop.run_in_executor(executor, run_xlsx_search)
+        
+        if result:
             rag = {"text": result["result"], "sources": result["source_documents"]}
+            logger.info("Successfully retrieved scheme data from XLSX search")
+    
+    # Fallback to Pinecone if XLSX didn't work
+    if not rag:
+        logger.info("Falling back to Pinecone search")
+        if guid:
+            # Try Pinecone with known GUID
+            docs = await loop.run_in_executor(
+                executor, 
+                fetch_scheme_docs_by_guid, 
+                guid, 
+                vector_store,
+                False  # use_xlsx=False for Pinecone fallback
+            )
+            
+            if docs:
+                def run_qa_chain():
+                    retriever = DocumentListRetriever(docs)
+                    qa_chain = RetrievalQA.from_chain_type(
+                        llm=llm,
+                        chain_type="stuff",
+                        retriever=retriever,
+                        return_source_documents=True,
+                    )
+                    return qa_chain.invoke({"query": query})
+                
+                result = await loop.run_in_executor(executor, run_qa_chain)
+                rag = {"text": result["result"], "sources": result["source_documents"]}
         else:
-            logger.warning("No documents fetched by GUID; falling back to search")
-            guid = None
+            # Regular Pinecone search
+            rag = await get_rag_response_async(
+                query,
+                vector_store,
+                state=state,
+                gender=gender,
+                business_category=business_category,
+            )
 
-    if not guid:
-        rag = await get_rag_response_async(
-            query,
-            vector_store,
-            state=state,
-            gender=gender,
-            business_category=business_category,
-        )
-
+    # Handle Mudra inclusion (if needed)
     if include_mudra:
-        logger.info("Fetching Pradhan Mantri Mudra Yojana details")
+        logger.info("Including Pradhan Mantri Mudra Yojana details")
         loop = asyncio.get_event_loop()
-        mudra_guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, "pradhan mantri mudra yojana") or "SH0008BK"
-        mudra_docs = await loop.run_in_executor(executor, fetch_scheme_docs_by_guid, mudra_guid, vector_store)
+        
+        mudra_guid = await loop.run_in_executor(
+            executor, 
+            find_scheme_guid_by_query, 
+            "pradhan mantri mudra yojana"
+        ) or "SH0008BK"
+        
+        # Try XLSX first for Mudra
+        mudra_docs = None
+        if use_xlsx and FAST_XLSX_AVAILABLE:
+            mudra_docs = await loop.run_in_executor(
+                executor, 
+                fetch_scheme_docs_by_guid, 
+                mudra_guid, 
+                None, 
+                True
+            )
+        
+        # Fallback to Pinecone for Mudra if needed
+        if not mudra_docs:
+            mudra_docs = await loop.run_in_executor(
+                executor, 
+                fetch_scheme_docs_by_guid, 
+                mudra_guid, 
+                vector_store,
+                False
+            )
 
         if mudra_docs:
             def run_mudra_qa():
@@ -503,6 +628,7 @@ async def get_dfl_response_async(query, vector_store, state=None, gender=None, b
         business_category=business_category,
     )
 
+
 async def generate_response_async(
     intent: str, 
     rag_response: str, 
@@ -512,14 +638,25 @@ async def generate_response_async(
     query: str, 
     scheme_guid: str = None, 
     stream: bool = False
-) -> str:
-    """Async version of generate_response"""
+):
+    """Async version of generate_response with proper streaming support"""
+    
+    # Handle non-streaming cases first (these return strings)
     if intent == "Out_of_Scope":
+        response = ""
         if language == "Hindi":
-            return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
-        if language == "Hinglish":
-            return "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
-        return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+            response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
+        elif language == "Hinglish":
+            response = "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
+        else:
+            response = "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+        
+        if stream:
+            async def stream_response():
+                for char in response:
+                    yield char
+            return stream_response()
+        return response
 
     if intent == "Gratitude_Intent":
         gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
@@ -531,21 +668,41 @@ async def generate_response_async(
 
         **Output**:
         - Only the acknowledgement message in the user's language."""
+        
         try:
-            response = await llm.ainvoke([{"role": "user", "content": gratitude_prompt}])
-            return response.content.strip()
+            if stream:
+                async def stream_gratitude():
+                    buffer = ""
+                    async for chunk in llm.astream([{"role": "user", "content": gratitude_prompt}]):
+                        token = chunk.content or ""
+                        buffer += token
+                        if token:
+                            yield token
+                return stream_gratitude()
+            else:
+                response = await llm.ainvoke([{"role": "user", "content": gratitude_prompt}])
+                return response.content.strip()
         except Exception as e:
             logger.error(f"Failed to generate gratitude response: {str(e)}")
+            fallback_response = ""
             if language == "Hindi":
-                return "धन्यवाद! क्या मैं और मदद कर सकता हूँ?"
-            if language == "Hinglish":
-                return "Thanks! Kya main aur madad kar sakta hoon?"
-            return "You're welcome! Let me know if you need anything else."
+                fallback_response = "धन्यवाद! क्या मैं और मदद कर सकता हूँ?"
+            elif language == "Hinglish":
+                fallback_response = "Thanks! Kya main aur madad kar sakta hoon?"
+            else:
+                fallback_response = "You're welcome! Let me know if you need anything else."
+            
+            if stream:
+                async def stream_fallback():
+                    for char in fallback_response:
+                        yield char
+                return stream_fallback()
+            return fallback_response
 
+    # Build the main prompt for other intents
     word_limit = 150 if intent == "Schemes_Know_Intent" else 100
     tone_prompt = get_system_prompt(language, user_info.name, word_limit)
 
-    # Build your existing prompt structure
     base_prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
     **Input**:
@@ -573,7 +730,7 @@ async def generate_response_async(
     Prioritise the **Current Query** over the **Conversation Context** when determining the response.
     """
 
-    # Add your existing intent-specific logic here
+    # Add intent-specific logic
     special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST", "Mudra", "PMEGP", "PMFME", "CMEGP", "Yuva Udyami", "PMSBY", "PMJJBY", "PMJAY (Ayushman Bharat)"]
     
     if intent == "Specific_Scheme_Know_Intent":
@@ -613,7 +770,7 @@ async def generate_response_async(
 
     try:
         if stream:
-            async def token_generator():
+            async def stream_main_response():
                 buffer = ""
                 try:
                     async for chunk in llm.astream([{"role": "user", "content": prompt}]):
@@ -621,17 +778,22 @@ async def generate_response_async(
                         buffer += token
                         if token:
                             yield token
+                
+                     # Add eligibility link for specific intent after streaming
+                    if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+                        screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+                        if screening_link not in buffer:
+                            link_text = f"\n{screening_link}"
+                            for char in link_text:
+                             yield char
+                            
                 except Exception as e:
                     logger.error(f"Failed to stream response: {str(e)}")
-                    return
-
-                if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
-                    screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
-                    if screening_link not in buffer:
-                        for char in "\n" + screening_link:
-                            yield char
-
-            return token_generator()
+                    error_msg = "Sorry, I couldn't process your query."
+                    for char in error_msg:
+                        yield char
+            
+            return stream_main_response()
         else:
             response = await llm.ainvoke([{"role": "user", "content": prompt}])
             final_text = response.content.strip()
@@ -642,13 +804,24 @@ async def generate_response_async(
                     final_text += f"\n{screening_link}"
             
             return final_text
+            
     except Exception as e:
         logger.error(f"Failed to generate response: {str(e)}")
+        error_response = ""
         if language == "Hindi":
-            return "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
-        if language == "Hinglish":
-            return "Sorry, main aapka query process nahi kar saka."
-        return "Sorry, I couldn't process your query."
+            error_response = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
+        elif language == "Hinglish":
+            error_response = "Sorry, main aapka query process nahi kar saka."
+        else:
+            error_response = "Sorry, I couldn't process your query."
+        
+        if stream:
+            async def stream_error():
+                for char in error_response:
+                    yield char
+            return stream_error()
+        return error_response
+
 
 def generate_hindi_audio_script(
     original_response: str,
@@ -876,7 +1049,9 @@ async def process_query_optimized(
     
     context_pair = f"User: {recent_query}\nAssistant: {recent_response}" if follow_up and recent_query and recent_response else ""
     
-    # Step 10: RAG retrieval with caching
+   
+
+    # Step 10: RAG retrieval with XLSX support
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
     
@@ -896,13 +1071,14 @@ async def process_query_optimized(
                 "state": user_info.state_id,
                 "gender": user_info.gender,
                 "business_category": user_info.business_category,
-                "intent": intent
+                "intent": intent,
+                 "use_xlsx": True
             }
             
             rag_response = await cache_manager.get_rag_cache(query, cache_context)
             
             if not rag_response:
-                # Actual RAG retrieval
+                # Actual RAG retrieval with XLSX support
                 augmented_query = query
                 if follow_up and recent_query and recent_response:
                     augmented_query = f"{query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
@@ -915,34 +1091,90 @@ async def process_query_optimized(
                     business_category=user_info.business_category,
                     include_mudra=intent == "Schemes_Know_Intent",
                     intent=intent,
+                    # use_xlsx=use_xlsx,  # Pass the XLSX flag
                 )
                 
                 # Cache the response
                 session_data.rag_cache[query] = rag_response
                 
         tracker.end_timer("rag_retrieval")
-        
-    elif intent in dfl_intents:
-        tracker.start_timer("rag_retrieval")
-        
-        # Check session cache first
-        cache_key = query if not follow_up else recent_query
-        if cache_key and cache_key in session_data.dfl_rag_cache:
-            rag_response = session_data.dfl_rag_cache[cache_key]
-            logger.info("Using session cache for DFL response")
-        else:
-            rag_response = await get_dfl_response_async(
-                query,
-                dfl_vector_store,
-                state=user_info.state_id,
-                gender=user_info.gender,
-                business_category=user_info.business_category,
-            )
-            session_data.dfl_rag_cache[query] = rag_response
-            
-        tracker.end_timer("rag_retrieval")
 
-    # Step 11: Generate response
+    # # Step 11: Generate response
+    # tracker.start_timer("generate_response")
+    # rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
+    # if intent == "DFL_Intent" and (rag_text is None or "No relevant" in rag_text):
+    #     rag_text = ""
+    
+    # scheme_guid = None
+    # if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
+    #     scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
+    
+    # response_result = await generate_response_async(
+    #     intent,
+    #     rag_text or "",
+    #     user_info,
+    #     query_language,
+    #     context_pair,
+    #     query,
+    #     scheme_guid=scheme_guid,
+    #     stream=stream,
+    # )
+    # tracker.end_timer("generate_response")
+
+    # # Step 12: Create background tasks (non-blocking)
+    # if stream:
+    # # For streaming, create a background task factory
+    #     def create_streaming_audio_task():
+    #         async def streaming_audio_task(final_text: str) -> str:
+    #             # Start background tasks
+    #             audio_script_task = asyncio.create_task(
+    #                 generate_audio_script_background(final_text, user_info, rag_text or "")
+    #             )
+    #             save_task = asyncio.create_task(
+    #                 save_conversation_background(session_id, mobile_number, query, final_text)
+    #             )
+                
+    #             # Wait for audio script, but don't wait for save
+    #             try:
+    #                 hindi_script = await audio_script_task
+    #                 # Fire and forget the save task - don't wait for it
+    #                 return hindi_script
+    #             except Exception as e:
+    #                 logger.error(f"Audio script generation failed: {e}")
+    #                 return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
+            
+    #         return streaming_audio_task
+    
+    #     audio_task = create_streaming_audio_task()
+    # else:
+    #     response_text = response_result
+        
+    #     # Create background task that handles both audio and save
+    #     async def background_audio_task(final_text: str = None) -> str:
+    #         text_to_use = final_text or response_text
+            
+    #         # Start audio task
+    #         try:
+    #             hindi_script = await generate_audio_script_background(text_to_use, user_info, rag_text or "")
+    #         except Exception as e:
+    #             logger.error(f"Audio script generation failed: {e}")
+    #             hindi_script = "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
+            
+    #         # Start save task in fire-and-forget mode
+    #         asyncio.create_task(
+    #             save_conversation_background(session_id, mobile_number, query, text_to_use)
+    #         )
+            
+    #         return hindi_script
+        
+    #     audio_task = background_audio_task
+
+    # # The rest of your function remains the same
+    # tracker.log_summary()
+    # logger.info(f"Query processing completed for: {query}")
+
+    # return response_result, audio_task
+    # Step 11: Generate response (this is where the fix is important)
     tracker.start_timer("generate_response")
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
     if intent == "DFL_Intent" and (rag_text is None or "No relevant" in rag_text):
@@ -964,23 +1196,17 @@ async def process_query_optimized(
     )
     tracker.end_timer("generate_response")
 
-    # Step 12: Create background tasks (non-blocking)
+    # Step 12: Handle streaming vs non-streaming audio tasks
     if stream:
-    # For streaming, create a background task factory
+        # For streaming, response_result is an async generator
         def create_streaming_audio_task():
             async def streaming_audio_task(final_text: str) -> str:
-                # Start background tasks
-                audio_script_task = asyncio.create_task(
-                    generate_audio_script_background(final_text, user_info, rag_text or "")
-                )
-                save_task = asyncio.create_task(
-                    save_conversation_background(session_id, mobile_number, query, final_text)
-                )
-                
-                # Wait for audio script, but don't wait for save
                 try:
-                    hindi_script = await audio_script_task
-                    # Fire and forget the save task - don't wait for it
+                    hindi_script = await generate_audio_script_background(final_text, user_info, rag_text or "")
+                    # Fire and forget the save task
+                    asyncio.create_task(
+                        save_conversation_background(session_id, mobile_number, query, final_text, hindi_script)
+                    )
                     return hindi_script
                 except Exception as e:
                     logger.error(f"Audio script generation failed: {e}")
@@ -990,13 +1216,12 @@ async def process_query_optimized(
     
         audio_task = create_streaming_audio_task()
     else:
+        # For non-streaming, response_result is a string
         response_text = response_result
         
-        # Create background task that handles both audio and save
         async def background_audio_task(final_text: str = None) -> str:
             text_to_use = final_text or response_text
             
-            # Start audio task
             try:
                 hindi_script = await generate_audio_script_background(text_to_use, user_info, rag_text or "")
             except Exception as e:
@@ -1005,15 +1230,83 @@ async def process_query_optimized(
             
             # Start save task in fire-and-forget mode
             asyncio.create_task(
-                save_conversation_background(session_id, mobile_number, query, text_to_use)
+                save_conversation_background(session_id, mobile_number, query, text_to_use, hindi_script)
             )
             
             return hindi_script
         
         audio_task = background_audio_task
 
-    # The rest of your function remains the same
     tracker.log_summary()
     logger.info(f"Query processing completed for: {query}")
 
     return response_result, audio_task
+
+
+
+
+ # # Step 10: RAG retrieval with caching
+    # scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
+    # dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
+    
+    # rag_response = None
+    
+    # if intent in scheme_intents:
+    #     tracker.start_timer("rag_retrieval")
+        
+    #     # Check session cache first
+    #     cache_key = query if not follow_up else recent_query
+    #     if cache_key and cache_key in session_data.rag_cache:
+    #         rag_response = session_data.rag_cache[cache_key]
+    #         logger.info("Using session cache for scheme response")
+    #     else:
+    #         # Check distributed cache
+    #         cache_context = {
+    #             "state": user_info.state_id,
+    #             "gender": user_info.gender,
+    #             "business_category": user_info.business_category,
+    #             "intent": intent
+    #         }
+            
+    #         rag_response = await cache_manager.get_rag_cache(query, cache_context)
+            
+    #         if not rag_response:
+    #             # Actual RAG retrieval
+    #             augmented_query = query
+    #             if follow_up and recent_query and recent_response:
+    #                 augmented_query = f"{query}. Previous User Query: {recent_query}. Previous Assistant Response: {recent_response}"
+                
+    #             rag_response = await get_scheme_response_async(
+    #                 augmented_query,
+    #                 scheme_vector_store,
+    #                 state=user_info.state_id,
+    #                 gender=user_info.gender,
+    #                 business_category=user_info.business_category,
+    #                 include_mudra=intent == "Schemes_Know_Intent",
+    #                 intent=intent,
+    #             )
+                
+    #             # Cache the response
+    #             session_data.rag_cache[query] = rag_response
+                
+    #     tracker.end_timer("rag_retrieval")
+        
+    # elif intent in dfl_intents:
+    #     tracker.start_timer("rag_retrieval")
+        
+    #     # Check session cache first
+    #     cache_key = query if not follow_up else recent_query
+    #     if cache_key and cache_key in session_data.dfl_rag_cache:
+    #         rag_response = session_data.dfl_rag_cache[cache_key]
+    #         logger.info("Using session cache for DFL response")
+    #     else:
+    #         rag_response = await get_dfl_response_async(
+    #             query,
+    #             dfl_vector_store,
+    #             state=user_info.state_id,
+    #             gender=user_info.gender,
+    #             business_category=user_info.business_category,
+    #         )
+    #         session_data.dfl_rag_cache[query] = rag_response
+            
+    #     tracker.end_timer("rag_retrieval")
