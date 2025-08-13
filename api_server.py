@@ -29,6 +29,9 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 
 logging.getLogger("sse_starlette.sse").setLevel(logging.INFO)
+# Reduce OpenAI + HTTPX debug logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)          # <─ defined exactly once
 logging.basicConfig(

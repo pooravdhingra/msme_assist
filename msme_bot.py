@@ -28,7 +28,7 @@ from typing import Optional, Dict, Any, AsyncGenerator, Tuple
 import redis.asyncio as redis
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     force=True)
 logger = logging.getLogger(__name__)
@@ -137,12 +137,24 @@ cache_manager = CacheManager()
 def init_fast_xlsx_scheme_manager():
     """Initialize fast XLSX scheme manager"""
     try:
-        from scheme_lookup import initialize_fast_xlsx_manager
-        initialize_fast_xlsx_manager(os.getenv("SCHEME_XLSX_PATH"))
-        FAST_XLSX_AVAILABLE = True
+        xlsx_path = os.getenv("SCHEME_XLSX_PATH")
+        if not xlsx_path:
+            logger.error("SCHEME_XLSX_PATH environment variable not set")
+            return False
+        
+        if not os.path.exists(xlsx_path):
+            logger.error(f"XLSX file not found at path: {xlsx_path}")
+            return False
+            
+        initialize_fast_xlsx_manager(xlsx_path)
+        logger.info(f"Fast XLSX manager initialized successfully with file: {xlsx_path}")
+        return True
     except Exception as e:
-     logger.error(f"Failed to initialize fast XLSX manager: {e}")
-     FAST_XLSX_AVAILABLE = False
+        logger.error(f"Failed to initialize fast XLSX manager: {e}")
+        return False
+
+# Initialize at module level
+FAST_XLSX_AVAILABLE = init_fast_xlsx_scheme_manager()
 
 
 # Initialize DataManager - make it async capable
@@ -426,7 +438,7 @@ async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender
         if details:
             full_query = f"{full_query}. {' '.join(details)}"
 
-        logger.debug(f"Processing query: {full_query}")
+        # logger.debug(f"Processing query: {full_query}")
         
         # Run retrieval in thread pool since it's CPU intensive
         loop = asyncio.get_event_loop()

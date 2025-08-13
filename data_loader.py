@@ -13,7 +13,7 @@ import requests
 from dotenv import load_dotenv
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     force=True)
 logger = logging.getLogger(__name__)
@@ -152,8 +152,8 @@ class PineconeRecordRetriever(BaseRetriever):
 
     def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
 
-        logger.debug(f"Pinecone query text: {query}")
-        logger.debug(f"Top K: {self.k}")
+        # logger.debug(f"Pinecone query text: {query}")
+        # logger.debug(f"Top K: {self.k}")
 
         try:
             embedding = pc.inference.embed(
@@ -161,13 +161,13 @@ class PineconeRecordRetriever(BaseRetriever):
                 inputs=query,
                 parameters={"input_type": "query"},
             ).data[0]["values"]
-            logger.debug(f"Query embedding sample: {embedding[:5]}")
+            # logger.debug(f"Query embedding sample: {embedding[:5]}")
             filter_arg = None
             if self.state:
                 filter_arg = {
                     "applicability_state": {"$in": [self.state, "ALL_STATES"]}
                 }
-            logger.debug(f"Pinecone filter: {filter_arg}")
+            # logger.debug(f"Pinecone filter: {filter_arg}")
             res = self.index.query(
                 vector=embedding,
                 top_k=self.k,
@@ -181,7 +181,7 @@ class PineconeRecordRetriever(BaseRetriever):
 
   
         hits = res.get("matches", [])
-        logger.debug(f"Number of matches returned: {len(hits)}")
+        # logger.debug(f"Number of matches returned: {len(hits)}")
         docs = []
         for hit in hits:
             metadata = getattr(hit, "metadata", {}) or {}

@@ -209,7 +209,7 @@ class FastXLSXSchemeManager:
                         page_content=text,
                         metadata=metadata
                     )
-                    logger.debug(f"Registered scheme document for GUID: {guid}")
+                    # logger.debug(f"Registered scheme document for GUID: {guid}")
                     
             except Exception as e:
                 logger.error(f"Failed to register scheme from row: {str(e)}")
@@ -282,68 +282,11 @@ def find_scheme_guid_by_query(query: str) -> Optional[str]:
     for guid, keywords in SCHEME_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
-                logger.debug(f"Matched keyword '{kw}' for guid {guid}")
+                # logger.debug(f"Matched keyword '{kw}' for guid {guid}")
                 return guid
     return None
 
-# def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
-#     """Return scheme document from XLSX, local cache, or Pinecone."""
-    
-#     # First, try XLSX data if available and use_xlsx is True
-#     if use_xlsx and xlsx_manager:
-#         try:
-#             scheme_data = xlsx_manager.get_scheme_by_guid(guid)
-#             if scheme_data:
-#                 # Build text content from scheme data
-#                 text_parts = []
-#                 content_fields = [
-#                     'scheme_name', 'name', 'title',
-#                     'scheme_description', 'description', 'desc',
-#                     'benefit', 'benefits',
-#                     'application_process', 'process', 'how_to_apply',
-#                     'scheme_eligibility', 'eligibility', 'eligible',
-#                     'documents_required', 'documents', 'docs',
-#                     'amount', 'loan_amount', 'subsidy',
-#                     'interest_rate', 'rate',
-#                     'details', 'full_details'
-#                 ]
-                
-#                 for field in content_fields:
-#                     if field in scheme_data and pd.notna(scheme_data[field]):
-#                         text_parts.append(str(scheme_data[field]))
-                
-#                 if text_parts:
-#                     text = " ".join(text_parts)
-#                     doc = Document(page_content=text, metadata=scheme_data)
-#                     logger.info(f"Found scheme data for GUID {guid} in XLSX")
-#                     return [doc]
-#         except Exception as e:
-#             logger.error(f"Failed to fetch scheme from XLSX for GUID {guid}: {e}")
-    
-#     # Fallback to local cache
-#     doc = SCHEME_DOCS.get(str(guid))
-#     if doc:
-#         logger.info(f"Found scheme data for GUID {guid} in local cache")
-#         return [doc]
-    
-#     # Fallback to Pinecone
-#     logger.warning(f"Scheme document for GUID {guid} not found in XLSX or local cache")
-#     if index is not None:
-#         try:
-#             res = index.fetch(ids=[str(guid)], namespace="__default__")
-#             record = res.records.get(str(guid))
-#             if record and record.metadata:
-#                 text = record.metadata.get("chunk_text", "")
-#                 if text:
-#                     doc = Document(page_content=text, metadata=record.metadata)
-#                     SCHEME_DOCS[str(guid)] = doc
-#                     logger.info(f"Found scheme data for GUID {guid} in Pinecone")
-#                     return [doc]
-#         except Exception as exc:
-#             logger.error(f"Failed to fetch GUID {guid} from Pinecone: {exc}")
-    
-#     logger.warning(f"No scheme data found for GUID {guid}")
-#     return []
+
 
 def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
     """Optimized GUID fetch"""
@@ -357,7 +300,8 @@ def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
                 str(scheme_data.get('scheme_name', '')),
                 str(scheme_data.get('scheme_description', '')),
                 str(scheme_data.get('benefit', '')),
-                str(scheme_data.get('application_process', ''))
+                str(scheme_data.get('application_process', '')),
+                str(scheme_data.get('scheme_eligibility', '')),
             ]
             text = " ".join(p for p in text_parts if p and p != 'nan')
             
@@ -372,47 +316,7 @@ def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
     
     return []
 
-# def search_schemes_by_query(query: str, limit: int = 5) -> List[Document]:
-#     print(f"Searching schemes by query: {query} with limit {limit}")
-#     """Search schemes by query in XLSX data"""
-#     if not xlsx_manager:
-#         logger.warning("XLSX manager not initialized")
-#         return []
-    
-#     try:
-#         # Extract keywords from query
-#         query_words = query.lower().split()
-        
-#         # Search using XLSX manager
-#         matches = xlsx_manager.search_schemes_by_keywords(query_words, limit)
-        
-#         documents = []
-#         for match in matches:
-#             # Build text content
-#             text_parts = []
-#             content_fields = [
-#                 'scheme_name', 'name', 'title',
-#                 'scheme_description', 'description', 'desc',
-#                 'benefit', 'benefits',
-#                 'application_process', 'process', 'how_to_apply',
-#                 'scheme_eligibility', 'eligibility', 'eligible'
-#             ]
-            
-#             for field in content_fields:
-#                 if field in match and pd.notna(match[field]):
-#                     text_parts.append(str(match[field]))
-            
-#             if text_parts:
-#                 text = " ".join(text_parts)
-#                 doc = Document(page_content=text, metadata=match)
-#                 documents.append(doc)
-        
-#         logger.info(f"Found {len(documents)} schemes matching query: {query}")
-#         return documents
-        
-#     except Exception as e:
-#         logger.error(f"Failed to search schemes by query: {str(e)}")
-#         return []
+
 def search_schemes_by_query(query: str, limit: int = 5) -> List[Document]:
     """Optimized search using fast manager"""
     if not fast_xlsx_manager:
@@ -427,7 +331,7 @@ def search_schemes_by_query(query: str, limit: int = 5) -> List[Document]:
         for match in matches:
             # Build text content efficiently
             text_parts = []
-            for field in ['scheme_name', 'scheme_description', 'benefit', 'application_process']:
+            for field in ['scheme_name', 'scheme_description', 'benefit', 'application_process','scheme_eligibility']:
                 if field in match and pd.notna(match[field]):
                     text_parts.append(str(match[field]))
             
