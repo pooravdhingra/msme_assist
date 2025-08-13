@@ -498,13 +498,18 @@ async def get_scheme_response_async(
     
     # For specific scheme queries, try direct XLSX lookup first
     if intent == "Specific_Scheme_Know_Intent" and FAST_XLSX_AVAILABLE:
+        guid_start = time.perf_counter()
         logger.info(f"Using XLSX for specific scheme lookup - Query: {query}")
         
         # First, try to find GUID
         loop = asyncio.get_event_loop()
         guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query)
+
+        guid_time = time.perf_counter() - guid_start
+        logger.info(f"GUID lookup time: {guid_time:.3f}s, found: {guid}")
         
         if guid:
+            fetch_start = time.perf_counter()
             logger.info(f"Found popular scheme GUID: {guid} for query: '{query}'")
             # Fetch docs directly from XLSX
             docs = await loop.run_in_executor(
@@ -514,9 +519,11 @@ async def get_scheme_response_async(
                 None, 
                 True
             )
+            fetch_time = time.perf_counter() - fetch_start
             
             if docs:
-                logger.info(f"Retrieved aadhil {docs} documents from XLSX for GUID: {guid}")
+                llm_start = time.perf_counter()
+                logger.info(f"Retrieved {len(docs)} documents from XLSX for GUID: {guid} (fetch time: {fetch_time:.3f}s)")
                 def run_qa_chain():
                     retriever = DocumentListRetriever(docs)
                     qa_chain = RetrievalQA.from_chain_type(
@@ -528,38 +535,44 @@ async def get_scheme_response_async(
                     return qa_chain.invoke({"query": query})
                 
                 result = await loop.run_in_executor(executor, run_qa_chain)
+                llm_time = time.perf_counter() - llm_start
+               
                 rag = {"text": result["result"], "sources": result["source_documents"]}
+                logger.info(f"LLM processing time: {llm_time:.3f}s, response length: {len(rag['text'])} chars")
                 logger.info("Successfully retrieved scheme data from XLSX")
             else:
                 logger.warning("No documents found in XLSX for GUID; falling back to search")
     
-    # If direct GUID lookup didn't work, try XLSX search
-    if not rag and use_xlsx and FAST_XLSX_AVAILABLE:
-        logger.info("Using XLSX search for scheme lookup")
-        
-        loop = asyncio.get_event_loop()
-        
-        def run_xlsx_search():
-            # Search schemes in XLSX
-            logger.info(f"Searching schemes by query: {query} with limit 5")
-            docs = search_schemes_by_query(query, limit=5)
-            
-            if docs:
-                retriever = DocumentListRetriever(docs)
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=llm,
-                    chain_type="stuff",
-                    retriever=retriever,
-                    return_source_documents=True,
-                )
-                return qa_chain.invoke({"query": query})
-            return None
-        
-        result = await loop.run_in_executor(executor, run_xlsx_search)
-        
-        if result:
-            rag = {"text": result["result"], "sources": result["source_documents"]}
-            logger.info("Successfully retrieved scheme data from XLSX search")
+            # If direct GUID lookup didn't work, try XLSX search
+        if not rag and use_xlsx and FAST_XLSX_AVAILABLE:
+                search_start = time.perf_counter()
+                logger.info("Using XLSX search for scheme lookup")
+                
+                loop = asyncio.get_event_loop()
+                
+                def run_xlsx_search():
+                    # Search schemes in XLSX
+                    logger.info(f"Searching schemes by query: {query} with limit 5")
+                    docs = search_schemes_by_query(query, limit=5)
+                    
+                    if docs:
+                        retriever = DocumentListRetriever(docs)
+                        qa_chain = RetrievalQA.from_chain_type(
+                            llm=llm,
+                            chain_type="stuff",
+                            retriever=retriever,
+                            return_source_documents=True,
+                        )
+                        return qa_chain.invoke({"query": query})
+                    return None
+                
+                result = await loop.run_in_executor(executor, run_xlsx_search)
+                search_time = time.perf_counter() - search_start
+                
+                if result:
+                    rag = {"text": result["result"], "sources": result["source_documents"]}
+                    logger.info(f"XLSX search + LLM time: {search_time:.3f}s, response length: {len(rag['text'])} chars")
+                    logger.info("Successfully retrieved scheme data from XLSX search")
     
     # Fallback to Pinecone if XLSX didn't work
     if not rag:
@@ -652,6 +665,9 @@ async def get_scheme_response_async(
         rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
         rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
 
+    total_rag_time = time.perf_counter() - rag_start_time
+    logger.info(f"Total RAG processing time: {total_rag_time:.3f}s")    
+
     # Cache the result
     await cache_manager.set_rag_cache(query, rag, cache_context)
     
@@ -680,7 +696,7 @@ async def generate_response_async(
     stream: bool = False
 ):
     """Async version of generate_response with proper streaming support"""
-    
+    print(f"Generating response for intent: {intent}, language: {language}, query: {query} and rag_response: {rag_response}...")
     # Handle non-streaming cases first (these return strings)
     if intent == "Out_of_Scope":
         if language == "Hindi":
@@ -1043,7 +1059,7 @@ async def get_popular_scheme_response_fast(query: str, intent: str) -> Optional[
         
         result = await loop.run_in_executor(executor, run_fast_qa)
         rag_response = {"text": result["result"], "sources": result["source_documents"]}
-        
+        print(f"Fast path RAG kittu response: {rag_response['text']}...")  # Log first 100 chars
         logger.info(f"Fast path completed for popular scheme: {guid}")
         return rag_response
         
@@ -1204,7 +1220,7 @@ async def process_query_optimized(
     rag_response = None
     if intent in scheme_intents:
         tracker.start_timer("rag_retrieval")
-        
+        print(f"Retrieving RAG response for kittu intent: {intent}")
         # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
         if intent == "Specific_Scheme_Know_Intent":
             rag_response = await get_popular_scheme_response_fast(query, intent)
