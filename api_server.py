@@ -414,8 +414,8 @@ async def get_welcome(session_id: str):
 
     b64_audio = None
     if audio_task:
-        script = audio_task(response_text)
-        audio_bytes = synthesize(script, "Hindi")
+        script = await audio_task(response_text)  # FIX: await async task
+        audio_bytes = synthesize(script, "Hindi")  # assuming sync
         b64_audio = base64.b64encode(audio_bytes).decode()
 
     return {
