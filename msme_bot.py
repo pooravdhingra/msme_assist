@@ -497,25 +497,26 @@ async def get_scheme_response_async(
     rag = None
     
     # For specific scheme queries, try direct XLSX lookup first
-    if intent == "Specific_Scheme_Know_Intent" and use_xlsx and FAST_XLSX_AVAILABLE:
-        logger.info("Using XLSX for specific scheme lookup")
+    if intent == "Specific_Scheme_Know_Intent" and FAST_XLSX_AVAILABLE:
+        logger.info(f"Using XLSX for specific scheme lookup - Query: {query}")
         
         # First, try to find GUID
         loop = asyncio.get_event_loop()
         guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query)
         
         if guid:
-            logger.info(f"Found GUID {guid} for query: {query}")
+            logger.info(f"Found popular scheme GUID: {guid} for query: '{query}'")
             # Fetch docs directly from XLSX
             docs = await loop.run_in_executor(
                 executor, 
                 fetch_scheme_docs_by_guid, 
                 guid, 
-                None,  # index parameter (not needed for XLSX)
-                True   # use_xlsx parameter
+                None, 
+                True
             )
             
             if docs:
+                logger.info(f"Retrieved aadhil {docs} documents from XLSX for GUID: {guid}")
                 def run_qa_chain():
                     retriever = DocumentListRetriever(docs)
                     qa_chain = RetrievalQA.from_chain_type(
@@ -541,7 +542,6 @@ async def get_scheme_response_async(
         def run_xlsx_search():
             # Search schemes in XLSX
             logger.info(f"Searching schemes by query: {query} with limit 5")
-            logger.info("novfal")
             docs = search_schemes_by_query(query, limit=5)
             
             if docs:
@@ -740,7 +740,6 @@ async def generate_response_async(
     # Build the main prompt for other intents
     word_limit = 150 if intent == "Schemes_Know_Intent" else 100
     tone_prompt = get_system_prompt(language, user_info.name, word_limit)
-
     base_prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
     **Input**:
@@ -997,6 +996,61 @@ async def generate_audio_script_background(response: str, user_info: UserContext
         logger.error(f"Background audio script generation failed: {str(e)}")
         return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
 
+async def get_popular_scheme_response_fast(query: str, intent: str) -> Optional[dict]:
+    """Ultra-fast response for popular schemes (1-2 seconds)"""
+    if intent != "Specific_Scheme_Know_Intent":
+        return None
+    
+    # Step 1: Quick GUID lookup (< 100ms)
+    guid = find_scheme_guid_by_query(query)
+    if not guid:
+        logger.info(f"No popular scheme GUID found for query: '{query}' - using regular path")
+        return None
+    
+    logger.info(f"Found popular scheme GUID: {guid} for query: '{query}' - using fast path")
+    
+    # Step 2: Fast XLSX fetch (< 200ms)  
+    if not FAST_XLSX_AVAILABLE:
+        logger.warning("XLSX not available - falling back to regular path")
+        return None
+    
+    try:
+        loop = asyncio.get_event_loop()
+        
+        # Single fast operation - no parallel tasks overhead
+        docs = await loop.run_in_executor(
+            executor, 
+            fetch_scheme_docs_by_guid, 
+            guid, 
+            None, 
+            True
+        )
+        
+        if not docs:
+            logger.warning(f"No docs found for popular scheme GUID: {guid}")
+            return None
+        
+        # Step 3: Fast QA chain (< 1000ms)
+        def run_fast_qa():
+            retriever = DocumentListRetriever(docs)
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=llm,
+                chain_type="stuff", 
+                retriever=retriever,
+                return_source_documents=True,
+            )
+            return qa_chain.invoke({"query": query})
+        
+        result = await loop.run_in_executor(executor, run_fast_qa)
+        rag_response = {"text": result["result"], "sources": result["source_documents"]}
+        
+        logger.info(f"Fast path completed for popular scheme: {guid}")
+        return rag_response
+        
+    except Exception as e:
+        logger.error(f"Fast path failed for GUID {guid}: {str(e)} - falling back")
+        return None
+
 def create_audio_task_background(response: str, user_info: UserContext, rag_response: str = ""):
     """Create a background audio task that returns a coroutine"""
     async def audio_task(final_text: str = None) -> str:
@@ -1142,75 +1196,55 @@ async def process_query_optimized(
     
 
 
-    # Replace Step 10 with this optimized version:
     scheme_intents = {"Specific_Scheme_Know_Intent", "Specific_Scheme_Apply_Intent", "Specific_Scheme_Eligibility_Intent", "Schemes_Know_Intent", "Contextual_Follow_Up", "Confirmation_New_RAG"}
     dfl_intents = {"DFL_Intent", "Non_Scheme_Know_Intent"}
-    
+
+    logger.info(f"Processing query: '{query}' with intent: {intent}")
+
     rag_response = None
     if intent in scheme_intents:
         tracker.start_timer("rag_retrieval")
         
-        # Check all caches in parallel
-        cache_tasks = []
-        cache_context = {
-                "state": user_info.state_id,
-                "gender": user_info.gender,
-                "business_category": user_info.business_category,
-                "intent": intent,
-                 "use_xlsx": True
-        }
-        if not follow_up:
-            cache_tasks.append(asyncio.create_task(cache_manager.get_rag_cache(query, cache_context)))
-        
-        # Start RAG retrieval immediately if no cache hit expected
+        # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
         if intent == "Specific_Scheme_Know_Intent":
-            # Use fast XLSX path for specific schemes
-            loop = asyncio.get_event_loop()
-
-            guid_task = loop.run_in_executor(executor, find_scheme_guid_by_query, query)
-            search_task = loop.run_in_executor(executor, search_schemes_by_query, query, 5)
-
-            guid_result, search_result = await asyncio.gather(guid_task, search_task)
+            rag_response = await get_popular_scheme_response_fast(query, intent)
+        
+        # FALLBACK to full pipeline if fast path didn't work
+        if not rag_response:
+            logger.info("Using full scheme response pipeline")
+            include_mudra = intent == "Schemes_Know_Intent"
             
-            # Wait for faster result
-            done, pending = await asyncio.wait(
-                [guid_task, search_task], 
-                return_when=asyncio.FIRST_COMPLETED,
-                timeout=1.0  # 1 second timeout
+            rag_response = await get_scheme_response_async(
+                query=query,
+                vector_store=scheme_vector_store,
+                state=user_info.state_id,
+                gender=user_info.gender,
+                business_category=user_info.business_category,
+                include_mudra=include_mudra,
+                intent=intent,
+                use_xlsx=True
             )
-            
-            # Cancel slower task
-            for task in pending:
-                task.cancel()
-            
-            # Process fastest result
-            for task in done:
-                try:
-                    result = await task
-                    if isinstance(result, str) and result:  # GUID found
-                        docs = await loop.run_in_executor(
-                            executor, fetch_scheme_docs_by_guid, result, None, True
-                        )
-                        if docs:
-                            rag_response = await loop.run_in_executor(
-                                executor, run_qa_chain_fast, docs, query
-                            )
-                    elif isinstance(result, list) and result:  # Search results found
-                        rag_response = await loop.run_in_executor(
-                            executor, run_qa_chain_fast, result, query
-                        )
-                    break
-                except Exception as e:
-                    continue
         
         tracker.end_timer("rag_retrieval")
+
+    elif intent in dfl_intents:
+        tracker.start_timer("dfl_retrieval")
+        
+        rag_response = await get_dfl_response_async(
+            query=query,
+            vector_store=dfl_vector_store,
+            state=user_info.state_id,
+            gender=user_info.gender,
+            business_category=user_info.business_category
+        )
+        
+        tracker.end_timer("dfl_retrieval")
 
     # Step 11: Generate response (this is where the fix is important)
     tracker.start_timer("generate_response")
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
     if intent == "DFL_Intent" and (rag_text is None or "No relevant" in rag_text):
         rag_text = ""
-    
     scheme_guid = None
     if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))

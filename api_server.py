@@ -390,7 +390,7 @@ def get_history(session_id: str):
     )
 
 @app.get("/welcome/{session_id}")
-def get_welcome(session_id: str):
+async def get_welcome(session_id: str):
     session = _load_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
@@ -401,7 +401,7 @@ def get_welcome(session_id: str):
     if any("welcome" in (msg["content"] or "").lower() for conv in conversations for msg in conv["messages"]):
         return {"welcome": None, "audio": None}
 
-    response_text, audio_task = process_query_optimized(
+    response_text, audio_task = await process_query_optimized(
         "welcome",
         scheme_vector_store,
         dfl_vector_store,

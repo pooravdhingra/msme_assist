@@ -115,7 +115,7 @@ class FastXLSXSchemeManager:
     
     def _build_text_index(self):
         """Build text search index"""
-        search_columns = ['scheme_name', 'name', 'title', 'scheme_description', 'description']
+        search_columns = ['scheme_name', 'name', 'title', 'scheme_description', 'description','scheme_eligibility','application_process','benefit']
         
         for guid, row_data in self.scheme_index.items():
             text_tokens = set()
@@ -279,6 +279,21 @@ def register_scheme_docs(records: List[Dict]) -> None:
 def find_scheme_guid_by_query(query: str) -> Optional[str]:
     """Return scheme guid if query matches keywords."""
     text = query.lower()
+       # Direct exact matches first (fastest)
+    direct_matches = {
+        "mudra": "SH0008BK",
+        "pmegp": "SH0009RA", 
+        "fssai": "DC00096J",
+        "udyam": "DC0008R0",
+        "vishwakarma": "SH000B51",
+        "pmfme": "SH000DFP"
+    }
+    
+    for key, guid in direct_matches.items():
+        if key in text:
+            logger.debug(f"Direct match: '{key}' -> {guid}")
+            return guid
+            
     for guid, keywords in SCHEME_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
@@ -289,12 +304,16 @@ def find_scheme_guid_by_query(query: str) -> Optional[str]:
 
 
 def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
-    """Optimized GUID fetch"""
+    """Optimized GUID fetch with detailed logging"""
+    
+    logger.info(f"Fetching scheme docs for GUID: {guid}, use_xlsx: {use_xlsx}")
     
     # Fast XLSX lookup (O(1) time)
     if use_xlsx and fast_xlsx_manager:
+        logger.debug(f"Using fast XLSX manager for GUID: {guid}")
         scheme_data = fast_xlsx_manager.get_scheme_by_guid(guid)
         if scheme_data:
+            logger.info(f"Found scheme data in XLSX for GUID: {guid}")
             # Quick text building
             text_parts = [
                 str(scheme_data.get('scheme_name', '')),
@@ -302,33 +321,48 @@ def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
                 str(scheme_data.get('benefit', '')),
                 str(scheme_data.get('application_process', '')),
                 str(scheme_data.get('scheme_eligibility', '')),
+                str(scheme_data.get('application_process', '')),
+                str(scheme_data.get('scheme_eligibility', '')),
             ]
             text = " ".join(p for p in text_parts if p and p != 'nan')
             
             if text:
+                logger.info(f"Built document text for GUID: {guid}, length: {len(text)} characters")
                 doc = Document(page_content=text, metadata=scheme_data)
                 return [doc]
+            else:
+                logger.warning(f"No valid text content found for GUID: {guid}")
+        else:
+            logger.warning(f"No scheme data found in XLSX for GUID: {guid}")
+    elif use_xlsx:
+        logger.warning("Fast XLSX manager not available, falling back to cache")
     
     # Fallback to cache/Pinecone (existing logic)
+    logger.debug(f"Checking document cache for GUID: {guid}")
     doc = SCHEME_DOCS.get(str(guid))
     if doc:
+        logger.info(f"Found document in cache for GUID: {guid}")
         return [doc]
     
+    logger.warning(f"No documents found for GUID: {guid} in any source")
     return []
 
 
 def search_schemes_by_query(query: str, limit: int = 5) -> List[Document]:
-    """Optimized search using fast manager"""
+    """Optimized search using fast manager with detailed logging"""
+    logger.info(f"Searching schemes for query: '{query}', limit: {limit}")
+    
     if not fast_xlsx_manager:
-        logger.warning("Fast XLSX manager not initialized")
+        logger.error("Fast XLSX manager not initialized - cannot perform search")
         return []
     
     try:
         # Use fast search
         matches = fast_xlsx_manager.search_schemes_fast(query, limit)
+        logger.info(f"Found {len(matches)} raw matches for query: '{query}'")
         
         documents = []
-        for match in matches:
+        for i, match in enumerate(matches):
             # Build text content efficiently
             text_parts = []
             for field in ['scheme_name', 'scheme_description', 'benefit', 'application_process','scheme_eligibility']:
@@ -339,11 +373,13 @@ def search_schemes_by_query(query: str, limit: int = 5) -> List[Document]:
                 text = " ".join(text_parts)
                 doc = Document(page_content=text, metadata=match)
                 documents.append(doc)
+                logger.debug(f"Match {i+1}: {match.get('scheme_name', 'Unknown')} (GUID: {match.get('scheme_guid', 'N/A')})")
         
+        logger.info(f"Converted {len(documents)} matches to documents for query: '{query}'")
         return documents
         
     except Exception as e:
-        logger.error(f"Fast search failed: {str(e)}")
+        logger.error(f"Fast search failed for query '{query}': {str(e)}")
         return []
 
 class DocumentListRetriever(BaseRetriever):
