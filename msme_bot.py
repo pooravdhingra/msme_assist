@@ -417,7 +417,6 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
         
         # Cache the result
         await cache_manager.set_intent_cache(query, intent, conversation_history)
-        
         return intent
     except Exception as e:
         logger.error(f"Failed to classify intent: {str(e)}")
@@ -700,10 +699,11 @@ async def generate_response_async(
     # Handle non-streaming cases first (these return strings)
     if intent == "Out_of_Scope":
         if language == "Hindi":
-            return "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
-        if language == "Hinglish":
-            return "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
-        return "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+            response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
+        elif language == "Hinglish":
+            response = "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
+        else:
+            response = "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
         
         if stream:
             async def stream_response():
@@ -1264,7 +1264,7 @@ async def process_query_optimized(
     scheme_guid = None
     if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
-    
+
     response_result = await generate_response_async(
         intent,
         rag_text or "",

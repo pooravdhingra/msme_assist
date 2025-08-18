@@ -329,13 +329,7 @@ def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
             
             # Log specific field values for debugging
             key_fields = ['scheme_name', 'scheme_description', 'benefit', 'application_process', 'scheme_eligibility']
-            field_data = {}
-            for field in key_fields:
-                if field in scheme_data and pd.notna(scheme_data[field]):
-                    value = str(scheme_data[field])
-                    field_data[field] = f"{len(value)} chars" if len(value) > 50 else value
-            logger.info(f"Key field data for GUID {guid}: {field_data}")
-            
+           
             # Quick text building
             text_build_start = time.perf_counter()
             text_parts = [

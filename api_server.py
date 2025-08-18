@@ -139,7 +139,6 @@ async def chat_get_optimized(session_id: str, query: str):
         user_language=sess.user.get("language"),
         stream=True,
     )
-    
     print(f"⏱️ Optimized process_query: {time.perf_counter() - start_time:.3f}s")
 
     async def event_generator():
