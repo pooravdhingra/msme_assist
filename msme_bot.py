@@ -477,7 +477,7 @@ async def get_scheme_response_async(
 ):
     """Async version of get_scheme_response with XLSX support"""
     logger.info("Querying scheme dataset")
-
+    rag_start_time = time.perf_counter()   
     # Check cache first
     cache_context = {
         "state": state,

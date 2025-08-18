@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 from langchain.schema import Document
 from langchain.schema import BaseRetriever
 from functools import lru_cache
+import time
 
 logger = logging.getLogger(__name__)
 
