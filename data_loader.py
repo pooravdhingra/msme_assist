@@ -157,7 +157,7 @@ class PineconeRecordRetriever(BaseRetriever):
 
         try:
             embedding = pc.inference.embed(
-                model="llama-text-embed-v2",
+                model="multilingual-e5-large",
                 inputs=query,
                 parameters={"input_type": "query"},
             ).data[0]["values"]
@@ -285,7 +285,7 @@ def load_rag_data(
             name=index_name,
             cloud="aws",
             region="us-east-1",
-            embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
+            embed={"model": "multilingual-e5-large", "field_map": {"text": "chunk_text"}},
         )
 
     index = get_index_by_host(host)
@@ -357,7 +357,7 @@ def load_dfl_data(
             name=index_name,
             cloud="aws",
             region="us-east-1",
-            embed={"model": "llama-text-embed-v2", "field_map": {"text": "chunk_text"}},
+            embed={"model": "multilingual-e5-large", "field_map": {"text": "chunk_text"}},
         )
 
     index = get_index_by_host(host)

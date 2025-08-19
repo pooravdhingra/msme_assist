@@ -28,7 +28,7 @@ def get_embeddings():
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
         embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",
+            model="multilingual-e5-large",
             api_key=api_key
         )
         logger.info("OpenAI embeddings initialized successfully")
