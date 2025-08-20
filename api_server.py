@@ -12,7 +12,6 @@ from typing import Dict
 from msme_bot import (
     scheme_vector_store,
     dfl_vector_store,
-    # process_query,
     process_query_optimized,
     SessionData,
 )
@@ -108,6 +107,7 @@ def auth_token(payload: Dict[str, str]):
         "business_category": result.get("employmentType", ""),
         "language": "English",
         "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown"),
+        "user_type":result.get("user_type", 1),
     }
     session_id = uuid.uuid4().hex
     data_manager.start_session(user["mobile_number"], session_id, user)
@@ -125,7 +125,7 @@ async def chat_get_optimized(session_id: str, query: str):
 
     user_msg = {"role": "user", "content": query, "timestamp": uuid.uuid4().hex}
     sess.messages.append(user_msg)
-
+    user_type = sess.user["user_type"]
     start_time = time.perf_counter()
     
     # Use optimized async version
@@ -136,6 +136,7 @@ async def chat_get_optimized(session_id: str, query: str):
         session_id,
         sess.user["mobile_number"],
         sess,
+        user_type,
         user_language=sess.user.get("language"),
         stream=True,
     )
@@ -264,16 +265,17 @@ def get_history(session_id: str):
     # Step 2: Append user message
     user_msg = {"role": "user", "content": query, "timestamp": uuid.uuid4().hex}
     session.messages.append(user_msg)
-
+    user_type = session.user["user_type"]
     # Step 3: Run process_query
     step2 = time.perf_counter()
-    stream, audio_task = process_query(
+    stream, audio_task = process_query_optimized(
         query,
         scheme_vector_store,
         dfl_vector_store,
         session_id,
         session.user["mobile_number"],
         session,
+        user_type,
         user_language=session.user.get("language"),
         stream=True,
     )
@@ -323,71 +325,6 @@ def get_history(session_id: str):
     return EventSourceResponse(event_generator(), headers=sse_headers)
 
 
-# @app.get("/chat")
-# async def chat_get(session_id: str, query: str):
-    sess = _load_session(session_id)
-    if not sess:
-        raise HTTPException(404, "session not found")
-    if not isinstance(sess, SessionData):
-        import inspect, logging
-        logging.error(f"sess is {type(sess)}: {sess}  (callable? {callable(sess)})  source: {inspect.getsource(sess) if callable(sess) else ''}")
-        raise HTTPException(500, "Corrupt session object")
-
-    user_msg = {"role": "user", "content": query, "timestamp": uuid.uuid4().hex}
-    sess.messages.append(user_msg)
-
-    step2 = time.perf_counter()
-    token_stream, make_audio = process_query(
-        query,
-        scheme_vector_store,
-        dfl_vector_store,
-        session_id,
-        sess.user["mobile_number"],
-        sess,
-        user_language=sess.user.get("language"),
-        stream=True,
-    )
-    print("⏱️ process_query (GET):", time.perf_counter() - step2)
-
-    async def event_generator():
-        final_text = ""
-        stream_start = time.perf_counter()
-        try:
-            for token in token_stream:
-                final_text += token
-                yield {"data": token}
-            print("⏱️ Streaming complete (GET):", time.perf_counter() - stream_start)
-
-            if make_audio:
-                script = make_audio(final_text)
-                audio_bytes = synthesize(script, "Hindi")
-                b64_audio = base64.b64encode(audio_bytes).decode()
-                logger.info("Audio event generated – %d bytes", len(audio_bytes))
-                yield {"event": "audio", "data": b64_audio}
-
-            assistant_msg = {
-                "role": "assistant",
-                "content": final_text,
-                "timestamp": uuid.uuid4().hex
-            }
-            sess.messages.append(assistant_msg)
-
-            yield {"event": "done", "data": ""}
-
-        except Exception as e:
-            import traceback, logging
-            logging.error("SSE gen error: %s\n%s", e, traceback.format_exc())
-
-    return EventSourceResponse(
-        event_generator(),
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
 @app.get("/welcome/{session_id}")
 async def get_welcome(session_id: str):
     session = _load_session(session_id)
@@ -395,6 +332,7 @@ async def get_welcome(session_id: str):
         raise HTTPException(status_code=404, detail="session not found")
 
     mobile = session.user["mobile_number"]
+    user_type = session.user["user_type"]
     conversations = data_manager.get_conversations(mobile)
 
     if any("welcome" in (msg["content"] or "").lower() for conv in conversations for msg in conv["messages"]):
@@ -407,8 +345,9 @@ async def get_welcome(session_id: str):
         session_id,
         mobile,
         session,
+        user_type,
         user_language=session.user.get("language"),
-        stream=False
+        stream=False   
     )
 
     b64_audio = None

@@ -14,9 +14,9 @@ from scheme_lookup import (
     find_scheme_guid_by_query,
     fetch_scheme_docs_by_guid,
     DocumentListRetriever,
-    initialize_fast_xlsx_manager,  # Add this import
-    search_schemes_by_query,  # Add this import
-    XLSXSchemeRetriever,     # Add this import
+    initialize_fast_xlsx_manager,  
+    search_schemes_by_query,  
+    XLSXSchemeRetriever,     
 )
 from utils import extract_scheme_guid
 from data import DataManager
@@ -341,8 +341,54 @@ def build_conversation_history(messages):
     return conversation_history
 
 # Welcome user
-def welcome_user(state_name, user_name, query_language):
+# def welcome_user(state_name, user_name, query_language,user_type):
+#     """Generate a welcome message in the user's chosen language."""
+#     prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a new user named {user_name} from {state_name}.
+
+#     **Input**:
+#     - Query Language: {query_language}
+
+#     **Instructions**:
+#     - Generate a welcome message for a new user in the specified language ({query_language}).
+#     - For Hindi, use Devanagari script with simple, clear words suitable for micro business owners with low Hindi proficiency.
+#     - For English, use simple English with a friendly tone.
+#     - The message should welcome the user, and offer assistance with schemes and documents applicable to their state and all central government schemes or help with digital/financial literacy and business growth.
+#     - Response must be ≤70 words.
+#     - Start the response with 'Hi {user_name}!' (English) or 'नमस्ते {user_name}!' (Hindi).
+
+#     **Output**:
+#     - Return only the welcome message in the specified language.
+#     """
+
+#     try:
+#         response = llm.invoke([{"role": "user", "content": prompt}])
+#         generated_response = response.content.strip()
+#         logger.info(f"Generated welcome message in {query_language}: {generated_response}")
+#         return generated_response
+#     except Exception as e:
+#         logger.error(f"Failed to generate welcome message: {str(e)}")
+#         # Fallback to default messages
+#         if query_language == "Hindi":
+#             return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
+#         return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
+
+def welcome_user(state_name, user_name, query_language, user_type):
     """Generate a welcome message in the user's chosen language."""
+    
+    # If user_type is 1, return the complete message from the screenshot
+    if user_type == 1:
+        if query_language == "Hindi":
+            return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!"
+        else:
+            return f"Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes. If you need support with digital skills, financial literacy, or growing your business, just ask. Let's work together to make your business successful!"
+    
+    # If user_type is 0, return shortened message (until central schemes only)
+    else:
+        if query_language == "Hindi":
+            return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ।"
+        else:
+            return f"Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes."
+    # If user_type is 0, generate the original dynamic message
     prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a new user named {user_name} from {state_name}.
 
     **Input**:
@@ -369,8 +415,8 @@ def welcome_user(state_name, user_name, query_language):
         logger.error(f"Failed to generate welcome message: {str(e)}")
         # Fallback to default messages
         if query_language == "Hindi":
-            return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
-        return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
+            return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा।"
+        return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes."
 
 def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
@@ -716,7 +762,7 @@ async def generate_response_async(
         gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
 
         **Instructions**:
-        - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help.
+        - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help. 
         - Use Devanagari script for Hindi and a natural mix of Hindi and English words in Roman script for Hinglish.
         - Keep the message under 30 words.
 
@@ -776,6 +822,13 @@ async def generate_response_async(
 
     **Language Handling and Tone Instructions**:
     {tone_prompt}
+
+    **Formatting Instructions**:
+    - Start with greeting on its own line: 'Hi {user_info.name}!' (English), 'Namaste {user_info.name}!' (Hinglish), or 'नमस्ते {user_info.name}!' (Hindi)
+    - After greeting, add a blank line
+    - Structure the answer in multiple short paragraphs (1-2 lines each)
+    - Add a blank line between each paragraph for better readability
+    - Use clear, simple formatting without excessive bullet points
 
     **Task**:
     Use any user-provided scheme details to pick relevant schemes from retrieved data and personalise the scheme information wherever applicable.
@@ -1105,6 +1158,7 @@ async def process_query_optimized(
     session_id: str,
     mobile_number: str,
     session_data: SessionData,
+     userType: int = 0,
     user_language: str = None,
     stream: bool = False
 ) -> Tuple[Any, callable]:
@@ -1142,7 +1196,7 @@ async def process_query_optimized(
         user_type = "returning" if conversations else "new"
         
         if user_type == "new":
-            response = welcome_user(user_info.state_name, user_info.name, query_language)
+            response = welcome_user(user_info.state_name, user_info.name, query_language,userType)
             
             # Create background task for saving welcome message
             async def save_welcome():
