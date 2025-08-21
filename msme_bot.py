@@ -795,7 +795,7 @@ async def generate_response_async(
     - After greeting, add a blank line
     - Structure the answer in multiple short paragraphs (1-2 lines each)
     - Add a blank line between each paragraph for better readability
-    - Use clear, simple formatting without excessive bullet points
+    - Use clear, simple formatting with bullet bullet points
 
     **Task**:
     Use any user-provided scheme details to pick relevant schemes from retrieved data and personalise the scheme information wherever applicable.
@@ -1240,11 +1240,11 @@ async def process_query_optimized(
     rag_response = None
     if intent in scheme_intents:
         tracker.start_timer("rag_retrieval")
-        print(f"Retrieving RAG response for kittu intent: {intent}")
+        logger.info(f"Retrieving RAG response for kittu intent: {intent}")
         # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
         if intent == "Specific_Scheme_Know_Intent":
             rag_response = await get_popular_scheme_response_fast(query, intent)
-            print(f"Fast path tobi response: {rag_response}")
+            logger.info(f"Fast path tobi response: {rag_response}")
         # FALLBACK to full pipeline if fast path didn't work
         if not rag_response:
             logger.info("Using full scheme response pipeline")

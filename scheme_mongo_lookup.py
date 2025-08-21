@@ -1,392 +1,3 @@
-# # scheme_mongo_lookup.py
-# import logging
-# import os
-# import time
-# from typing import Optional, Dict, List, Any
-# from pymongo import MongoClient
-# from functools import lru_cache
-# import re
-# from dataclasses import dataclass
-
-# logger = logging.getLogger(__name__)
-
-# @dataclass
-# class SchemeDocument:
-#     """Document structure for scheme data"""
-#     page_content: str
-#     metadata: Dict[str, Any]
-
-# class MongoSchemeRetriever:
-#     """Fast MongoDB-based scheme retriever for popular schemes"""
-    
-#     def __init__(self, connection_string: str = None, database_name: str = "haqdarshak", collection_name: str = "schemes"):
-#         self.connection_string = connection_string or os.getenv("mongodb+srv://pooravdhingra:Poorav123@msmeassist.womwsrv.mongodb.net/haqdarshak")
-#         self.database_name = database_name
-#         self.collection_name = collection_name
-#         self.client = None
-#         self.db = None
-#         self.collection = None
-#         self._initialize_connection()
-    
-#     def _initialize_connection(self):
-#         """Initialize MongoDB connection"""
-#         try:
-#             if not self.connection_string:
-#                 raise ValueError("MongoDB connection string not provided")
-            
-#             self.client = MongoClient(self.connection_string)
-#             self.db = self.client[self.database_name]
-#             self.collection = self.db[self.collection_name]
-            
-#             # Test connection
-#             self.client.admin.command('ping')
-#             logger.info(f"MongoDB connection established to {self.database_name}.{self.collection_name}")
-            
-#         except Exception as e:
-#             logger.error(f"Failed to initialize MongoDB connection: {e}")
-#             self.client = None
-    
-#     def is_available(self) -> bool:
-#         """Check if MongoDB connection is available"""
-#         return self.client is not None
-    
-#     @lru_cache(maxsize=500)
-#     def find_scheme_guid_by_query(self, query: str) -> Optional[str]:
-#         """
-#         Find scheme GUID by query with caching
-#         Uses text search and fuzzy matching for popular schemes
-#         """
-#         if not self.is_available():
-#             return None
-        
-#         try:
-#             start_time = time.perf_counter()
-#             query_lower = query.lower().strip()
-            
-#             # Popular scheme mappings (same as your existing logic)
-#             scheme_mappings = {
-#                 # Existing mappings from your XLSX approach
-#                 "udyam": "SH000BJI",
-#                 "udyam registration": "SH000BJI", 
-#                 "udyog": "SH000BJI",
-#                 "fssai": "DC00096J",
-#                 "food license": "DC00096J",
-#                 "food safety": "DC00096J",
-#                 "shop act": "SH000BOZ",
-#                 "shop establishment": "SH000BOZ",
-#                 "trade license": "SH000BOZ",
-#                 "gst": "SH000BNY",
-#                 "goods and services tax": "SH000BNY",
-#                 "mudra": "SH0008BK",
-#                 "mudra yojana": "SH0008BK",
-#                 "pradhan mantri mudra": "SH0008BK",
-#                 "pmegp": "SH000898",
-#                 "prime minister employment": "SH000898",
-#                 "pmfme": "SH000B3H",
-#                 "pm formalization": "SH000B3H",
-#                 "cmegp": "SH000BYG",
-#                 "coir udyami": "SH000BYG",
-#                 "yuva udyami": "SH000BZK",
-#                 "pmsby": "SH000BLR",
-#                 "pradhan mantri suraksha": "SH000BLR",
-#                 "pmjjby": "SH000BLS",
-#                 "pradhan mantri jeevan": "SH000BLS",
-#                 "pmjay": "SH000BLQ",
-#                 "ayushman bharat": "SH000BLQ",
-#             }
-            
-#             # Check direct mappings first
-#             for key, guid in scheme_mappings.items():
-#                 if key in query_lower:
-#                     elapsed = time.perf_counter() - start_time
-#                     logger.info(f"Found scheme GUID via mapping: {guid} for query: '{query}' in {elapsed:.3f}s")
-#                     return guid
-            
-#             # If no direct mapping, try MongoDB text search
-#             search_queries = [
-#                 # Text search with original query
-#                 {"$text": {"$search": query}},
-                
-#                 # Regex search on scheme name
-#                 {"scheme_name": {"$regex": re.escape(query), "$options": "i"}},
-                
-#                 # Search in description
-#                 {"scheme_description": {"$regex": re.escape(query), "$options": "i"}}
-#             ]
-            
-#             for search_query in search_queries:
-#                 try:
-#                     # Add filters for active schemes
-#                     full_query = {
-#                         "$and": [
-#                             search_query,
-#                             {"scheme_status": {"$in": ["Active", "active"]}},
-#                             {"type": {"$in": ["Centrally Sponsored Scheme", "Central Sector Scheme", "State Scheme"]}}
-#                         ]
-#                     }
-                    
-#                     # Find with relevance scoring for text search
-#                     if "$text" in search_query:
-#                         cursor = self.collection.find(
-#                             full_query,
-#                             {"scheme_guid": 1, "scheme_name": 1, "score": {"$meta": "textScore"}}
-#                         ).sort([("score", {"$meta": "textScore"})]).limit(1)
-#                     else:
-#                         cursor = self.collection.find(
-#                             full_query,
-#                             {"scheme_guid": 1, "scheme_name": 1}
-#                         ).limit(1)
-                    
-#                     result = list(cursor)
-#                     if result:
-#                         scheme_guid = result[0].get("scheme_guid")
-#                         scheme_name = result[0].get("scheme_name", "Unknown")
-#                         elapsed = time.perf_counter() - start_time
-#                         logger.info(f"Found scheme GUID via MongoDB search: {scheme_guid} ({scheme_name}) for query: '{query}' in {elapsed:.3f}s")
-#                         return scheme_guid
-                        
-#                 except Exception as search_error:
-#                     logger.warning(f"Search query failed: {search_query}, error: {search_error}")
-#                     continue
-            
-#             elapsed = time.perf_counter() - start_time
-#             logger.info(f"No scheme GUID found for query: '{query}' in {elapsed:.3f}s")
-#             return None
-            
-#         except Exception as e:
-#             logger.error(f"Error in find_scheme_guid_by_query: {e}")
-#             return None
-    
-#     def fetch_scheme_docs_by_guid(self, guid: str, limit: int = 10) -> List[SchemeDocument]:
-#         """
-#         Fetch scheme documents by GUID from MongoDB
-#         """
-#         if not self.is_available():
-#             return []
-        
-#         try:
-#             start_time = time.perf_counter()
-            
-#             # Query for the specific scheme
-#             query = {"scheme_guid": guid}
-            
-#             # Project only needed fields to optimize performance
-#             projection = {
-#                 "scheme_guid": 1,
-#                 "scheme_name": 1,
-#                 "scheme_description": 1,
-#                 "scheme_eligibility": 1,
-#                 "benefit": 1,
-#                 "application_process": 1,
-#                 "required_documents": 1,
-#                 "type": 1,
-#                 "applicability_state": 1,
-#                 "central_department_name": 1,
-#                 "state_department_name": 1,
-#                 "Individual/MSME": 1,
-#                 "scheme_status": 1
-#             }
-            
-#             cursor = self.collection.find(query, projection).limit(limit)
-#             results = list(cursor)
-#             logging.info(f"Fetched {len(results)} documents novfal for GUID: {guid}")
-#             if not results:
-#                 logger.warning(f"No documents found for scheme GUID: {guid}")
-#                 return []
-            
-#             # Convert MongoDB documents to SchemeDocument format
-#             scheme_docs = []
-#             for doc in results:
-#                 # Create page content from key fields
-#                 content_parts = []
-                
-#                 if doc.get("scheme_name"):
-#                     content_parts.append(f"Scheme Name: {doc['scheme_name']}")
-                
-#                 if doc.get("scheme_description"):
-#                     content_parts.append(f"Description: {doc['scheme_description']}")
-                
-#                 if doc.get("benefit"):
-#                     content_parts.append(f"Benefits: {doc['benefit']}")
-                
-#                 if doc.get("scheme_eligibility"):
-#                     content_parts.append(f"Eligibility: {doc['scheme_eligibility']}")
-                
-#                 if doc.get("application_process"):
-#                     content_parts.append(f"Application Process: {doc['application_process']}")
-                
-#                 if doc.get("required_documents"):
-#                     content_parts.append(f"Required Documents: {doc['required_documents']}")
-                
-#                 page_content = "\n\n".join(content_parts)
-                
-#                 # Create metadata
-#                 metadata = {
-#                     "scheme_guid": doc.get("scheme_guid"),
-#                     "scheme_name": doc.get("scheme_name"),
-#                     "type": doc.get("type"),
-#                     "applicability_state": doc.get("applicability_state"),
-#                     "department": doc.get("central_department_name") or doc.get("state_department_name"),
-#                     "target": doc.get("Individual/MSME"),
-#                     "status": doc.get("scheme_status"),
-#                     "source": "mongodb"
-#                 }
-                
-#                 scheme_docs.append(SchemeDocument(
-#                     page_content=page_content,
-#                     metadata=metadata
-#                 ))
-            
-#             elapsed = time.perf_counter() - start_time
-#             logger.info(f"Retrieved {len(scheme_docs)} novfs documents for GUID {guid} in {elapsed:.3f}s")
-#             return scheme_docs
-            
-#         except Exception as e:
-#             logger.error(f"Error fetching scheme docs for GUID {guid}: {e}")
-#             return []
-    
-#     def search_schemes_by_query(self, query: str, limit: int = 5) -> List[SchemeDocument]:
-#         """
-#         Search schemes by query text and return documents
-#         """
-#         if not self.is_available():
-#             return []
-        
-#         try:
-#             start_time = time.perf_counter()
-            
-#             # Multiple search strategies
-#             search_pipeline = [
-#                 # Text search with scoring
-#                 {
-#                     "$match": {
-#                         "$and": [
-#                             {"$text": {"$search": query}},
-#                             {"scheme_status": {"$in": ["Active", "active"]}},
-#                             {"type": {"$in": ["Centrally Sponsored Scheme", "Central Sector Scheme", "State Scheme"]}}
-#                         ]
-#                     }
-#                 },
-#                 {"$addFields": {"score": {"$meta": "textScore"}}},
-#                 {"$sort": {"score": -1}},
-#                 {"$limit": limit}
-#             ]
-            
-#             results = list(self.collection.aggregate(search_pipeline))
-            
-#             if not results:
-#                 # Fallback to regex search
-#                 fallback_query = {
-#                     "$and": [
-#                         {
-#                             "$or": [
-#                                 {"scheme_name": {"$regex": re.escape(query), "$options": "i"}},
-#                                 {"scheme_description": {"$regex": re.escape(query), "$options": "i"}}
-#                             ]
-#                         },
-#                         {"scheme_status": {"$in": ["Active", "active"]}}
-#                     ]
-#                 }
-#                 results = list(self.collection.find(fallback_query).limit(limit))
-            
-#             # Convert to SchemeDocument format
-#             scheme_docs = []
-#             for doc in results:
-#                 content_parts = []
-                
-#                 if doc.get("scheme_name"):
-#                     content_parts.append(f"Scheme Name: {doc['scheme_name']}")
-                
-#                 if doc.get("scheme_description"):
-#                     content_parts.append(f"Description: {doc['scheme_description']}")
-                
-#                 if doc.get("benefit"):
-#                     content_parts.append(f"Benefits: {doc['benefit']}")
-                
-#                 if doc.get("scheme_eligibility"):
-#                     content_parts.append(f"Eligibility: {doc['scheme_eligibility']}")
-                
-#                 page_content = "\n\n".join(content_parts)
-                
-#                 metadata = {
-#                     "scheme_guid": doc.get("scheme_guid"),
-#                     "scheme_name": doc.get("scheme_name"),
-#                     "type": doc.get("type"),
-#                     "applicability_state": doc.get("applicability_state"),
-#                     "source": "mongodb"
-#                 }
-                
-#                 scheme_docs.append(SchemeDocument(
-#                     page_content=page_content,
-#                     metadata=metadata
-#                 ))
-            
-#             elapsed = time.perf_counter() - start_time
-#             logger.info(f"Search returned {len(scheme_docs)} documents for query '{query}' in {elapsed:.3f}s")
-#             return scheme_docs
-            
-#         except Exception as e:
-#             logger.error(f"Error searching schemes for query '{query}': {e}")
-#             return []
-    
-#     def close_connection(self):
-#         """Close MongoDB connection"""
-#         if self.client:
-#             self.client.close()
-#             logger.info("MongoDB connection closed")
-
-# # Initialize global MongoDB retriever
-# mongo_retriever = None
-
-# def initialize_mongo_scheme_retriever():
-#     """Initialize MongoDB scheme retriever"""
-#     global mongo_retriever
-#     try:
-#         connection_string = "mongodb+srv://pooravdhingra:Poorav123@msmeassist.womwsrv.mongodb.net/haqdarshak"
-#         if not connection_string:
-#             logger.error("MONGODB_CONNECTION_STRING environment variable not set")
-#             return False
-        
-#         mongo_retriever = MongoSchemeRetriever(connection_string)
-#         if mongo_retriever.is_available():
-#             logger.info("MongoDB scheme retriever initialized successfully")
-#             return True
-#         else:
-#             logger.error("MongoDB scheme retriever failed to connect")
-#             return False
-            
-#     except Exception as e:
-#         logger.error(f"Failed to initialize MongoDB scheme retriever: {e}")
-#         return False
-
-# # Compatibility functions to replace XLSX functions
-# def find_scheme_guid_by_query_mongo(query: str) -> Optional[str]:
-#     """Find scheme GUID using MongoDB"""
-#     if mongo_retriever and mongo_retriever.is_available():
-#         return mongo_retriever.find_scheme_guid_by_query(query)
-#     return None
-
-# def fetch_scheme_docs_by_guid_mongo(guid: str, vector_store=None, use_mongo: bool = True) -> List:
-#     """Fetch scheme docs by GUID - MongoDB version"""
-#     if use_mongo and mongo_retriever and mongo_retriever.is_available():
-#         docs = mongo_retriever.fetch_scheme_docs_by_guid(guid)
-#         # Convert to format expected by your existing code
-#         return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
-    
-#     # Fallback to existing Pinecone logic if needed
-#     if vector_store:
-#         # Your existing Pinecone fallback code here
-#         pass
-    
-#     return []
-
-# def search_schemes_by_query_mongo(query: str, limit: int = 5) -> List:
-#     """Search schemes by query - MongoDB version"""
-#     if mongo_retriever and mongo_retriever.is_available():
-#         docs = mongo_retriever.search_schemes_by_query(query, limit)
-#         return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
-#     return []
-
 # scheme_mongo_lookup.py
 import logging
 import os
@@ -461,7 +72,7 @@ SCHEME_DOCS: Dict[str, Document] = {}
 class SchemeDocument:
     """Document structure for scheme data"""
     page_content: str
-    metadata: Dict[str, Any]
+    # metadata: Optional[Dict[str, Any]]
 
 class MongoSchemeRetriever:
     """Fast MongoDB-based scheme retriever for popular schemes"""
@@ -589,24 +200,17 @@ class MongoSchemeRetriever:
             # Query for the specific scheme
             query = {"scheme_guid": guid}
             
+
             # Project only needed fields to optimize performance
             projection = {
-                "scheme_guid": 1,
                 "scheme_name": 1,
                 "scheme_description": 1,
                 "scheme_eligibility": 1,
                 "benefit": 1,
                 "application_process": 1,
-                "required_documents": 1,
-                "type": 1,
-                "applicability_state": 1,
-                "central_department_name": 1,
-                "state_department_name": 1,
-                "Individual/MSME": 1,
-                "scheme_status": 1
             }
             
-            cursor = self.collection.find(query, projection).limit(limit)
+            cursor = self.collection.find(query, projection).limit(1)
             results = list(cursor)
             logging.info(f"Fetched {len(results)} documents tobi for GUID: {guid}")
             if not results:
@@ -634,28 +238,23 @@ class MongoSchemeRetriever:
                 if doc.get("application_process"):
                     content_parts.append(f"Application Process: {doc['application_process']}")
                 
-                if doc.get("required_documents"):
-                    content_parts.append(f"Required Documents: {doc['required_documents']}")
+                # if doc.get("required_documents"):
+                #     content_parts.append(f"Required Documents: {doc['required_documents']}")
                 
                 page_content = "\n\n".join(content_parts)
                 
-                # Create metadata
-                metadata = {
-                    "scheme_guid": doc.get("scheme_guid"),
-                    "scheme_name": doc.get("scheme_name"),
-                    "type": doc.get("type"),
-                    "applicability_state": doc.get("applicability_state"),
-                    "department": doc.get("central_department_name") or doc.get("state_department_name"),
-                    "target": doc.get("Individual/MSME"),
-                    "status": doc.get("scheme_status"),
-                    "source": "mongodb"
-                }
+                # # Create metadata
+                # metadata = {
+                #     "scheme_name": doc.get("scheme_name"),
+                #     "applicability_state": doc.get("applicability_state"),
+                #     "target": doc.get("Individual/MSME"),
+                #     "status": doc.get("scheme_status"),
+                #     "source": "mongodb"
+                # }
                 
                 scheme_docs.append(SchemeDocument(
                     page_content=page_content,
-                    metadata=metadata
                 ))
-            
             elapsed = time.perf_counter() - start_time
             logger.info(f"Retrieved {len(scheme_docs)} tobi documents for GUID {guid} in {elapsed:.3f}s")
             return scheme_docs
@@ -727,19 +326,18 @@ class MongoSchemeRetriever:
                 
                 page_content = "\n\n".join(content_parts)
                 
-                metadata = {
-                    "scheme_guid": doc.get("scheme_guid"),
-                    "scheme_name": doc.get("scheme_name"),
-                    "type": doc.get("type"),
-                    "applicability_state": doc.get("applicability_state"),
-                    "source": "mongodb"
-                }
+                # metadata = {
+                #     "scheme_guid": doc.get("scheme_guid"),
+                #     "scheme_name": doc.get("scheme_name"),
+                #     "type": doc.get("type"),
+                #     "applicability_state": doc.get("applicability_state"),
+                #     "source": "mongodb"
+                # }
                 
                 scheme_docs.append(SchemeDocument(
                     page_content=page_content,
-                    metadata=metadata
+                    # metadata=metadata
                 ))
-            
             elapsed = time.perf_counter() - start_time
             logger.info(f"Search returned {len(scheme_docs)} documents for query '{query}' in {elapsed:.3f}s")
             return scheme_docs
@@ -790,7 +388,7 @@ def fetch_scheme_docs_by_guid_mongo(guid: str, vector_store=None, use_mongo: boo
     if use_mongo and mongo_retriever and mongo_retriever.is_available():
         docs = mongo_retriever.fetch_scheme_docs_by_guid(guid)
         # Convert to format expected by your existing code
-        return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
+        return [{"page_content": doc.page_content} for doc in docs]
     
     # Fallback to existing Pinecone logic if needed
     if vector_store:
@@ -803,5 +401,5 @@ def search_schemes_by_query_mongo(query: str, limit: int = 5) -> List:
     """Search schemes by query - MongoDB version"""
     if mongo_retriever and mongo_retriever.is_available():
         docs = mongo_retriever.search_schemes_by_query(query, limit)
-        return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
+        return [{"page_content": doc.page_content} for doc in docs]
     return []
