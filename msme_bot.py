@@ -405,7 +405,7 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
     Return only one label from the following:
        - Schemes_Know_Intent - General queries enquiring about schemes or loans without specific names (e.g., 'show me schemes', 'mere liye schemes dikhao', 'loan', 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao' etc.)
        - DFL_Intent - Digital/financial literacy queries (e.g., 'Current account', 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'Setting up internet banking', 'Benefits of internet for business' etc.)
-       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names. Generally asking for loan or scheme is NOT specific. (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp' etc.)
+       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names. Generally asking for loan or scheme is NOT specific. (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp' , 'savitribai phule' , etc.)
        - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसआईएआई के लिए आवेदन कैसे करें?' etc.)
        - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसआईएआई की पात्रता क्या है?' etc.)
        - Out_of_Scope - Queries that are not relevant to business growth or digital literacy or financial literacy (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?' etc.)
@@ -415,7 +415,7 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
-       - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' are in scope and should be classified as Specific_Scheme_Know_Intent.
+       - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' , 'savitribai phule' are in scope and should be classified as Specific_Scheme_Know_Intent.
        - For Contextual_Follow_Up, prioritise the most recent query-response pair from the conversation history to check if the query is a follow-up.
        - Use conversation history for context but intent should be determined solely by the current query.
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes.
@@ -485,6 +485,7 @@ async def get_scheme_response_async(
     include_mudra=False,
     intent=None,
     use_mongo=True,  # Changed from use_xlsx
+    userTpe=1
 ):
     """Async version of get_scheme_response with MongoDB support"""
     logger.info("Querying scheme dataset")
@@ -515,7 +516,7 @@ async def get_scheme_response_async(
         
         # First, try to find GUID
         loop = asyncio.get_event_loop()
-        guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query)
+        guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userTpe)
 
         guid_time = time.perf_counter() - guid_start
         logger.info(f"GUID lookup time: {guid_time:.3f}s, found: {guid}")
@@ -529,7 +530,8 @@ async def get_scheme_response_async(
                 fetch_scheme_docs_by_guid, 
                 guid, 
                 None, 
-                True  # use_mongo=True
+                True,
+                userTpe
             )
             fetch_time = time.perf_counter() - fetch_start
             
@@ -596,7 +598,8 @@ async def get_scheme_response_async(
                 fetch_scheme_docs_by_guid, 
                 guid, 
                 vector_store,
-                False  # use_mongo=False for Pinecone fallback
+                False,
+                userTpe  
             )
             
             if docs:
@@ -630,7 +633,8 @@ async def get_scheme_response_async(
         mudra_guid = await loop.run_in_executor(
             executor, 
             find_scheme_guid_by_query, 
-            "pradhan mantri mudra yojana"
+            "pradhan mantri mudra yojana",
+            userTpe  # Assuming userType 1 for Mudra
         ) or "SH0008BK"
         
         # Try MongoDB first for Mudra
@@ -641,7 +645,8 @@ async def get_scheme_response_async(
                 fetch_scheme_docs_by_guid, 
                 mudra_guid, 
                 None, 
-                True  # use_mongo=True
+                True,
+                userTpe
             )
         
         # Fallback to Pinecone for Mudra if needed
@@ -651,7 +656,8 @@ async def get_scheme_response_async(
                 fetch_scheme_docs_by_guid, 
                 mudra_guid, 
                 vector_store,
-                False  # use_mongo=False
+                False,
+                userTpe
             )
 
         if mudra_docs:
@@ -1032,14 +1038,16 @@ async def generate_audio_script_background(response: str, user_info: UserContext
         logger.error(f"Background audio script generation failed: {str(e)}")
         return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
 
-async def get_popular_scheme_response_fast(query: str, intent: str) -> Optional[dict]:
+async def get_popular_scheme_response_fast(query: str, intent: str,userTpe: int) -> Optional[dict]:
     """Ultra-fast response for popular schemes using MongoDB (1-2 seconds)"""
-    if intent != "Specific_Scheme_Know_Intent":
-        return None
+
+    logger.info(f"Processing popular userType {userTpe} scheme query: {query} with intent: {intent}")
+    # if intent != "Specific_Scheme_Know_Intent":
+    #     return None
     
     # Step 1: Quick GUID lookup from MongoDB (< 100ms)
     loop = asyncio.get_event_loop()
-    guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query)
+    guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userTpe)
     
     if not guid:
         logger.info(f"No popular scheme GUID found for query: '{query}' - using regular path")
@@ -1059,7 +1067,8 @@ async def get_popular_scheme_response_fast(query: str, intent: str) -> Optional[
             fetch_scheme_docs_by_guid, 
             guid, 
             None, 
-            True  # use_mongo=True
+            userTpe,
+            True
         )
         
         if not docs:
@@ -1074,6 +1083,7 @@ async def get_popular_scheme_response_fast(query: str, intent: str) -> Optional[
                 chain_type="stuff", 
                 retriever=retriever,
                 return_source_documents=True,
+                
             )
             return qa_chain.invoke({"query": query})
         
@@ -1124,7 +1134,7 @@ async def process_query_optimized(
     session_id: str,
     mobile_number: str,
     session_data: SessionData,
-     userType: int = 0,
+     userType: int = 1,
     user_language: str = None,
     stream: bool = False
 ) -> Tuple[Any, callable]:
@@ -1133,7 +1143,7 @@ async def process_query_optimized(
     Expected improvement: 12.81s -> 3-4s (70% improvement)
     """
     tracker = PerformanceTracker()
-    logger.info(f"Starting optimized query processing for: {query}")
+    logger.info(f"Starting optimized userType {userType} query processing for: {query}")
 
     # Step 1: Get user context (fast, local operation)
     tracker.start_timer("user_context")
@@ -1243,7 +1253,7 @@ async def process_query_optimized(
         logger.info(f"Retrieving RAG response for kittu intent: {intent}")
         # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
         if intent == "Specific_Scheme_Know_Intent":
-            rag_response = await get_popular_scheme_response_fast(query, intent)
+            rag_response = await get_popular_scheme_response_fast(query, intent,userType)
             logger.info(f"Fast path tobi response: {rag_response}")
         # FALLBACK to full pipeline if fast path didn't work
         if not rag_response:
@@ -1258,7 +1268,8 @@ async def process_query_optimized(
                 business_category=user_info.business_category,
                 include_mudra=include_mudra,
                 intent=intent,
-                use_mongo=True
+                use_mongo=True,
+                userTpe=userType
             )
         
         tracker.end_timer("rag_retrieval")
