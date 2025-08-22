@@ -225,7 +225,7 @@ class MongoSchemeRetriever:
         Find scheme GUID by query with caching
         Uses text search and fuzzy matching for popular schemes
         """
-        logger.info(f"Finding scheme GUID podu for query: {query} with userType : {user_type}")
+        logger.info(f"Finding scheme GUID for query: {query} with userType : {user_type}")
         if not self.is_available():
             return None
         
@@ -311,14 +311,18 @@ class MongoSchemeRetriever:
         """
         Fetch scheme documents by GUID from MongoDB
         """
-        if not self.is_available():
-            return []
+        logger.info(f" Fetch scheme documents by GUID from MongoDB")
+        # if not self.is_available():
+        #     print("here self available")
+        #     return []
         
         try:
             start_time = time.perf_counter()
             
-            # Query for the specific scheme
-            query = {"scheme_guid": guid}
+            if user_type == 1:
+               query = {"scheme_guid": guid}
+            else:
+               query={"scheme_guid":guid,"type":user_type}
 
             # Project only needed fields to optimize performance
             projection = {

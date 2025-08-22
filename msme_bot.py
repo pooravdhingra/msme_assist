@@ -433,7 +433,7 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
         logger.error(f"Failed to classify intent: {str(e)}")
         return "Out_of_Scope"
 
-async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender=None, business_category=None):
+async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender=None, business_category=None,userType=1):
     """Async version of get_rag_response"""
     try:
         details = []
@@ -454,8 +454,13 @@ async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender
         loop = asyncio.get_event_loop()
         
         def run_retrieval():
+            
             retriever = PineconeRecordRetriever(
-                index=vector_store, state=state, gender=gender, k=5
+                index=vector_store, 
+                state=state, 
+                gender=gender,
+                userType=userType, 
+                k=5,
             )
             qa_chain = RetrievalQA.from_chain_type(
                 llm=llm,
@@ -484,8 +489,8 @@ async def get_scheme_response_async(
     business_category=None,
     include_mudra=False,
     intent=None,
-    use_mongo=True,  # Changed from use_xlsx
-    userTpe=1
+    use_mongo=True,
+    userType=1
 ):
     """Async version of get_scheme_response with MongoDB support"""
     logger.info("Querying scheme dataset")
@@ -508,180 +513,186 @@ async def get_scheme_response_async(
 
     guid = None
     rag = None
-    
+    # guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
+    # if guid:
+    #     logger.info(f"guid found with {query} and guid {guid} for pinecone search")
+    # else:
+    #    guid = None
     # For specific scheme queries, try direct MongoDB lookup first
-    if intent == "Specific_Scheme_Know_Intent" and MONGO_SCHEME_AVAILABLE:
-        guid_start = time.perf_counter()
-        logger.info(f"Using MongoDB for specific scheme lookup - Query: {query}")
+    # if intent == "Specific_Scheme_Know_Intent" and MONGO_SCHEME_AVAILABLE:
+    #     guid_start = time.perf_counter()
+    #     logger.info(f"Using MongoDB for specific scheme lookup - Query: {query}")
         
-        # First, try to find GUID
-        loop = asyncio.get_event_loop()
-        guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userTpe)
+    #     # First, try to find GUID
+    #     loop = asyncio.get_event_loop()
+    #     guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
 
-        guid_time = time.perf_counter() - guid_start
-        logger.info(f"GUID lookup time: {guid_time:.3f}s, found: {guid}")
+    #     guid_time = time.perf_counter() - guid_start
+    #     logger.info(f"GUID lookup time: {guid_time:.3f}s, found: {guid}")
         
-        if guid:
-            fetch_start = time.perf_counter()
-            logger.info(f"Found popular scheme GUID: {guid} for query: '{query}'")
-            # Fetch docs directly from MongoDB
-            docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                guid, 
-                None, 
-                True,
-                userTpe
-            )
-            fetch_time = time.perf_counter() - fetch_start
+    #     if guid:
+    #         fetch_start = time.perf_counter()
+    #         logger.info(f"Found popular scheme GUID: {guid} for query: '{query}'")
+    #         # Fetch docs directly from MongoDB
+    #         docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             guid, 
+    #             None, 
+    #             True,
+    #             userType
+    #         )
+    #         fetch_time = time.perf_counter() - fetch_start
             
-            if docs:
-                llm_start = time.perf_counter()
-                logger.info(f"Retrieved {len(docs)} documents from MongoDB for GUID: {guid} (fetch time: {fetch_time:.3f}s)")
-                def run_qa_chain():
-                    retriever = DocumentListRetriever(docs)
-                    qa_chain = RetrievalQA.from_chain_type(
-                        llm=llm,
-                        chain_type="stuff",
-                        retriever=retriever,
-                        return_source_documents=True,
-                    )
-                    return qa_chain.invoke({"query": query})
+    #         if docs:
+    #             llm_start = time.perf_counter()
+    #             logger.info(f"Retrieved {len(docs)} documents from MongoDB for GUID: {guid} (fetch time: {fetch_time:.3f}s)")
+    #             def run_qa_chain():
+    #                 retriever = DocumentListRetriever(docs)
+    #                 qa_chain = RetrievalQA.from_chain_type(
+    #                     llm=llm,
+    #                     chain_type="stuff",
+    #                     retriever=retriever,
+    #                     return_source_documents=True,
+    #                 )
+    #                 return qa_chain.invoke({"query": query})
                 
-                result = await loop.run_in_executor(executor, run_qa_chain)
-                llm_time = time.perf_counter() - llm_start
+    #             result = await loop.run_in_executor(executor, run_qa_chain)
+    #             llm_time = time.perf_counter() - llm_start
                
-                rag = {"text": result["result"], "sources": result["source_documents"]}
-                logger.info(f"LLM processing time: {llm_time:.3f}s, response length: {len(rag['text'])} chars")
-                logger.info("Successfully retrieved scheme data from MongoDB")
-            else:
-                logger.warning("No documents found in MongoDB for GUID; falling back to search")
+    #             rag = {"text": result["result"], "sources": result["source_documents"]}
+    #             logger.info(f"LLM processing time: {llm_time:.3f}s, response length: {len(rag['text'])} chars")
+    #             logger.info("Successfully retrieved scheme data from MongoDB")
+    #         else:
+    #             logger.warning("No documents found in MongoDB for GUID; falling back to search")
     
-        # If direct GUID lookup didn't work, try MongoDB search
-        if not rag and use_mongo and MONGO_SCHEME_AVAILABLE:
-            search_start = time.perf_counter()
-            logger.info("Using MongoDB search for scheme lookup")
+    #     # If direct GUID lookup didn't work, try MongoDB search
+    #     if not rag and use_mongo and MONGO_SCHEME_AVAILABLE:
+    #         search_start = time.perf_counter()
+    #         logger.info("Using MongoDB search for scheme lookup")
             
-            loop = asyncio.get_event_loop()
+    #         loop = asyncio.get_event_loop()
             
-            def run_mongo_search():
-                # Search schemes in MongoDB
-                logger.info(f"Searching schemes by query: {query} with limit 5")
-                docs = search_schemes_by_query(query, limit=5)
+    #         def run_mongo_search():
+    #             # Search schemes in MongoDB
+    #             logger.info(f"Searching schemes by query: {query} with limit 5")
+    #             docs = search_schemes_by_query(query, limit=5)
                 
-                if docs:
-                    retriever = DocumentListRetriever(docs)
-                    qa_chain = RetrievalQA.from_chain_type(
-                        llm=llm,
-                        chain_type="stuff",
-                        retriever=retriever,
-                        return_source_documents=True,
-                    )
-                    return qa_chain.invoke({"query": query})
-                return None
+    #             if docs:
+    #                 retriever = DocumentListRetriever(docs)
+    #                 qa_chain = RetrievalQA.from_chain_type(
+    #                     llm=llm,
+    #                     chain_type="stuff",
+    #                     retriever=retriever,
+    #                     return_source_documents=True,
+    #                 )
+    #                 return qa_chain.invoke({"query": query})
+    #             return None
             
-            result = await loop.run_in_executor(executor, run_mongo_search)
-            search_time = time.perf_counter() - search_start
+    #         result = await loop.run_in_executor(executor, run_mongo_search)
+    #         search_time = time.perf_counter() - search_start
             
-            if result:
-                rag = {"text": result["result"], "sources": result["source_documents"]}
-                logger.info(f"MongoDB search + LLM time: {search_time:.3f}s, response length: {len(rag['text'])} chars")
-                logger.info("Successfully retrieved scheme data from MongoDB search")
+    #         if result:
+    #             rag = {"text": result["result"], "sources": result["source_documents"]}
+    #             logger.info(f"MongoDB search + LLM time: {search_time:.3f}s, response length: {len(rag['text'])} chars")
+    #             logger.info("Successfully retrieved scheme data from MongoDB search")
     
     # Fallback to Pinecone if MongoDB didn't work
-    if not rag:
-        logger.info("Falling back to Pinecone search")
-        if guid:
-            # Try Pinecone with known GUID
-            docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                guid, 
-                vector_store,
-                False,
-                userTpe  
-            )
+    # if not rag:
+    #     logger.info("Falling back to Pinecone search")
+    #     if guid:
+    #         # Try Pinecone with known GUID
+    #         docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             guid, 
+    #             vector_store,
+    #             False,
+    #             userType  
+    #         )
             
-            if docs:
-                def run_qa_chain():
-                    retriever = DocumentListRetriever(docs)
-                    qa_chain = RetrievalQA.from_chain_type(
-                        llm=llm,
-                        chain_type="stuff",
-                        retriever=retriever,
-                        return_source_documents=True,
-                    )
-                    return qa_chain.invoke({"query": query})
+    #         if docs:
+    #             def run_qa_chain():
+    #                 retriever = DocumentListRetriever(docs)
+    #                 qa_chain = RetrievalQA.from_chain_type(
+    #                     llm=llm,
+    #                     chain_type="stuff",
+    #                     retriever=retriever,
+    #                     return_source_documents=True,
+    #                 )
+    #                 return qa_chain.invoke({"query": query})
                 
-                result = await loop.run_in_executor(executor, run_qa_chain)
-                rag = {"text": result["result"], "sources": result["source_documents"]}
-        else:
+    #             result = await loop.run_in_executor(executor, run_qa_chain)
+    #             rag = {"text": result["result"], "sources": result["source_documents"]}
+    #     else:
             # Regular Pinecone search
-            rag = await get_rag_response_async(
+    logger.info(f"userType is equal too {userType}")
+    rag = await get_rag_response_async(
                 query,
                 vector_store,
                 state=state,
                 gender=gender,
                 business_category=business_category,
+                userType=userType
             )
 
-    # Handle Mudra inclusion (if needed)
-    if include_mudra:
-        logger.info("Including Pradhan Mantri Mudra Yojana details")
-        loop = asyncio.get_event_loop()
+    # # Handle Mudra inclusion (if needed)
+    # if include_mudra:
+    #     logger.info("Including Pradhan Mantri Mudra Yojana details")
+    #     loop = asyncio.get_event_loop()
         
-        mudra_guid = await loop.run_in_executor(
-            executor, 
-            find_scheme_guid_by_query, 
-            "pradhan mantri mudra yojana",
-            userTpe  # Assuming userType 1 for Mudra
-        ) or "SH0008BK"
+    #     mudra_guid = await loop.run_in_executor(
+    #         executor, 
+    #         find_scheme_guid_by_query, 
+    #         "pradhan mantri mudra yojana",
+    #         userType  # Assuming userType 1 for Mudra
+    #     ) or "SH0008BK"
         
-        # Try MongoDB first for Mudra
-        mudra_docs = None
-        if use_mongo and MONGO_SCHEME_AVAILABLE:
-            mudra_docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                mudra_guid, 
-                None, 
-                True,
-                userTpe
-            )
+    #     # Try MongoDB first for Mudra
+    #     mudra_docs = None
+    #     if use_mongo and MONGO_SCHEME_AVAILABLE:
+    #         mudra_docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             mudra_guid, 
+    #             None, 
+    #             True,
+    #             userType
+    #         )
         
-        # Fallback to Pinecone for Mudra if needed
-        if not mudra_docs:
-            mudra_docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                mudra_guid, 
-                vector_store,
-                False,
-                userTpe
-            )
+    #     # Fallback to Pinecone for Mudra if needed
+    #     if not mudra_docs:
+    #         mudra_docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             mudra_guid, 
+    #             vector_store,
+    #             False,
+    #             userType
+    #         )
 
-        if mudra_docs:
-            def run_mudra_qa():
-                retriever = DocumentListRetriever(mudra_docs)
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=llm,
-                    chain_type="stuff",
-                    retriever=retriever,
-                    return_source_documents=True,
-                )
-                return qa_chain.invoke({"query": "Pradhan Mantri Mudra Yojana"})
+    #     if mudra_docs:
+    #         def run_mudra_qa():
+    #             retriever = DocumentListRetriever(mudra_docs)
+    #             qa_chain = RetrievalQA.from_chain_type(
+    #                 llm=llm,
+    #                 chain_type="stuff",
+    #                 retriever=retriever,
+    #                 return_source_documents=True,
+    #             )
+    #             return qa_chain.invoke({"query": "Pradhan Mantri Mudra Yojana"})
             
-            result = await loop.run_in_executor(executor, run_mudra_qa)
-            mudra_rag = {"text": result["result"], "sources": result["source_documents"]}
-        else:
-            logger.warning("Mudra documents not found; skipping")
-            mudra_rag = {"text": "", "sources": []}
+    #         result = await loop.run_in_executor(executor, run_mudra_qa)
+    #         mudra_rag = {"text": result["result"], "sources": result["source_documents"]}
+    #     else:
+    #         logger.warning("Mudra documents not found; skipping")
+    #         mudra_rag = {"text": "", "sources": []}
 
-        if not isinstance(rag, dict):
-            rag = {"text": str(rag), "sources": []}
+    if not isinstance(rag, dict):
+        rag = {"text": str(rag), "sources": []}
 
-        rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
-        rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
+    # rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
+    # rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
 
     total_rag_time = time.perf_counter() - rag_start_time
     logger.info(f"Total RAG processing time: {total_rag_time:.3f}s")    
@@ -1038,16 +1049,16 @@ async def generate_audio_script_background(response: str, user_info: UserContext
         logger.error(f"Background audio script generation failed: {str(e)}")
         return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
 
-async def get_popular_scheme_response_fast(query: str, intent: str,userTpe: int) -> Optional[dict]:
+async def get_popular_scheme_response_fast(query: str, intent: str,userType: int) -> Optional[dict]:
     """Ultra-fast response for popular schemes using MongoDB (1-2 seconds)"""
 
-    logger.info(f"Processing popular userType {userTpe} scheme query: {query} with intent: {intent}")
+    logger.info(f"Processing popular userType {userType} scheme query: {query} with intent: {intent}")
     # if intent != "Specific_Scheme_Know_Intent":
     #     return None
     
     # Step 1: Quick GUID lookup from MongoDB (< 100ms)
     loop = asyncio.get_event_loop()
-    guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userTpe)
+    guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
     
     if not guid:
         logger.info(f"No popular scheme GUID found for query: '{query}' - using regular path")
@@ -1062,17 +1073,17 @@ async def get_popular_scheme_response_fast(query: str, intent: str,userTpe: int)
     
     try:
         # Single fast operation - fetch docs from MongoDB
+        logger.info("starting scheme fetch by guid")
         docs = await loop.run_in_executor(
             executor, 
             fetch_scheme_docs_by_guid, 
             guid, 
-            None, 
-            userTpe,
-            True
+            None,
+            True,
+            userType,
         )
-        
         if not docs:
-            logger.warning(f"No docs found for popular scheme GUID: {guid}")
+            logger.warning(f"No docs found for {docs} popular scheme GUID: {guid}")
             return None
         
         # Step 3: Fast QA chain (< 1000ms)
@@ -1252,7 +1263,7 @@ async def process_query_optimized(
         tracker.start_timer("rag_retrieval")
         logger.info(f"Retrieving RAG response for kittu intent: {intent}")
         # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
-        if intent == "Specific_Scheme_Know_Intent":
+        if intent == "Specific_Scheme_Know_Intent" or "Schemes_Know_Intent":
             rag_response = await get_popular_scheme_response_fast(query, intent,userType)
             logger.info(f"Fast path tobi response: {rag_response}")
         # FALLBACK to full pipeline if fast path didn't work
@@ -1269,7 +1280,7 @@ async def process_query_optimized(
                 include_mudra=include_mudra,
                 intent=intent,
                 use_mongo=True,
-                userTpe=userType
+                userType=userType
             )
         
         tracker.end_timer("rag_retrieval")

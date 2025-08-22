@@ -152,6 +152,7 @@ class PineconeRecordRetriever(BaseRetriever):
     index: Any
     state: str | None = None
     gender: str | None = None
+    userType: int | None = None   # <-- instead of filter_type
     k: int = 5
 
     model_config = {
@@ -163,16 +164,18 @@ class PineconeRecordRetriever(BaseRetriever):
         index: Any,
         state: str | None = None,
         gender: str | None = None,
+        userType: int | None = None,
         k: int = 5,
     ) -> None:
         # Ensure BaseModel initialises correctly
-        super().__init__(index=index, state=state, gender=gender, k=k)
+        super().__init__(index=index, state=state, gender=gender, userType=userType, k=k)
 
 
     def _get_relevant_documents(self, query: str, *, run_manager):  # type: ignore[override]
 
         # logger.debug(f"Pinecone query text: {query}")
         # logger.debug(f"Top K: {self.k}")
+        logger.info(f"userType inside retriever = {self.userType}")
 
         try:
             embedding = pc.inference.embed(
@@ -181,18 +184,27 @@ class PineconeRecordRetriever(BaseRetriever):
                 parameters={"input_type": "query"},
             ).data[0]["values"]
             # logger.debug(f"Query embedding sample: {embedding[:5]}")
-            filter_arg = None
+            filter_arg = {}
+
             if self.state:
                 filter_arg = {
                     "applicability_state": {"$in": [self.state, "ALL_STATES"]}
                 }
+
+            if self.userType is not None and self.userType == 0:
+                filter_arg ={
+                    "type":{"$eq":self.userType}
+                }
+            
+            logger.info(f"Pinecone query tobi filter: {filter_arg}")
+
             # logger.debug(f"Pinecone filter: {filter_arg}")
             res = self.index.query(
                 vector=embedding,
                 top_k=self.k,
                 namespace="__default__",
                 include_metadata=True,
-                filter=filter_arg,
+                filter=filter_arg if filter_arg else None,
             )
         except Exception as e:
             logger.error(f"Pinecone search failed: {e}")
