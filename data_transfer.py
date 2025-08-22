@@ -1,6 +1,6 @@
 import pandas as pd
 from pymongo import MongoClient, TEXT
-import datetime
+from datetime import datetime, timezone
 import json
 
 def import_data_and_create_indexes():
@@ -36,8 +36,8 @@ def import_data_and_create_indexes():
             else:
                 record[column] = value
         
-        record['created_at'] = datetime.datetime.utcnow()
-        record['updated_at'] = datetime.datetime.utcnow()
+        record['created_at'] = datetime.now(timezone.utc)
+        record['updated_at'] = datetime.now(timezone.utc)
         records.append(record)
         
         if (index + 1) % 500 == 0:
@@ -89,22 +89,22 @@ def import_data_and_create_indexes():
             print("  ✅ Created non-unique index on 'scheme_guid'")
         
         # Create other indexes
-        indexes_to_create = [
-            "type",
-            "scheme_status", 
-            "applicability_state",
-            "central_department_name",
-            "state_department_name",
-            "Individual/MSME",
-            "Service Type GUID",
-            "parent_scheme_guid",
-            "created_at",
-            "updated_at"
-        ]
+        # indexes_to_create = [
+        #     "type",
+        #     "scheme_status", 
+        #     "applicability_state",
+        #     "central_department_name",
+        #     "state_department_name",
+        #     "Individual/MSME",
+        #     "Service Type GUID",
+        #     "parent_scheme_guid",
+        #     "created_at",
+        #     "updated_at"
+        # ]
         
-        for field in indexes_to_create:
-            collection.create_index(field)
-            print(f"  ✅ Created index on '{field}'")
+        # for field in indexes_to_create:
+        #     collection.create_index(field)
+        #     print(f"  ✅ Created index on '{field}'")
         
         # Text search index
         collection.create_index([
@@ -115,16 +115,16 @@ def import_data_and_create_indexes():
         ])
         print("  ✅ Created text search index")
         
-        # Compound indexes
-        compound_indexes = [
-            [("type", 1), ("applicability_state", 1)],
-            [("scheme_status", 1), ("type", 1)],
-            [("Individual/MSME", 1), ("scheme_status", 1)]
-        ]
+        # # Compound indexes
+        # compound_indexes = [
+        #     [("type", 1), ("applicability_state", 1)],
+        #     [("scheme_status", 1), ("type", 1)],
+        #     [("Individual/MSME", 1), ("scheme_status", 1)]
+        # ]
         
-        for idx in compound_indexes:
-            collection.create_index(idx)
-            print(f"  ✅ Created compound index on {[field[0] for field in idx]}")
+        # for idx in compound_indexes:
+        #     collection.create_index(idx)
+        #     print(f"  ✅ Created compound index on {[field[0] for field in idx]}")
         
         print("\n🎉 All indexes created successfully!")
         
