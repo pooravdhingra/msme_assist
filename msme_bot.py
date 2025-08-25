@@ -300,11 +300,31 @@ def get_system_prompt(language, user_name="User", word_limit=200):
 
     """Return tone and style instructions."""
 
+    # system_rules = f"""1. **Language Handling**:
+    #    - The query language is provided as {language} (English, Hindi, or Hinglish).
+    #    - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
+    #    - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script, prioritizing hindi words in the mix.
+    #    - For English queries, respond in simple English.
+       
+    #    2. **Response Guidelines**:
+    #    - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
+    #    - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
+    #    - Give structured responses with formatting like bullets or headings/subheadings. Do not give long paragraphs of text.
+    #    - Response must be <={word_limit} words.
+
+    #    - Never mention agent fees unless specified in RAG Response for scheme queries.
+    #    - Never repeat user query or bring up ambiguity in the response, proceed directly to answering.
+    #    - Never mention technical terms like RAG, LLM, Database etc. to the user.
+    #    - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
+    #    - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
+
+    # system_prompt = system_rules.format(language=language, user_name=user_name)
+    # return system_prompt
     system_rules = f"""1. **Language Handling**:
        - The query language is provided as {language} (English, Hindi, or Hinglish).
        - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
+       - For English queries, respond in Devanagari script using simple, clear Hindi words suitable for micro business owners with low Hindi proficiency.
        - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script, prioritizing hindi words in the mix.
-       - For English queries, respond in simple English.
        
        2. **Response Guidelines**:
        - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
@@ -316,7 +336,7 @@ def get_system_prompt(language, user_name="User", word_limit=200):
        - Never repeat user query or bring up ambiguity in the response, proceed directly to answering.
        - Never mention technical terms like RAG, LLM, Database etc. to the user.
        - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
-       - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
+       - Start the response with 'नमस्ते {user_name}!' for Hindi and English queries, 'Namaste {user_name}!' for Hinglish queries unless Out_of_Scope."""
 
     system_prompt = system_rules.format(language=language, user_name=user_name)
     return system_prompt
@@ -728,12 +748,18 @@ async def generate_response_async(
     print(f"Generating response for intent: {intent}, language: {language}, query: {query} and rag_response: {rag_response}...")
     # Handle non-streaming cases first (these return strings)
     if intent == "Out_of_Scope":
-        if language == "Hindi":
+        # if language == "Hindi":
+        #     response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
+        # elif language == "Hinglish":
+        #     response = "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
+        # else:
+        #     response = "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+        if language == "Hindi" or language == "English":
             response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
         elif language == "Hinglish":
             response = "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
         else:
-            response = "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
+            response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
         
         if stream:
             async def stream_response():
@@ -743,15 +769,27 @@ async def generate_response_async(
         return response
 
     if intent == "Gratitude_Intent":
+        # gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
+
+        # **Instructions**:
+        # - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help. 
+        # - Use Devanagari script for Hindi and a natural mix of Hindi and English words in Roman script for Hinglish.
+        # - Keep the message under 30 words.
+
+        # **Output**:
+        # - Only the acknowledgement message in the user's language."""
+        response_language = "Hindi" if language in ["Hindi", "English"] else language
+        
         gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
 
         **Instructions**:
-        - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help. 
-        - Use Devanagari script for Hindi and a natural mix of Hindi and English words in Roman script for Hinglish.
+        - Respond briefly in {response_language} acknowledging the thanks and offering further help. 
+        - For Hindi: Use Devanagari script with simple words.
+        - For Hinglish: Use a natural mix of Hindi and English words in Roman script.
         - Keep the message under 30 words.
 
         **Output**:
-        - Only the acknowledgement message in the user's language."""
+        - Only the acknowledgement message in the specified language."""
         
         try:
             if stream:
@@ -774,7 +812,7 @@ async def generate_response_async(
             elif language == "Hinglish":
                 fallback_response = "Thanks! Kya main aur madad kar sakta hoon?"
             else:
-                fallback_response = "You're welcome! Let me know if you need anything else."
+                fallback_response = "धन्यवाद! क्या मैं और मदद कर सकता हूँ?"
             
             if stream:
                 async def stream_fallback():
@@ -786,6 +824,10 @@ async def generate_response_async(
     # Build the main prompt for other intents
     word_limit = 150 if intent == "Schemes_Know_Intent" else 100
     tone_prompt = get_system_prompt(language, user_info.name, word_limit)
+
+    greeting_lang = "Hindi" if language in ["Hindi", "English"] else language
+    greeting_text = 'नमस्ते' if greeting_lang == "Hindi" else 'Namaste'
+
     base_prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
     **Input**:
@@ -808,7 +850,7 @@ async def generate_response_async(
     {tone_prompt}
 
     **Formatting Instructions**:
-    - Start with greeting on its own line: 'Hi {user_info.name}!' (English), 'Namaste {user_info.name}!' (Hinglish), or 'नमस्ते {user_info.name}!' (Hindi)
+    - Start with greeting on its own line: '{greeting_text} {user_info.name}!'
     - After greeting, add a blank line
     - Structure the answer in multiple short paragraphs (1-2 lines each)
     - Add a blank line between each paragraph for better readability
@@ -822,56 +864,234 @@ async def generate_response_async(
     special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST", "Mudra", "PMEGP", "PMFME", "CMEGP", "Yuva Udyami", "PMSBY", "PMJJBY", "PMJAY (Ayushman Bharat)"]
     link = "https://haqdarshak.com/contact"
 
+    # if intent == "Specific_Scheme_Know_Intent":
+    #     intent_prompt = (
+    #         "Share scheme name, purpose, benefits and other fetched relevant details in a structured format from **RAG Response**. "
+    #         "Ask: 'Want details on eligibility or how to apply?' "
+    #         "(English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' "
+    #         "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
+    #     )
+    #     intent_prompt += (
+    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
+    #     )
+    # elif intent == "Specific_Scheme_Apply_Intent":
+    #     intent_prompt = (
+    #         "Share application process from **RAG Response**."
+    #     )
+    #     intent_prompt += (
+    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
+    #     )
+    # elif intent == "Specific_Scheme_Eligibility_Intent":
+    #     intent_prompt = (
+    #         "Summarize eligibility rules from **RAG Response** and provide a link "
+    #         f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
+    #         "Ask the user to verify their eligibility there."
+    #     )
+    #     intent_prompt += (
+    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
+    #     )
+    # elif intent == "Schemes_Know_Intent":
+    #     intent_prompt = (
+    #         "List 3-4 schemes from **RAG Response** with a short one-line description for each. "
+    #         "Always include Pradhan Mantri Mudra Yojana as one of the schemes. "
+    #         "Use any user provided scheme details to choose the most relevant schemes. "
+    #         "If no close match is found, still list the top schemes applicable to the user in their state or CSS. "
+    #         "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
+    #         "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
+    #     )
+    #     intent_prompt += (
+    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
+    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
+    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi). Add this only in the description for the applicable scheme/s, not under the entire list."
+    #     )
+    # elif intent == "DFL_Intent":
+    #     intent_prompt = (
+    #         "Use the **RAG Response** if available, augmenting with your own knowledge "
+    #         "where relevant. If the RAG Response is empty or not relevant, do not mention that to user and provide a helpful answer "
+    #         "smoothly from your own knowledge in simple language "
+    #         "with helpful examples."
+    #     )
+    # elif intent == "Contextual_Follow_Up":
+    #     intent_prompt = (
+    #         "Use the Previous Assistant Response and Conversation Context to identify the topic. "
+    #         "If the RAG Response does not match the referenced scheme, indicate a new RAG search "
+    #         "is needed. Provide a relevant follow-up response using the RAG Response, "
+    #         "filtering for schemes where 'applicability' includes state_id or 'scheme type' is "
+    #         "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., "
+    #         "'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?')."
+    #     )
+    # elif intent == "Confirmation_New_RAG":
+    #     intent_prompt = (
+    #         "If the user confirms to initiate a new RAG search, respond with the details of the "
+    #         "scheme they are interested in, refer to conversation context for details."
+    #     )
+    # else:
+    #     intent_prompt = ""
+
+    # output_prompt = """
+    # **Output**:
+    #    - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed for schemes, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
+    #    - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don't have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
+    #    - Do not mention any other scheme when a specific scheme is being talked about.
+    #    - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
+    #    - No need to mention user profile details in every response, only include where contextually relevant.
+    #    - Scheme answers must come only from scheme data. For DFL answers, use the DFL document supplemented by your own knowledge when possible, but rely on your own knowledge if nothing relevant is found.
+    # """
+
+    # prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
+
+    # try:
+    #     if stream:
+    #         async def stream_main_response():
+    #             buffer = ""
+    #             try:
+    #                 async for chunk in llm.astream([{"role": "user", "content": prompt}]):
+    #                     token = chunk.content or ""
+    #                     buffer += token
+    #                     if token:
+    #                         yield token
+                
+    #                  # Add eligibility link for specific intent after streaming
+    #                 if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+    #                     screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+    #                     if screening_link not in buffer:
+    #                         link_text = f"\n{screening_link}"
+    #                         for char in link_text:
+    #                          yield char
+                            
+    #             except Exception as e:
+    #                 logger.error(f"Failed to stream response: {str(e)}")
+    #                 error_msg = "Sorry, I couldn't process your query."
+    #                 for char in error_msg:
+    #                     yield char
+            
+    #         return stream_main_response()
+    #     else:
+    #         response = await llm.ainvoke([{"role": "user", "content": prompt}])
+    #         final_text = response.content.strip()
+            
+    #         if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
+    #             screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
+    #             if screening_link not in final_text:
+    #                 final_text += f"\n{screening_link}"
+            
+    #         return final_text
+
     if intent == "Specific_Scheme_Know_Intent":
         intent_prompt = (
             "Share scheme name, purpose, benefits and other fetched relevant details in a structured format from **RAG Response**. "
-            "Ask: 'Want details on eligibility or how to apply?' "
-            "(English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' "
-            "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
         )
-        intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
-        )
+        # Modified to use Hindi for both English and Hindi queries
+        if language in ["Hindi", "English"]:
+            intent_prompt += "पूछें: 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?'"
+        elif language == "Hinglish":
+            intent_prompt += "Ask: 'Eligibility ya apply karne ke baare mein jaanna chahte hain?'"
+        else:
+            intent_prompt += "पूछें: 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?'"
+        
+        # Modified Haqdarshak message
+        if language in ["Hindi", "English"]:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
+            )
+        elif language == "Hinglish":
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+                f"Kripya app mein book karein.'"
+            )
+        else:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
+            )
+            
     elif intent == "Specific_Scheme_Apply_Intent":
         intent_prompt = (
             "Share application process from **RAG Response**."
         )
-        intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
-        )
+        # Modified Haqdarshak message
+        if language in ["Hindi", "English"]:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
+            )
+        elif language == "Hinglish":
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+                f"Kripya app mein book karein.'"
+            )
+        else:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
+            )
+            
     elif intent == "Specific_Scheme_Eligibility_Intent":
         intent_prompt = (
             "Summarize eligibility rules from **RAG Response** and provide a link "
             f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
             "Ask the user to verify their eligibility there."
         )
-        intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
-        )
+        # Modified Haqdarshak message
+        if language in ["Hindi", "English"]:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
+            )
+        elif language == "Hinglish":
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+                f"Kripya app mein book karein.'"
+            )
+        else:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
+            )
+            
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
             "List 3-4 schemes from **RAG Response** with a short one-line description for each. "
             "Always include Pradhan Mantri Mudra Yojana as one of the schemes. "
             "Use any user provided scheme details to choose the most relevant schemes. "
             "If no close match is found, still list the top schemes applicable to the user in their state or CSS. "
-            "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
-            "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
         )
-        intent_prompt += (
-            f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-            f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-            f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-            f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi). Add this only in the description for the applicable scheme/s, not under the entire list."
-        )
+        # Modified final question
+        if language in ["Hindi", "English"]:
+            intent_prompt += "अंत में पूछें: 'किसी योजना के बारे में और जानना चाहते हैं?'"
+        elif language == "Hinglish":
+            intent_prompt += "Finally Ask: 'Kisi yojana ke baare mein aur jaanna chahte hain?'"
+        else:
+            intent_prompt += "अंत में पूछें: 'किसी योजना के बारे में और जानना चाहते हैं?'"
+        
+        # Modified Haqdarshak message
+        if language in ["Hindi", "English"]:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।' Add this only in the description for the applicable scheme/s, not under the entire list."
+            )
+        elif language == "Hinglish":
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
+                f"Kripya app mein book karein.' Add this only in the description for the applicable scheme/s, not under the entire list."
+            )
+        else:
+            intent_prompt += (
+                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
+                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।' Add this only in the description for the applicable scheme/s, not under the entire list."
+            )
+            
     elif intent == "DFL_Intent":
         intent_prompt = (
             "Use the **RAG Response** if available, augmenting with your own knowledge "
@@ -879,15 +1099,23 @@ async def generate_response_async(
             "smoothly from your own knowledge in simple language "
             "with helpful examples."
         )
+        
     elif intent == "Contextual_Follow_Up":
         intent_prompt = (
             "Use the Previous Assistant Response and Conversation Context to identify the topic. "
             "If the RAG Response does not match the referenced scheme, indicate a new RAG search "
             "is needed. Provide a relevant follow-up response using the RAG Response, "
             "filtering for schemes where 'applicability' includes state_id or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., "
-            "'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?')."
+            "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification."
         )
+        # Modified clarification questions
+        if language in ["Hindi", "English"]:
+            intent_prompt += " (e.g., 'कौन सी योजना के बारे में?')"
+        elif language == "Hinglish":
+            intent_prompt += " (e.g., 'Kaunsi scheme ke baare mein?')"
+        else:
+            intent_prompt += " (e.g., 'कौन सी योजना के बारे में?')"
+            
     elif intent == "Confirmation_New_RAG":
         intent_prompt = (
             "If the user confirms to initiate a new RAG search, respond with the details of the "
@@ -896,10 +1124,24 @@ async def generate_response_async(
     else:
         intent_prompt = ""
 
-    output_prompt = """
+    # Updated output_prompt section
+    output_prompt_rag_search = ""
+    output_prompt_no_info = ""
+    
+    if language in ["Hindi", "English"]:
+        output_prompt_rag_search = "मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?"
+        output_prompt_no_info = "मुझे इसके बारे में अभी जानकारी नहीं है।"
+    elif language == "Hinglish":
+        output_prompt_rag_search = "Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?"
+        output_prompt_no_info = "Mujhe iske baare mein abhi jaankari nahi hai."
+    else:
+        output_prompt_rag_search = "मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?"
+        output_prompt_no_info = "मुझे इसके बारे में अभी जानकारी नहीं है।"
+
+    output_prompt = f"""
     **Output**:
-       - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed for schemes, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
-       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don't have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
+       - Return only the final response in the appropriate language (no intent label or intermediate steps). If a new RAG search is needed for schemes, indicate with: '{output_prompt_rag_search}'
+       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: '{output_prompt_no_info}'
        - Do not mention any other scheme when a specific scheme is being talked about.
        - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
        - No need to mention user profile details in every response, only include where contextually relevant.
@@ -929,7 +1171,13 @@ async def generate_response_async(
                             
                 except Exception as e:
                     logger.error(f"Failed to stream response: {str(e)}")
-                    error_msg = "Sorry, I couldn't process your query."
+                    # Modified error message based on language
+                    if language in ["Hindi", "English"]:
+                        error_msg = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
+                    elif language == "Hinglish":
+                        error_msg = "Sorry, main aapka query process nahi kar saka."
+                    else:
+                        error_msg = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
                     for char in error_msg:
                         yield char
             
@@ -945,15 +1193,31 @@ async def generate_response_async(
             
             return final_text
             
+    # except Exception as e:
+    #     logger.error(f"Failed to generate response: {str(e)}")
+    #     error_response = ""
+    #     if language == "Hindi":
+    #         error_response = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
+    #     elif language == "Hinglish":
+    #         error_response = "Sorry, main aapka query process nahi kar saka."
+    #     else:
+    #         error_response = "Sorry, I couldn't process your query."
+        
+    #     if stream:
+    #         async def stream_error():
+    #             for char in error_response:
+    #                 yield char
+    #         return stream_error()
+    #     return error_response
     except Exception as e:
         logger.error(f"Failed to generate response: {str(e)}")
-        error_response = ""
-        if language == "Hindi":
+        # Modified to use Hindi for English queries
+        if language == "Hindi" or language == "English":
             error_response = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
         elif language == "Hinglish":
             error_response = "Sorry, main aapka query process nahi kar saka."
         else:
-            error_response = "Sorry, I couldn't process your query."
+            error_response = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
         
         if stream:
             async def stream_error():
