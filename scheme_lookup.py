@@ -200,15 +200,15 @@ class FastXLSXSchemeManager:
                     text = " ".join(text_parts)
                     
                     # Create metadata from row data
-                    metadata = {}
-                    for col in self.data.columns:
-                        if pd.notna(row[col]):
-                            metadata[col] = row[col]
+                    # metadata = {}
+                    # for col in self.data.columns:
+                    #     if pd.notna(row[col]):
+                    #         metadata[col] = row[col]
                     
                     # Create and store document
                     SCHEME_DOCS[guid] = Document(
                         page_content=text,
-                        metadata=metadata
+                        # metadata=metadata
                     )
                     # logger.debug(f"Registered scheme document for GUID: {guid}")
                     
@@ -275,7 +275,7 @@ def register_scheme_docs(records: List[Dict]) -> None:
         ]
         text = " ".join(part for part in text_parts if part) or rec.get("chunk_text", "")
         if text:
-            SCHEME_DOCS[guid] = Document(page_content=text, metadata=rec)
+            SCHEME_DOCS[guid] = Document(page_content=text)
 
 def find_scheme_guid_by_query(query: str) -> Optional[str]:
     """Return scheme guid if query matches keywords."""
@@ -346,7 +346,7 @@ def fetch_scheme_docs_by_guid(guid: str, index=None, use_xlsx: bool = True):
             
             if text:
                 logger.info(f"Built document text for GUID: {guid}, length: {len(text)} characters")
-                doc = Document(page_content=text, metadata=scheme_data)
+                doc = Document(page_content=text)
                 
                 total_time = time.perf_counter() - start_time
                 logger.info(f"Total XLSX processing time for GUID {guid}: {total_time:.3f}s")
@@ -421,7 +421,7 @@ def search_schemes_by_query(query: str, limit: int = 5) -> List[Document]:
             
             if text_parts:
                 text = " ".join(text_parts)
-                doc = Document(page_content=text, metadata=match)
+                doc = Document(page_content=text)
                 documents.append(doc)
                 logger.debug(f"Built document for match {i+1}: {len(text)} chars")
         

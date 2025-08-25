@@ -11,12 +11,13 @@ from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
 from data_loader import load_rag_data, load_dfl_data, PineconeRecordRetriever
 from scheme_lookup import (
-    find_scheme_guid_by_query,
-    fetch_scheme_docs_by_guid,
     DocumentListRetriever,
-    initialize_fast_xlsx_manager,  # Add this import
-    search_schemes_by_query,  # Add this import
-    XLSXSchemeRetriever,     # Add this import
+)
+from scheme_mongo_lookup import (
+    initialize_mongo_scheme_retriever,
+    find_scheme_guid_by_query_mongo as find_scheme_guid_by_query,
+    fetch_scheme_docs_by_guid_mongo as fetch_scheme_docs_by_guid,
+    search_schemes_by_query_mongo as search_schemes_by_query,
 )
 from utils import extract_scheme_guid
 from data import DataManager
@@ -134,27 +135,21 @@ class CacheManager:
 cache_manager = CacheManager()
 
 
-def init_fast_xlsx_scheme_manager():
-    """Initialize fast XLSX scheme manager"""
+def init_mongo_scheme_manager():
+    """Initialize MongoDB scheme manager"""
     try:
-        xlsx_path = os.getenv("SCHEME_XLSX_PATH")
-        if not xlsx_path:
-            logger.error("SCHEME_XLSX_PATH environment variable not set")
+        success = initialize_mongo_scheme_retriever()
+        if success:
+            logger.info("MongoDB scheme manager initialized successfully")
+            return True
+        else:
+            logger.error("Failed to initialize MongoDB scheme manager")
             return False
-        
-        if not os.path.exists(xlsx_path):
-            logger.error(f"XLSX file not found at path: {xlsx_path}")
-            return False
-            
-        initialize_fast_xlsx_manager(xlsx_path)
-        logger.info(f"Fast XLSX manager initialized successfully with file: {xlsx_path}")
-        return True
     except Exception as e:
-        logger.error(f"Failed to initialize fast XLSX manager: {e}")
+        logger.error(f"Failed to initialize MongoDB scheme manager: {e}")
         return False
 
-# Initialize at module level
-FAST_XLSX_AVAILABLE = init_fast_xlsx_scheme_manager()
+MONGO_SCHEME_AVAILABLE = init_mongo_scheme_manager()
 
 
 # Initialize DataManager - make it async capable
@@ -340,9 +335,25 @@ def build_conversation_history(messages):
         conversation_history += f"{role.capitalize()}: {content}\n"
     return conversation_history
 
-# Welcome user
-def welcome_user(state_name, user_name, query_language):
+
+
+def welcome_user(state_name, user_name, query_language, user_type):
     """Generate a welcome message in the user's chosen language."""
+    
+    # If user_type is 1, return the complete message from the screenshot
+    if user_type == 1:
+        if query_language == "Hindi":
+            return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!"
+        else:
+            return f"Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes. If you need support with digital skills, financial literacy, or growing your business, just ask. Let's work together to make your business successful!"
+    
+    # If user_type is 0, return shortened message (until central schemes only)
+    else:
+        if query_language == "Hindi":
+            return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ।"
+        else:
+            return f"Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes."
+    # If user_type is 0, generate the original dynamic message
     prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth. The user is a new user named {user_name} from {state_name}.
 
     **Input**:
@@ -369,8 +380,8 @@ def welcome_user(state_name, user_name, query_language):
         logger.error(f"Failed to generate welcome message: {str(e)}")
         # Fallback to default messages
         if query_language == "Hindi":
-            return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा। आज कैसे सहायता करूँ?"
-        return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes. How can I assist you today?"
+            return f"नमस्ते {user_name}! हकदर्शक MSME चैटबॉट में स्वागत है। आप {state_name} से हैं, मैं आपकी राज्य और केंद्रीय योजनाओं में मदद करूँगा।"
+        return f"Hi {user_name}! Welcome to Haqdarshak MSME Chatbot! Since you're from {state_name}, I'll help with schemes and documents applicable to your state and all central government schemes."
 
 def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
@@ -394,7 +405,7 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
     Return only one label from the following:
        - Schemes_Know_Intent - General queries enquiring about schemes or loans without specific names (e.g., 'show me schemes', 'mere liye schemes dikhao', 'loan', 'Schemes for credit?', 'MSME ke liye schemes kya hain?', 'क्रेडिट के लिए योजनाएं?', 'loan chahiye', 'scheme dikhao' etc.)
        - DFL_Intent - Digital/financial literacy queries (e.g., 'Current account', 'How to use UPI?', 'डिजिटल भुगतान कैसे करें?', 'Opening Bank Account', 'Why get Insurance', 'Why take loans', 'Online Safety', 'Setting up internet banking', 'Benefits of internet for business' etc.)
-       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names. Generally asking for loan or scheme is NOT specific. (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp' etc.)
+       - Specific_Scheme_Know_Intent - Queries that mention specific scheme names. Generally asking for loan or scheme is NOT specific. (e.g., 'What is FSSAI?', 'PMFME ke baare mein batao', 'एफएसएसएआई क्या है?', 'Pashu Kisan Credit Scheme ke baare mein bataiye', 'Udyam', 'Mudra Yojana', 'pmegp' , 'savitribai phule' , etc.)
        - Specific_Scheme_Apply_Intent - Queries about applying for specific schemes (e.g., 'Apply', 'Apply kaise karna hai', 'How to apply for FSSAI?', 'FSSAI kaise apply karu?', 'एफएसएसआईएआई के लिए आवेदन कैसे करें?' etc.)
        - Specific_Scheme_Eligibility_Intent - Queries about eligibility for specific schemes (e.g., 'Eligibility', 'Eligibility batao', 'Am I eligible for FSSAI?', 'FSSAI eligibility?', 'एफएसएसआईएआई की पात्रता क्या है?' etc.)
        - Out_of_Scope - Queries that are not relevant to business growth or digital literacy or financial literacy (e.g., 'What's the weather?', 'Namaste', 'मौसम कैसा है?', 'Time?' etc.)
@@ -404,7 +415,7 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
 
     **Tips**:
        - Use rule-based checks for Out_of_Scope (keywords: 'hello', 'hi', 'hey', 'weather', 'time', 'namaste', 'mausam', 'samay').
-       - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' are in scope and should be classified as Specific_Scheme_Know_Intent.
+       - Single word queries with scheme names like 'pmegp', 'fssai', 'udyam' , 'savitribai phule' are in scope and should be classified as Specific_Scheme_Know_Intent.
        - For Contextual_Follow_Up, prioritise the most recent query-response pair from the conversation history to check if the query is a follow-up.
        - Use conversation history for context but intent should be determined solely by the current query.
        - To distinguish between Specific_Scheme_Know_Intent and Scheme_Know_Intent, check for whether query is asking for information about specific scheme or general information about schemes.
@@ -422,7 +433,7 @@ async def classify_intent_async(query: str, conversation_history: str = "") -> s
         logger.error(f"Failed to classify intent: {str(e)}")
         return "Out_of_Scope"
 
-async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender=None, business_category=None):
+async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender=None, business_category=None,userType=1):
     """Async version of get_rag_response"""
     try:
         details = []
@@ -443,8 +454,13 @@ async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender
         loop = asyncio.get_event_loop()
         
         def run_retrieval():
+            
             retriever = PineconeRecordRetriever(
-                index=vector_store, state=state, gender=gender, k=5
+                index=vector_store, 
+                state=state, 
+                gender=gender,
+                userType=userType, 
+                k=5,
             )
             qa_chain = RetrievalQA.from_chain_type(
                 llm=llm,
@@ -464,6 +480,7 @@ async def get_rag_response_async(query, vector_store, state="ALL_STATES", gender
         logger.error(f"RAG retrieval failed: {str(e)}")
         return {"text": "Error retrieving scheme information.", "sources": []}
 
+
 async def get_scheme_response_async(
     query,
     vector_store,
@@ -472,11 +489,13 @@ async def get_scheme_response_async(
     business_category=None,
     include_mudra=False,
     intent=None,
-    use_xlsx=True,  # Add this parameter
+    use_mongo=True,
+    userType=1
 ):
-    """Async version of get_scheme_response with XLSX support"""
+    """Async version of get_scheme_response with MongoDB support"""
     logger.info("Querying scheme dataset")
     rag_start_time = time.perf_counter()   
+    
     # Check cache first
     cache_context = {
         "state": state,
@@ -484,7 +503,7 @@ async def get_scheme_response_async(
         "business_category": business_category,
         "include_mudra": include_mudra,
         "intent": intent,
-         "use_xlsx": True
+        "use_mongo": True
     }
     
     cached_response = await cache_manager.get_rag_cache(query, cache_context)
@@ -494,175 +513,186 @@ async def get_scheme_response_async(
 
     guid = None
     rag = None
-    
-    # For specific scheme queries, try direct XLSX lookup first
-    if intent == "Specific_Scheme_Know_Intent" and FAST_XLSX_AVAILABLE:
-        guid_start = time.perf_counter()
-        logger.info(f"Using XLSX for specific scheme lookup - Query: {query}")
+    # guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
+    # if guid:
+    #     logger.info(f"guid found with {query} and guid {guid} for pinecone search")
+    # else:
+    #    guid = None
+    # For specific scheme queries, try direct MongoDB lookup first
+    # if intent == "Specific_Scheme_Know_Intent" and MONGO_SCHEME_AVAILABLE:
+    #     guid_start = time.perf_counter()
+    #     logger.info(f"Using MongoDB for specific scheme lookup - Query: {query}")
         
-        # First, try to find GUID
-        loop = asyncio.get_event_loop()
-        guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query)
+    #     # First, try to find GUID
+    #     loop = asyncio.get_event_loop()
+    #     guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
 
-        guid_time = time.perf_counter() - guid_start
-        logger.info(f"GUID lookup time: {guid_time:.3f}s, found: {guid}")
+    #     guid_time = time.perf_counter() - guid_start
+    #     logger.info(f"GUID lookup time: {guid_time:.3f}s, found: {guid}")
         
-        if guid:
-            fetch_start = time.perf_counter()
-            logger.info(f"Found popular scheme GUID: {guid} for query: '{query}'")
-            # Fetch docs directly from XLSX
-            docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                guid, 
-                None, 
-                True
-            )
-            fetch_time = time.perf_counter() - fetch_start
+    #     if guid:
+    #         fetch_start = time.perf_counter()
+    #         logger.info(f"Found popular scheme GUID: {guid} for query: '{query}'")
+    #         # Fetch docs directly from MongoDB
+    #         docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             guid, 
+    #             None, 
+    #             True,
+    #             userType
+    #         )
+    #         fetch_time = time.perf_counter() - fetch_start
             
-            if docs:
-                llm_start = time.perf_counter()
-                logger.info(f"Retrieved {len(docs)} documents from XLSX for GUID: {guid} (fetch time: {fetch_time:.3f}s)")
-                def run_qa_chain():
-                    retriever = DocumentListRetriever(docs)
-                    qa_chain = RetrievalQA.from_chain_type(
-                        llm=llm,
-                        chain_type="stuff",
-                        retriever=retriever,
-                        return_source_documents=True,
-                    )
-                    return qa_chain.invoke({"query": query})
+    #         if docs:
+    #             llm_start = time.perf_counter()
+    #             logger.info(f"Retrieved {len(docs)} documents from MongoDB for GUID: {guid} (fetch time: {fetch_time:.3f}s)")
+    #             def run_qa_chain():
+    #                 retriever = DocumentListRetriever(docs)
+    #                 qa_chain = RetrievalQA.from_chain_type(
+    #                     llm=llm,
+    #                     chain_type="stuff",
+    #                     retriever=retriever,
+    #                     return_source_documents=True,
+    #                 )
+    #                 return qa_chain.invoke({"query": query})
                 
-                result = await loop.run_in_executor(executor, run_qa_chain)
-                llm_time = time.perf_counter() - llm_start
+    #             result = await loop.run_in_executor(executor, run_qa_chain)
+    #             llm_time = time.perf_counter() - llm_start
                
-                rag = {"text": result["result"], "sources": result["source_documents"]}
-                logger.info(f"LLM processing time: {llm_time:.3f}s, response length: {len(rag['text'])} chars")
-                logger.info("Successfully retrieved scheme data from XLSX")
-            else:
-                logger.warning("No documents found in XLSX for GUID; falling back to search")
+    #             rag = {"text": result["result"], "sources": result["source_documents"]}
+    #             logger.info(f"LLM processing time: {llm_time:.3f}s, response length: {len(rag['text'])} chars")
+    #             logger.info("Successfully retrieved scheme data from MongoDB")
+    #         else:
+    #             logger.warning("No documents found in MongoDB for GUID; falling back to search")
     
-            # If direct GUID lookup didn't work, try XLSX search
-        if not rag and use_xlsx and FAST_XLSX_AVAILABLE:
-                search_start = time.perf_counter()
-                logger.info("Using XLSX search for scheme lookup")
-                
-                loop = asyncio.get_event_loop()
-                
-                def run_xlsx_search():
-                    # Search schemes in XLSX
-                    logger.info(f"Searching schemes by query: {query} with limit 5")
-                    docs = search_schemes_by_query(query, limit=5)
-                    
-                    if docs:
-                        retriever = DocumentListRetriever(docs)
-                        qa_chain = RetrievalQA.from_chain_type(
-                            llm=llm,
-                            chain_type="stuff",
-                            retriever=retriever,
-                            return_source_documents=True,
-                        )
-                        return qa_chain.invoke({"query": query})
-                    return None
-                
-                result = await loop.run_in_executor(executor, run_xlsx_search)
-                search_time = time.perf_counter() - search_start
-                
-                if result:
-                    rag = {"text": result["result"], "sources": result["source_documents"]}
-                    logger.info(f"XLSX search + LLM time: {search_time:.3f}s, response length: {len(rag['text'])} chars")
-                    logger.info("Successfully retrieved scheme data from XLSX search")
-    
-    # Fallback to Pinecone if XLSX didn't work
-    if not rag:
-        logger.info("Falling back to Pinecone search")
-        if guid:
-            # Try Pinecone with known GUID
-            docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                guid, 
-                vector_store,
-                False  # use_xlsx=False for Pinecone fallback
-            )
+    #     # If direct GUID lookup didn't work, try MongoDB search
+    #     if not rag and use_mongo and MONGO_SCHEME_AVAILABLE:
+    #         search_start = time.perf_counter()
+    #         logger.info("Using MongoDB search for scheme lookup")
             
-            if docs:
-                def run_qa_chain():
-                    retriever = DocumentListRetriever(docs)
-                    qa_chain = RetrievalQA.from_chain_type(
-                        llm=llm,
-                        chain_type="stuff",
-                        retriever=retriever,
-                        return_source_documents=True,
-                    )
-                    return qa_chain.invoke({"query": query})
+    #         loop = asyncio.get_event_loop()
+            
+    #         def run_mongo_search():
+    #             # Search schemes in MongoDB
+    #             logger.info(f"Searching schemes by query: {query} with limit 5")
+    #             docs = search_schemes_by_query(query, limit=5)
                 
-                result = await loop.run_in_executor(executor, run_qa_chain)
-                rag = {"text": result["result"], "sources": result["source_documents"]}
-        else:
+    #             if docs:
+    #                 retriever = DocumentListRetriever(docs)
+    #                 qa_chain = RetrievalQA.from_chain_type(
+    #                     llm=llm,
+    #                     chain_type="stuff",
+    #                     retriever=retriever,
+    #                     return_source_documents=True,
+    #                 )
+    #                 return qa_chain.invoke({"query": query})
+    #             return None
+            
+    #         result = await loop.run_in_executor(executor, run_mongo_search)
+    #         search_time = time.perf_counter() - search_start
+            
+    #         if result:
+    #             rag = {"text": result["result"], "sources": result["source_documents"]}
+    #             logger.info(f"MongoDB search + LLM time: {search_time:.3f}s, response length: {len(rag['text'])} chars")
+    #             logger.info("Successfully retrieved scheme data from MongoDB search")
+    
+    # Fallback to Pinecone if MongoDB didn't work
+    # if not rag:
+    #     logger.info("Falling back to Pinecone search")
+    #     if guid:
+    #         # Try Pinecone with known GUID
+    #         docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             guid, 
+    #             vector_store,
+    #             False,
+    #             userType  
+    #         )
+            
+    #         if docs:
+    #             def run_qa_chain():
+    #                 retriever = DocumentListRetriever(docs)
+    #                 qa_chain = RetrievalQA.from_chain_type(
+    #                     llm=llm,
+    #                     chain_type="stuff",
+    #                     retriever=retriever,
+    #                     return_source_documents=True,
+    #                 )
+    #                 return qa_chain.invoke({"query": query})
+                
+    #             result = await loop.run_in_executor(executor, run_qa_chain)
+    #             rag = {"text": result["result"], "sources": result["source_documents"]}
+    #     else:
             # Regular Pinecone search
-            rag = await get_rag_response_async(
+    logger.info(f"userType is equal too {userType}")
+    rag = await get_rag_response_async(
                 query,
                 vector_store,
                 state=state,
                 gender=gender,
                 business_category=business_category,
+                userType=userType
             )
 
-    # Handle Mudra inclusion (if needed)
-    if include_mudra:
-        logger.info("Including Pradhan Mantri Mudra Yojana details")
-        loop = asyncio.get_event_loop()
+    # # Handle Mudra inclusion (if needed)
+    # if include_mudra:
+    #     logger.info("Including Pradhan Mantri Mudra Yojana details")
+    #     loop = asyncio.get_event_loop()
         
-        mudra_guid = await loop.run_in_executor(
-            executor, 
-            find_scheme_guid_by_query, 
-            "pradhan mantri mudra yojana"
-        ) or "SH0008BK"
+    #     mudra_guid = await loop.run_in_executor(
+    #         executor, 
+    #         find_scheme_guid_by_query, 
+    #         "pradhan mantri mudra yojana",
+    #         userType  # Assuming userType 1 for Mudra
+    #     ) or "SH0008BK"
         
-        # Try XLSX first for Mudra
-        mudra_docs = None
-        if use_xlsx and FAST_XLSX_AVAILABLE:
-            mudra_docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                mudra_guid, 
-                None, 
-                True
-            )
+    #     # Try MongoDB first for Mudra
+    #     mudra_docs = None
+    #     if use_mongo and MONGO_SCHEME_AVAILABLE:
+    #         mudra_docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             mudra_guid, 
+    #             None, 
+    #             True,
+    #             userType
+    #         )
         
-        # Fallback to Pinecone for Mudra if needed
-        if not mudra_docs:
-            mudra_docs = await loop.run_in_executor(
-                executor, 
-                fetch_scheme_docs_by_guid, 
-                mudra_guid, 
-                vector_store,
-                False
-            )
+    #     # Fallback to Pinecone for Mudra if needed
+    #     if not mudra_docs:
+    #         mudra_docs = await loop.run_in_executor(
+    #             executor, 
+    #             fetch_scheme_docs_by_guid, 
+    #             mudra_guid, 
+    #             vector_store,
+    #             False,
+    #             userType
+    #         )
 
-        if mudra_docs:
-            def run_mudra_qa():
-                retriever = DocumentListRetriever(mudra_docs)
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=llm,
-                    chain_type="stuff",
-                    retriever=retriever,
-                    return_source_documents=True,
-                )
-                return qa_chain.invoke({"query": "Pradhan Mantri Mudra Yojana"})
+    #     if mudra_docs:
+    #         def run_mudra_qa():
+    #             retriever = DocumentListRetriever(mudra_docs)
+    #             qa_chain = RetrievalQA.from_chain_type(
+    #                 llm=llm,
+    #                 chain_type="stuff",
+    #                 retriever=retriever,
+    #                 return_source_documents=True,
+    #             )
+    #             return qa_chain.invoke({"query": "Pradhan Mantri Mudra Yojana"})
             
-            result = await loop.run_in_executor(executor, run_mudra_qa)
-            mudra_rag = {"text": result["result"], "sources": result["source_documents"]}
-        else:
-            logger.warning("Mudra documents not found; skipping")
-            mudra_rag = {"text": "", "sources": []}
+    #         result = await loop.run_in_executor(executor, run_mudra_qa)
+    #         mudra_rag = {"text": result["result"], "sources": result["source_documents"]}
+    #     else:
+    #         logger.warning("Mudra documents not found; skipping")
+    #         mudra_rag = {"text": "", "sources": []}
 
-        if not isinstance(rag, dict):
-            rag = {"text": str(rag), "sources": []}
+    if not isinstance(rag, dict):
+        rag = {"text": str(rag), "sources": []}
 
-        rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
-        rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
+    # rag["text"] = f"{rag.get('text', '')}\n{mudra_rag.get('text', '')}"
+    # rag["sources"] = rag.get("sources", []) + mudra_rag.get("sources", [])
 
     total_rag_time = time.perf_counter() - rag_start_time
     logger.info(f"Total RAG processing time: {total_rag_time:.3f}s")    
@@ -716,7 +746,7 @@ async def generate_response_async(
         gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
 
         **Instructions**:
-        - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help.
+        - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help. 
         - Use Devanagari script for Hindi and a natural mix of Hindi and English words in Roman script for Hinglish.
         - Keep the message under 30 words.
 
@@ -776,6 +806,13 @@ async def generate_response_async(
 
     **Language Handling and Tone Instructions**:
     {tone_prompt}
+
+    **Formatting Instructions**:
+    - Start with greeting on its own line: 'Hi {user_info.name}!' (English), 'Namaste {user_info.name}!' (Hinglish), or 'नमस्ते {user_info.name}!' (Hindi)
+    - After greeting, add a blank line
+    - Structure the answer in multiple short paragraphs (1-2 lines each)
+    - Add a blank line between each paragraph for better readability
+    - Use clear, simple formatting with bullet bullet points
 
     **Task**:
     Use any user-provided scheme details to pick relevant schemes from retrieved data and personalise the scheme information wherever applicable.
@@ -1012,38 +1049,41 @@ async def generate_audio_script_background(response: str, user_info: UserContext
         logger.error(f"Background audio script generation failed: {str(e)}")
         return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
 
-async def get_popular_scheme_response_fast(query: str, intent: str) -> Optional[dict]:
-    """Ultra-fast response for popular schemes (1-2 seconds)"""
-    if intent != "Specific_Scheme_Know_Intent":
-        return None
+async def get_popular_scheme_response_fast(query: str, intent: str,userType: int) -> Optional[dict]:
+    """Ultra-fast response for popular schemes using MongoDB (1-2 seconds)"""
+
+    logger.info(f"Processing popular userType {userType} scheme query: {query} with intent: {intent}")
+    # if intent != "Specific_Scheme_Know_Intent":
+    #     return None
     
-    # Step 1: Quick GUID lookup (< 100ms)
-    guid = find_scheme_guid_by_query(query)
+    # Step 1: Quick GUID lookup from MongoDB (< 100ms)
+    loop = asyncio.get_event_loop()
+    guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
+    
     if not guid:
         logger.info(f"No popular scheme GUID found for query: '{query}' - using regular path")
         return None
     
     logger.info(f"Found popular scheme GUID: {guid} for query: '{query}' - using fast path")
     
-    # Step 2: Fast XLSX fetch (< 200ms)  
-    if not FAST_XLSX_AVAILABLE:
-        logger.warning("XLSX not available - falling back to regular path")
+    # Step 2: Fast MongoDB fetch (< 200ms)  
+    if not MONGO_SCHEME_AVAILABLE:
+        logger.warning("MongoDB not available - falling back to regular path")
         return None
     
     try:
-        loop = asyncio.get_event_loop()
-        
-        # Single fast operation - no parallel tasks overhead
+        # Single fast operation - fetch docs from MongoDB
+        logger.info("starting scheme fetch by guid")
         docs = await loop.run_in_executor(
             executor, 
             fetch_scheme_docs_by_guid, 
             guid, 
-            None, 
-            True
+            None,
+            True,
+            userType,
         )
-        
         if not docs:
-            logger.warning(f"No docs found for popular scheme GUID: {guid}")
+            logger.warning(f"No docs found for {docs} popular scheme GUID: {guid}")
             return None
         
         # Step 3: Fast QA chain (< 1000ms)
@@ -1054,12 +1094,12 @@ async def get_popular_scheme_response_fast(query: str, intent: str) -> Optional[
                 chain_type="stuff", 
                 retriever=retriever,
                 return_source_documents=True,
+                
             )
             return qa_chain.invoke({"query": query})
         
         result = await loop.run_in_executor(executor, run_fast_qa)
         rag_response = {"text": result["result"], "sources": result["source_documents"]}
-        print(f"Fast path RAG kittu response: {rag_response['text']}...")  # Log first 100 chars
         logger.info(f"Fast path completed for popular scheme: {guid}")
         return rag_response
         
@@ -1105,6 +1145,7 @@ async def process_query_optimized(
     session_id: str,
     mobile_number: str,
     session_data: SessionData,
+     userType: int = 1,
     user_language: str = None,
     stream: bool = False
 ) -> Tuple[Any, callable]:
@@ -1113,7 +1154,7 @@ async def process_query_optimized(
     Expected improvement: 12.81s -> 3-4s (70% improvement)
     """
     tracker = PerformanceTracker()
-    logger.info(f"Starting optimized query processing for: {query}")
+    logger.info(f"Starting optimized userType {userType} query processing for: {query}")
 
     # Step 1: Get user context (fast, local operation)
     tracker.start_timer("user_context")
@@ -1142,7 +1183,7 @@ async def process_query_optimized(
         user_type = "returning" if conversations else "new"
         
         if user_type == "new":
-            response = welcome_user(user_info.state_name, user_info.name, query_language)
+            response = welcome_user(user_info.state_name, user_info.name, query_language,userType)
             
             # Create background task for saving welcome message
             async def save_welcome():
@@ -1220,11 +1261,11 @@ async def process_query_optimized(
     rag_response = None
     if intent in scheme_intents:
         tracker.start_timer("rag_retrieval")
-        print(f"Retrieving RAG response for kittu intent: {intent}")
+        logger.info(f"Retrieving RAG response for kittu intent: {intent}")
         # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
-        if intent == "Specific_Scheme_Know_Intent":
-            rag_response = await get_popular_scheme_response_fast(query, intent)
-        
+        if intent == "Specific_Scheme_Know_Intent" or "Schemes_Know_Intent":
+            rag_response = await get_popular_scheme_response_fast(query, intent,userType)
+            logger.info(f"Fast path tobi response: {rag_response}")
         # FALLBACK to full pipeline if fast path didn't work
         if not rag_response:
             logger.info("Using full scheme response pipeline")
@@ -1238,7 +1279,8 @@ async def process_query_optimized(
                 business_category=user_info.business_category,
                 include_mudra=include_mudra,
                 intent=intent,
-                use_xlsx=True
+                use_mongo=True,
+                userType=userType
             )
         
         tracker.end_timer("rag_retrieval")
