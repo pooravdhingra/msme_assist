@@ -41,6 +41,62 @@ load_dotenv()
 # Thread pool for CPU-intensive operations
 executor = ThreadPoolExecutor(max_workers=8)
 
+WELCOME_MESSAGES = {
+    "en": {
+        "full": "Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes. If you need support with digital skills, financial literacy, or growing your business, just ask. Let's work together to make your business successful!",
+        "short": "Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes."
+    },
+    "hi": {
+        "full": "नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!",
+        "short": "नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करूंगा।"
+    },
+    "mr": {
+        "full": "नमस्कार {user_name}! हकदर्शक मध्ये आपले स्वागत आहे. मी येथे तुम्हाला {state_name} आणि केंद्र सरकारच्या योजनांसाठी सरकारी योजना आणि कागदपत्रे शोधण्यात मदत करण्यासाठी आहे. तुम्हाला डिजिटल कौशल्य, आर्थिक साक्षरता किंवा व्यवसाय वाढवण्यासाठी मदत हवी असल्यास, फक्त विचारा. चला मिळून तुमचा व्यवसाय यशस्वी करूया!",
+        "short": "नमस्कार {user_name}! हकदर्शक मध्ये आपले स्वागत आहे. मी तुम्हाला {state_name} आणि केंद्र सरकारच्या योजनांसाठी सरकारी योजना आणि कागदपत्रे शोधण्यात मदत करेन."
+    },
+    "ta": {
+        "full": "வணக்கம் {user_name}! ஹக்‌தர்ஷக்-க்கு வரவேற்கிறோம். {state_name} மற்றும் மத்திய அரசுத் திட்டங்களுக்கான அரசு திட்டங்கள் மற்றும் ஆவணங்களை நீங்கள் கண்டறிய நான் இங்கு இருக்கிறேன். டிஜிட்டல் திறன்கள், நிதி அறிவியல் அல்லது உங்கள் வணிகத்தை வளர்ப்பதில் உதவி தேவைப்பட்டால், கேளுங்கள். உங்கள் வணிகத்தை வெற்றிகரமாக மாற்ற ஒன்றாக வேலை செய்வோம்!",
+        "short": "வணக்கம் {user_name}! ஹக்‌தர்ஷக்-க்கு வரவேற்கிறோம். நான் {state_name} மற்றும் மத்திய அரசுத் திட்டங்களுக்கான அரசு திட்டங்கள் மற்றும் ஆவணங்களை கண்டறிய உதவுவேன்."
+    },
+    "te": {
+        "full": "నమస్కారం {user_name}! హక్దర్షక్‌కి స్వాగతం. నేను మీకు {state_name} మరియు కేంద్ర ప్రభుత్వ పథకాల కోసం ప్రభుత్వ పథకాలు మరియు పత్రాలను కనుగొనడంలో సహాయం చేయడానికి ఇక్కడ ఉన్నాను. డిజిటల్ నైపుణ్యాలు, ఆర్థిక సాక్షరత లేదా మీ వ్యాపారాన్ని పెంచుకోవడానికి సహాయం అవసరమైతే, కేవలం అడగండి. మనం కలిసి మీ వ్యాపారాన్ని విజయవంతం చేద్దాం!",
+        "short": "నమస్కారం {user_name}! హక్దర్షక్‌కి స్వాగతం. నేను మీకు {state_name} మరియు కేంద్ర ప్రభుత్వ పథకాల కోసం ప్రభుత్వ పథకాలు మరియు పత్రాలను కనుగొనడంలో సహాయం చేస్తాను."
+    },
+    "bn": {
+        "full": "নমস্কার {user_name}! হকদর্শকে আপনাকে স্বাগতম। আমি এখানে {state_name} এবং কেন্দ্রীয় প্রকল্পগুলির জন্য সরকারি প্রকল্প এবং নথি খুঁজে পেতে আপনাকে সাহায্য করতে এসেছি। যদি আপনার ডিজিটাল দক্ষতা, আর্থিক সাক্ষরতা বা ব্যবসা বৃদ্ধি সম্পর্কে সহায়তা প্রয়োজন হয়, তবে জিজ্ঞাসা করুন। আসুন একসাথে আপনার ব্যবসাকে সফল করি!",
+        "short": "নমস্কার {user_name}! হকদর্শকে আপনাকে স্বাগতম। আমি {state_name} এবং কেন্দ্রীয় প্রকল্পগুলির জন্য সরকারি প্রকল্প এবং নথি খুঁজে পেতে আপনাকে সাহায্য করব।"
+    },
+    "gu": {
+        "full": "નમસ્તે {user_name}! હકદરશકમાં આપનું સ્વાગત છે. હું અહીં {state_name} અને કેન્દ્રીય યોજનાઓ માટે સરકારી યોજનાઓ અને દસ્તાવેજો શોધવામાં તમને મદદ કરવા માટે છું. જો તમને ડિજિટલ કૌશલ્ય, નાણાકીય સાક્ષરતા અથવા તમારા વ્યવસાયને વધારવામાં મદદ જોઈએ, તો ફક્ત પૂછો. ચાલો મળીને તમારો વ્યવસાય સફળ બનાવીએ!",
+        "short": "નમસ્તે {user_name}! હકદરશકમાં આપનું સ્વાગત છે. હું {state_name} અને કેન્દ્રીય યોજનાઓ માટે સરકારી યોજનાઓ અને દસ્તાવેજો શોધવામાં તમારી મદદ કરીશ."
+    },
+    "kn": {
+        "full": "ನಮಸ್ಕಾರ {user_name}! ಹಕ್‌ದರ್ಶಕ್‌ಗೆ ಸುಸ್ವಾಗತ. ನಾನು ಇಲ್ಲಿ {state_name} ಮತ್ತು ಕೇಂದ್ರ ಸರ್ಕಾರದ ಯೋಜನೆಗಳಿಗೆ ಸರ್ಕಾರಿ ಯೋಜನೆಗಳು ಮತ್ತು ದಾಖಲೆಗಳನ್ನು ಹುಡುಕಲು ನಿಮಗೆ ಸಹಾಯ ಮಾಡಲು ಬಂದಿದ್ದೇನೆ. ಡಿಜಿಟಲ್ ಕೌಶಲ್ಯಗಳು, ಹಣಕಾಸು ಪಾಠಶಾಲೆ ಅಥವಾ ನಿಮ್ಮ ವ್ಯವಹಾರವನ್ನು ವೃದ್ಧಿಸಲು ಸಹಾಯ ಬೇಕಾದರೆ, ಕೇಳಿ. ನಾವು ಒಟ್ಟಾಗಿ ನಿಮ್ಮ ವ್ಯವಹಾರವನ್ನು ಯಶಸ್ವಿಗೊಳಿಸೋಣ!",
+        "short": "ನಮಸ್ಕಾರ {user_name}! ಹಕ್‌ದರ್ಶಕ್‌ಗೆ ಸುಸ್ವಾಗತ. ನಾನು {state_name} ಮತ್ತು ಕೇಂದ್ರ ಸರ್ಕಾರದ ಯೋಜನೆಗಳಿಗೆ ಸರ್ಕಾರಿ ಯೋಜನೆಗಳು ಮತ್ತು ದಾಖಲೆಗಳನ್ನು ಹುಡುಕಲು ನಿಮಗೆ ಸಹಾಯ ಮಾಡುತ್ತೇನೆ."
+    },
+    "or": {
+        "full": "ନମସ୍କାର {user_name}! ହକଦର୍ଶକରେ ଆପଣଙ୍କୁ ସ୍ବାଗତ। ମୁଁ {state_name} ଏବଂ କେନ୍ଦ୍ରୀୟ ଯୋଜନାଗୁଡିକ ପାଇଁ ସରକାରୀ ଯୋଜନା ଏବଂ ଦଳିଲଗୁଡିକ ଖୋଜିବାରେ ଆପଣଙ୍କୁ ସହଯୋଗ କରିବି। ଯଦି ଆପଣଙ୍କୁ ଡିଜିଟାଲ୍ କୌଶଳ, ଆର୍ଥିକ ସାକ୍ଷରତା କିମ୍ବା ବ୍ୟବସାୟ ବୃଦ୍ଧିରେ ସହାୟତା ଆବଶ୍ୟକ, ଦୟାକରି ପଚାରନ୍ତୁ। ଆସନ୍ତୁ ଆମେ ମିଳିତଭାବେ ଆପଣଙ୍କ ବ୍ୟବସାୟକୁ ସଫଳ କରିବା!",
+        "short": "ନମସ୍କାର {user_name}! ହକଦର୍ଶକରେ ଆପଣଙ୍କୁ ସ୍ବାଗତ। ମୁଁ {state_name} ଏବଂ କେନ୍ଦ୍ରୀୟ ଯୋଜନାଗୁଡିକ ପାଇଁ ସରକାରୀ ଯୋଜନା ଏବଂ ଦଳିଲଗୁଡିକ ଖୋଜିବାରେ ଆପଣଙ୍କୁ ସହଯୋଗ କରିବି।"
+    },
+    "ml": {
+        "full": "നമസ്കാരം {user_name}! ഹക്ദർശക്-ലേക്ക് സ്വാഗതം. ഞാൻ ഇവിടെ {state_name} സംസ്ഥാനത്തിനും കേന്ദ്ര പദ്ധതികൾക്കുമുള്ള സർക്കാർ പദ്ധതികളും രേഖകളും കണ്ടെത്തുന്നതിൽ നിങ്ങളെ സഹായിക്കാൻ എത്തി. നിങ്ങൾക്ക് ഡിജിറ്റൽ കഴിവുകൾ, സാമ്പത്തിക വിജ്ഞാനം അല്ലെങ്കിൽ നിങ്ങളുടെ ബിസിനസ്സ് വളർത്തുന്നതിനുള്ള സഹായം ആവശ്യമുണ്ടെങ്കിൽ, ചോദിക്കുക. നമുക്ക് ഒന്നിച്ച് നിങ്ങളുടെ ബിസിനസ്സ് വിജയകരമാക്കാം!",
+        "short": "നമസ്കാരം {user_name}! ഹക്ദർശക്-ലേക്ക് സ്വാഗതം. ഞാൻ {state_name} സംസ്ഥാനത്തിനും കേന്ദ്ര പദ്ധതികൾക്കുമുള്ള സർക്കാർ പദ്ധതികളും രേഖകളും കണ്ടെത്തുന്നതിൽ നിങ്ങളെ സഹായിക്കും."
+    },
+    "pa": {
+        "full": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ {user_name}! ਹਕਦਰਸ਼ਕ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ। ਮੈਂ ਤੁਹਾਨੂੰ {state_name} ਅਤੇ ਕੇਂਦਰੀ ਯੋਜਨਾਵਾਂ ਲਈ ਸਰਕਾਰੀ ਯੋਜਨਾਵਾਂ ਅਤੇ ਦਸਤਾਵੇਜ਼ ਲੱਭਣ ਵਿੱਚ ਮਦਦ ਕਰਨ ਲਈ ਇੱਥੇ ਹਾਂ। ਜੇ ਤੁਹਾਨੂੰ ਡਿਜ਼ੀਟਲ ਹੁਨਰਾਂ, ਵਿੱਤੀ ਸਾਖਰਤਾ ਜਾਂ ਆਪਣੇ ਕਾਰੋਬਾਰ ਨੂੰ ਵਧਾਉਣ ਵਿੱਚ ਸਹਾਇਤਾ ਦੀ ਲੋੜ ਹੈ, ਤਾਂ ਬੇਝਿਝਕ ਪੁੱਛੋ। ਆਓ ਮਿਲ ਕੇ ਤੁਹਾਡੇ ਕਾਰੋਬਾਰ ਨੂੰ ਸਫਲ ਬਣਾਈਏ!",
+        "short": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ {user_name}! ਹਕਦਰਸ਼ਕ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ। ਮੈਂ ਤੁਹਾਨੂੰ {state_name} ਅਤੇ ਕੇਂਦਰੀ ਯੋਜਨਾਵਾਂ ਲਈ ਸਰਕਾਰੀ ਯੋਜਨਾਵਾਂ ਅਤੇ ਦਸਤਾਵੇਜ਼ ਲੱਭਣ ਵਿੱਚ ਮਦਦ ਕਰਾਂਗਾ।"
+    },
+    "as": {
+        "full": "নমস্কাৰ {user_name}! হকদৰ্ছকত আপোনাক স্বাগতম। মই ইয়াত {state_name} আৰু কেন্দ্ৰীয় আঁচনিৰ বাবে চৰকাৰী আঁচনি আৰু নথিপত্ৰ বিচাৰি পাবলৈ আপোনাক সহায় কৰিবলৈ আহিছো। যদি আপোনাৰ ডি়জিটেল দক্ষতা, আৰ্থিক সাক্ষৰতা বা ব্যৱসায় বৃদ্ধিৰ প্ৰয়োজন হয়, তেন্তে সোধক। আহক, আমি একেলগে আপোনাৰ ব্যৱসায় সফল কৰোঁ!",
+        "short": "নমস্কাৰ {user_name}! হকদৰ্ছকত আপোনাক স্বাগতম। মই {state_name} আৰু কেন্দ্ৰীয় আঁচনিৰ বাবে চৰকাৰী আঁচনি আৰু নথিপত্ৰ বিচাৰি পাবলৈ আপোনাক সহায় কৰিম।"
+    },
+    "ur": {
+        "full": "السلام علیکم {user_name}! حق درشک میں خوش آمدید۔ میں یہاں {state_name} اور مرکزی اسکیموں کے لئے حکومتی اسکیمیں اور دستاویزات تلاش کرنے میں آپ کی مدد کے لئے موجود ہوں۔ اگر آپ کو ڈیجیٹل مہارت، مالی خواندگی، یا اپنے کاروبار کو بڑھانے میں مدد چاہیے تو بس پوچھیے۔ آئیے مل کر آپ کے کاروبار کو کامیاب بناتے ہیں!",
+        "short": "السلام علیکم {user_name}! حق درشک میں خوش آمدید۔ میں {state_name} اور مرکزی اسکیموں کے لئے حکومتی اسکیمیں اور دستاویزات تلاش کرنے میں آپ کی مدد کروں گا۔"
+    }
+}
+
+
 # Enhanced Cache Manager
 class CacheManager:
     def __init__(self):
@@ -355,22 +411,26 @@ def build_conversation_history(messages):
         conversation_history += f"{role.capitalize()}: {content}\n"
     return conversation_history
 
-
+def get_welcome_message(state_name,user_name, query_language, user_type):
+    # Get messages for language or fallback to English
+    messages = WELCOME_MESSAGES.get(query_language, WELCOME_MESSAGES["en"])
+    template = messages["full"] if user_type == 1 else messages["short"]
+    return template.format(user_name=user_name, state_name=state_name)
 
 def welcome_user(state_name, user_name, query_language, user_type):
     """Generate a welcome message in the user's chosen language."""
     
-    # If user_type is 1, return the complete message from the screenshot
-    if query_language  in ["Hindi", "English", "Hinglish"]:
+    if query_language  in ["hi", "en", "Hinglish"]:
         query_language = "Hindi"
-        
+
+    print(f"user_type is {user_type} and kits query_language is {query_language}")
+
     if user_type == 1:
         if query_language == "Hindi":
             return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!"
         else:
             return f"Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes. If you need support with digital skills, financial literacy, or growing your business, just ask. Let's work together to make your business successful!"
     
-    # If user_type is 0, return shortened message (until central schemes only)
     else:
         if query_language == "Hindi":
             return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ।"
@@ -1412,7 +1472,7 @@ async def process_query_optimized(
     session_id: str,
     mobile_number: str,
     session_data: SessionData,
-     userType: int = 1,
+    userType: int = 1,
     user_language: str = None,
     stream: bool = False
 ) -> Tuple[Any, callable]:
@@ -1434,7 +1494,8 @@ async def process_query_optimized(
 
     # Step 2: Language detection (fast, local operation)
     tracker.start_timer("language_detection")
-    query_language = user_language if query.lower() == "welcome" and user_language else detect_language(query)
+    query_language = user_language
+    #  if query.lower() == "welcome" and user_language else detect_language(query)
     tracker.end_timer("language_detection")
     
     logger.info(f"Using query language: {query_language}")
@@ -1450,7 +1511,7 @@ async def process_query_optimized(
         user_type = "returning" if conversations else "new"
         
         if user_type == "new":
-            response = welcome_user(user_info.state_name, user_info.name, query_language,userType)
+            response = get_welcome_message(user_info.state_name, user_info.name, query_language,userType)
             
             # Create background task for saving welcome message
             async def save_welcome():

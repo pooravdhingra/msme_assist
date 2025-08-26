@@ -105,9 +105,9 @@ def auth_token(payload: Dict[str, str]):
         "pincode": result.get("pincode", ""),
         "business_name": result.get("bussinessName", ""),
         "business_category": result.get("employmentType", ""),
-        "language": "English",
         "state_id": STATE_NAME_TO_ID.get(state_name, "Unknown"),
         "user_type":result.get("user_type", 1),
+        "user_lang": result.get("user_Language", "hi"),
     }
     session_id = uuid.uuid4().hex
     data_manager.start_session(user["mobile_number"], session_id, user)
@@ -137,7 +137,7 @@ async def chat_get_optimized(session_id: str, query: str):
         sess.user["mobile_number"],
         sess,
         user_type,
-        user_language=sess.user.get("language"),
+        user_language=sess.user.get("user_lang"),
         stream=True,
     )
     print(f"⏱️ Optimized process_query: {time.perf_counter() - start_time:.3f}s")
@@ -276,7 +276,7 @@ def get_history(session_id: str):
         session.user["mobile_number"],
         session,
         user_type,
-        user_language=session.user.get("language"),
+        user_language=session.user.get("user_lang"),
         stream=True,
     )
     print("⏱️ process_query:", time.perf_counter() - step2)
@@ -346,7 +346,7 @@ async def get_welcome(session_id: str):
         mobile,
         session,
         user_type,
-        user_language=session.user.get("language"),
+        user_language=session.user.get("user_lang"),
         stream=False   
     )
 
