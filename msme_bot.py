@@ -361,6 +361,9 @@ def welcome_user(state_name, user_name, query_language, user_type):
     """Generate a welcome message in the user's chosen language."""
     
     # If user_type is 1, return the complete message from the screenshot
+    if query_language  in ["Hindi", "English", "Hinglish"]:
+        query_language = "Hindi"
+        
     if user_type == 1:
         if query_language == "Hindi":
             return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!"
