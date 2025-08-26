@@ -96,6 +96,193 @@ WELCOME_MESSAGES = {
     }
 }
 
+LANGUAGE_LABELS = {
+    "en": "English",
+    "mr": "Marathi", 
+    "hi": "Hindi",
+    "as": "Assamese",
+    "te": "Telugu",
+    "bn": "Bengali", 
+    "ta": "Tamil",
+    "gu": "Gujarati",
+    "kn": "Kannada",
+    "or": "Odia",
+    "ml": "Malayalam",
+    "pa": "Punjabi",
+    "ur": "Urdu"
+}
+
+# Language-specific messages and greetings
+LANGUAGE_CONFIG = {
+    "English":{
+        "greeting": "नमस्ते",
+        "out_of_scope": "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।",
+        "gratitude_fallback": "धन्यवाद! क्या मैं और मदद कर सकता हूँ?",
+        "no_info": "मुझे इसके बारे में अभी जानकारी नहीं है।",
+        "rag_search": "मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?",
+        "eligibility_question": "पात्रता या आवेदन करने के बारे में जानना चाहते हैं?",
+        "scheme_question": "किसी योजना के बारे में और जानना चाहते हैं?",
+        "which_scheme": "कौन सी योजना के बारे में?",
+        "error_message": "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।",
+        "haqdarshak_message": "हकदर्शक आपको यह दस्तावेज़ दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।"
+    },
+    "Hindi": {
+        "greeting": "नमस्ते",
+        "out_of_scope": "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।",
+        "gratitude_fallback": "धन्यवाद! क्या मैं और मदद कर सकता हूँ?",
+        "no_info": "मुझे इसके बारे में अभी जानकारी नहीं है।",
+        "rag_search": "मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?",
+        "eligibility_question": "पात्रता या आवेदन करने के बारे में जानना चाहते हैं?",
+        "scheme_question": "किसी योजना के बारे में और जानना चाहते हैं?",
+        "which_scheme": "कौन सी योजना के बारे में?",
+        "error_message": "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।",
+        "haqdarshak_message": "हकदर्शक आपको यह दस्तावेज़ दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।"
+    },
+    "Tamil": {
+        "greeting": "வணக்கம்",
+        "out_of_scope": "மன்னிக்கவும், நான் அரசு திட்டங்கள், டிஜிட்டல் அல்லது நிதி கல்வியறிவு மற்றும் வணிக வளர்ச்சியில் மட்டுமே உதவ முடியும்.",
+        "gratitude_fallback": "நன்றி! வேறு ஏதாவது உதவி தேவையா?",
+        "no_info": "இதைப் பற்றி எனக்கு இப்போது தகவல் இல்லை.",
+        "rag_search": "[scheme name] பற்றி மேலும் தகவல் பெற வேண்டும். நீங்கள் இந்த திட்டத்தைப் பற்றி பேசுகிறீர்களா?",
+        "eligibility_question": "தகுதி அல்லது விண்ணப்பிப்பது எப்படி என்று தெரிந்து கொள்ள விரும்புகிறீர்களா?",
+        "scheme_question": "ஏதேனும் திட்டத்தைப் பற்றி மேலும் அறிய விரும்புகிறீர்களா?",
+        "which_scheme": "எந்த திட்டத்தைப் பற்றி கேட்கிறீர்கள்?",
+        "error_message": "மன்னிக்கவும், உங்கள் கேள்வியை செயலாக்க முடியவில்லை.",
+        "haqdarshak_message": "ஹக்தர்ஷக் இந்த ஆவணத்தை பெற உங்களுக்கு உதவ முடியும். தயவுசெய்து ஆப்பில் புக் செய்யுங்கள்."
+    },
+    "Telugu": {
+        "greeting": "నమస్కారం",
+        "out_of_scope": "క్షమించండి, నేను ప్రభుత్వ పథకాలు, డిజిటల్ లేదా ఆర్థిక అక్షరాస్యత మరియు వ్యాపార వృద్ధిలో మాత్రమే సహాయం చేయగలను.",
+        "gratitude_fallback": "ధన్యవాదాలు! నేను మరేమైనా సహాయం చేయగలనా?",
+        "no_info": "దీని గురించి నాకు ఇప్పుడు సమాచారం లేదు.",
+        "rag_search": "[scheme name] గురించి మరింత సమాచారం అవసరం. మీరు ఈ పథకం గురించి మాట్లాడుతున్నారా?",
+        "eligibility_question": "అర్హత లేదా దరఖాస్తు ఎలా చేయాలో తెలుసుకోవాలనుకుంటున్నారా?",
+        "scheme_question": "ఏదైనా పథకం గురించి మరింత తెలుసుకోవాలనుకుంటున్నారా?",
+        "which_scheme": "ఏ పథకం గురించి అడుగుతున్నారు?",
+        "error_message": "క్షమించండి, మీ ప్రశ్నను ప్రాసెస్ చేయలేకపోయాను.",
+        "haqdarshak_message": "ఈ డాక్యుమెంట్‌ను పొందడంలో హక్‌దర్శక్ మీకు సహాయం చేయగలదు. దయచేసి యాప్‌లో బుక్ చేయండి."
+    },
+    "Marathi": {
+        "greeting": "नमस्कार",
+        "out_of_scope": "क्षमस्व, मी फक्त सरकारी योजना, डिजिटल किंवा आर्थिक साक्षरता आणि व्यावसायिक वाढीत मदत करू शकतो.",
+        "gratitude_fallback": "धन्यवाद! मी आणखी काही मदत करू का?",
+        "no_info": "याबद्दल मला आता माहिती नाही.",
+        "rag_search": "[scheme name] बद्दल अधिक माहिती घ्यावी लागेल. तुम्ही या योजनेबद्दल बोलत आहात का?",
+        "eligibility_question": "पात्रता किंवा अर्ज कसा करावा हे जाणून घ्यायचे आहे का?",
+        "scheme_question": "कोणत्याही योजनेबद्दल अधिक जाणून घ्यायचे आहे का?",
+        "which_scheme": "कोणत्या योजनेबद्दल विचारत आहात?",
+        "error_message": "क्षमस्व, मी तुमचा प्रश्न प्रक्रिया करू शकलो नाही.",
+        "haqdarshak_message": "हक्दर्शक तुम्हाला हा कागदपत्र मिळवून देण्यात मदत करू शकतो. कृपया अॅपमध्ये बुक करा."
+    },
+    "Bengali": {
+        "greeting": "নমস্কার",
+        "out_of_scope": "দুঃখিত, আমি শুধুমাত্র সরকারি প্রকল্প, ডিজিটাল বা আর্থিক সাক্ষরতা এবং ব্যবসায়িক বৃদ্ধিতে সাহায্য করতে পারি।",
+        "gratitude_fallback": "ধন্যবাদ! আমি আর কিছুতে সাহায্য করতে পারি?",
+        "no_info": "এই বিষয়ে আমার এখন তথ্য নেই।",
+        "rag_search": "[scheme name] সম্পর্কে আরও তথ্য নিতে হবে। আপনি কি এই প্রকল্পের কথা বলছেন?",
+        "eligibility_question": "যোগ্যতা বা আবেদন করার বিষয়ে জানতে চান?",
+        "scheme_question": "কোনো প্রকল্প সম্পর্কে আরও জানতে চান?",
+        "which_scheme": "কোন প্রকল্প সম্পর্কে জিজ্ঞাসা করছেন?",
+        "error_message": "দুঃখিত, আমি আপনার প্রশ্ন প্রক্রিয়া করতে পারিনি।",
+        "haqdarshak_message": "হকদর্শক আপনাকে এই নথি পেতে সাহায্য করতে পারে। অ্যাপে বুক করুন।"
+    },
+    "Assamese": {
+        "greeting": "নমস্কাৰ",
+        "out_of_scope": "দুঃখিত, মই কেৱল চৰকাৰী আঁচনি, ডিজিটেল বা আৰ্থিক সাক্ষৰতা আৰু ব্যৱসায়িক বৃদ্ধিত সহায় কৰিব পাৰোঁ।",
+        "gratitude_fallback": "ধন্যবাদ! মই আৰু কিবা সহায় কৰিব পাৰোঁ নেকি?",
+        "no_info": "এই বিষয়ে মোৰ এতিয়া তথ্য নাই।",
+        "rag_search": "[scheme name] সম্পৰ্কে অধিক তথ্য লাগিব। আপুনি এই আঁচনিৰ কথা কৈছে নেকি?",
+        "eligibility_question": "যোগ্যতা বা আবেদন কৰাৰ বিষয়ে জানিব খোজে নেকি?",
+        "scheme_question": "কোনো আঁচনিৰ বিষয়ে অধিক জানিব খোজে নেকি?",
+        "which_scheme": "কোন আঁচনিৰ বিষয়ে সুধিছে?",
+        "error_message": "দুঃখিত, মই আপোনাৰ প্ৰশ্ন প্ৰক্ৰিয়া কৰিব নোৱাৰিলোঁ।",
+        "haqdarshak_message": "হকদৰ্শকে আপোনাক এই দস্তাবেজ পাবলৈ সহায় কৰিব পাৰে। এপত বুক কৰক।"
+    },
+    "Gujarati": {
+        "greeting": "નમસ્તે",
+        "out_of_scope": "માફ કરશો, હું ફક્ત સરકારી યોજનાઓ, ડિજિટલ અથવા નાણાકીય સાક્ષરતા અને વ્યાવસાયિક વૃદ્ધિમાં મદદ કરી શકું છું.",
+        "gratitude_fallback": "આભાર! હું બીજું કંઈ મદદ કરી શકું?",
+        "no_info": "આ વિશે મારી પાસે હમણાં માહિતી નથી.",
+        "rag_search": "[scheme name] વિશે વધુ માહિતી લેવી પડશે. તમે આ યોજના વિશે વાત કરો છો?",
+        "eligibility_question": "પાત્રતા અથવા અરજી કરવા વિશે જાણવા માંગો છો?",
+        "scheme_question": "કોઈ યોજના વિશે વધુ જાણવા માંગો છો?",
+        "which_scheme": "કઈ યોજના વિશે પૂછો છો?",
+        "error_message": "માફ કરશો, હું તમારા પ્રશ્નનો પ્રોસેસ કરી શક્યો નહીં.",
+        "haqdarshak_message": "હકદર્શક તમને આ દસ્તાવેજ મેળવવામાં મદદ કરી શકે છે. કૃપા કરીને એપમાં બુક કરો."
+    },
+    "Kannada": {
+        "greeting": "ನಮಸ್ಕಾರ",
+        "out_of_scope": "ಕ್ಷಮಿಸಿ, ನಾನು ಕೇವಲ ಸರ್ಕಾರಿ ಯೋಜನೆಗಳು, ಡಿಜಿಟಲ್ ಅಥವಾ ಹಣಕಾಸಿನ ಸಾಕ್ಷರತೆ ಮತ್ತು ವ್ಯಾಪಾರ ಬೆಳವಣಿಗೆಯಲ್ಲಿ ಸಹಾಯ ಮಾಡಬಹುದು.",
+        "gratitude_fallback": "ಧನ್ಯವಾದಗಳು! ನಾನು ಬೇರೆ ಏನಾದರೂ ಸಹಾಯ ಮಾಡಬಹುದೇ?",
+        "no_info": "ಇದರ ಬಗ್ಗೆ ನನಗೆ ಈಗ ಮಾಹಿತಿ ಇಲ್ಲ.",
+        "rag_search": "[scheme name] ಬಗ್ಗೆ ಹೆಚ್ಚಿನ ಮಾಹಿತಿ ಬೇಕಾಗಿದೆ. ನೀವು ಈ ಯೋಜನೆಯ ಬಗ್ಗೆ ಮಾತನಾಡುತ್ತಿದ್ದೀರಾ?",
+        "eligibility_question": "ಅರ್ಹತೆ ಅಥವಾ ಅರ್ಜಿ ಸಲ್ಲಿಸುವ ಬಗ್ಗೆ ತಿಳಿಯಲು ಬಯಸುವಿರಾ?",
+        "scheme_question": "ಯಾವುದೇ ಯೋಜನೆಯ ಬಗ್ಗೆ ಹೆಚ್ಚು ತಿಳಿಯಲು ಬಯಸುವಿರಾ?",
+        "which_scheme": "ಯಾವ ಯೋಜನೆಯ ಬಗ್ಗೆ ಕೇಳುತ್ತಿದ್ದೀರಿ?",
+        "error_message": "ಕ್ಷಮಿಸಿ, ನಾನು ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಪ್ರಕ್ರಿಯೆಗೊಳಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.",
+        "haqdarshak_message": "ಈ ದಾಖಲೆಯನ್ನು ಪಡೆಯಲು ಹಕ್‌ದರ್ಶಕ್ ನಿಮಗೆ ಸಹಾಯ ಮಾಡಬಹುದು. ದಯವಿಟ್ಟು ಆ್ಯಪ್‌ನಲ್ಲಿ ಬುಕ್ ಮಾಡಿ."
+    },
+    "Odia": {
+        "greeting": "ନମସ୍କାର",
+        "out_of_scope": "ଦୁଃଖିତ, ମୁଁ କେବଳ ସରକାରୀ ଯୋଜନା, ଡିଜିଟାଲ କିମ୍ବା ଆର୍ଥିକ ସାକ୍ଷରତା ଏବଂ ବ୍ୟବସାୟିକ ବୃଦ୍ଧିରେ ସାହାଯ୍ୟ କରିପାରିବି।",
+        "gratitude_fallback": "ଧନ୍ୟବାଦ! ମୁଁ ଆଉ କିଛି ସାହାଯ୍ୟ କରିପାରିବି କି?",
+        "no_info": "ଏହା ବିଷୟରେ ମୋର ବର୍ତ୍ତମାନ ତଥ୍ୟ ନାହିଁ।",
+        "rag_search": "[scheme name] ବିଷୟରେ ଅଧିକ ତଥ୍ୟ ଦରକାର। ଆପଣ ଏହି ଯୋଜନା ବିଷୟରେ କହୁଛନ୍ତି କି?",
+        "eligibility_question": "ଯୋଗ୍ୟତା କିମ୍ବା ଆବେଦନ କରିବା ବିଷୟରେ ଜାଣିବାକୁ ଚାହାଁନ୍ତି କି?",
+        "scheme_question": "କୌଣସି ଯୋଜନା ବିଷୟରେ ଅଧିକ ଜାଣିବାକୁ ଚାହାଁନ୍ତି କି?",
+        "which_scheme": "କେଉଁ ଯୋଜନା ବିଷୟରେ ପଚାରୁଛନ୍ତି?",
+        "error_message": "ଦୁଃଖିତ, ମୁଁ ଆପଣଙ୍କ ପ୍ରଶ୍ନ ପ୍ରକ୍ରିୟାକରଣ କରିପାରିଲି ନାହିଁ।",
+        "haqdarshak_message": "ଏହି ଡକୁମେଣ୍ଟ ପାଇବାରେ ହକଦର୍ଶକ ଆପଣଙ୍କୁ ସାହାଯ୍ୟ କରିପାରିବ। ଦୟାକରି ଆପରେ ବୁକ କରନ୍ତୁ।"
+    },
+    "Malayalam": {
+        "greeting": "നമസ്കാരം",
+        "out_of_scope": "ക്ഷമിക്കണം, എനിക്ക് സർക്കാർ പദ്ധതികൾ, ഡിജിറ്റൽ അല്ലെങ്കിൽ സാമ്പത്തിക സാക്ഷരता, ബിസിനസ് വളർച്ച എന്നിവയിൽ മാത്രമേ സഹായിക്കാൻ കഴിയൂ.",
+        "gratitude_fallback": "നന്ദി! എനിക്ക് മറ്റെന്തെങ്കിലും സഹായിക്കാൻ കഴിയുമോ?",
+        "no_info": "ഇതിനെക്കുറിച്ച് എനിക്ക് ഇപ്പോൾ വിവരങ്ങളില്ല.",
+        "rag_search": "[scheme name] നെക്കുറിച്ച് കൂടുതൽ വിവരങ്ങൾ ആവശ്യമാണ്. നിങ്ങൾ ഈ പദ്ധതിയെക്കുറിച്ചാണോ പറയുന്നത്?",
+        "eligibility_question": "യോഗ്യത അല്ലെങ്കിൽ അപേക്ഷിക്കുന്നതിനെക്കുറിച്ച് അറിയാൻ ആഗ്രഹിക്കുന്നുണ്ടോ?",
+        "scheme_question": "ഏതെങ്കിലും പദ്ധതിയെക്കുറിച്ച് കൂടുതൽ അറിയാൻ ആഗ്രഹിക്കുന്നുണ്ടോ?",
+        "which_scheme": "ഏത് പദ്ധതിയെക്കുറിച്ചാണ് ചോദിക്കുന്നത്?",
+        "error_message": "ക്ഷമിക്കണം, എനിക്ക് നിങ്ങളുടെ ചോദ്യം പ്രോസസ്സ് ചെയ്യാൻ കഴിഞ്ഞില്ല.",
+        "haqdarshak_message": "ഈ ഡോക്യുമെന്റ് ലഭിക്കുന്നതിന് ഹക്ദർശക് നിങ്ങളെ സഹായിക്കും. ആപ്പിൽ ബുക്ക് ചെയ്യുക."
+    },
+    "Punjabi": {
+        "greeting": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ",
+        "out_of_scope": "ਮਾਫ਼ ਕਰਨਾ, ਮੈਂ ਕੇਵਲ ਸਰਕਾਰੀ ਯੋਜਨਾਵਾਂ, ਡਿਜੀਟਲ ਜਾਂ ਵਿੱਤੀ ਸਾਖਰਤਾ ਅਤੇ ਵਪਾਰਕ ਵਿਕਾਸ ਵਿੱਚ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ।",
+        "gratitude_fallback": "ਧੰਨਵਾਦ! ਮੈਂ ਹੋਰ ਕੁਝ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?",
+        "no_info": "ਇਸ ਬਾਰੇ ਮੇਰੇ ਕੋਲ ਹੁਣ ਜਾਣਕਾਰੀ ਨਹੀਂ ਹੈ।",
+        "rag_search": "[scheme name] ਬਾਰੇ ਹੋਰ ਜਾਣਕਾਰੀ ਚਾਹੀਦੀ ਹੈ। ਕੀ ਤੁਸੀਂ ਇਸ ਯੋਜਨਾ ਬਾਰੇ ਗੱਲ ਕਰ ਰਹੇ ਹੋ?",
+        "eligibility_question": "ਯੋਗਤਾ ਜਾਂ ਅਰਜ਼ੀ ਦੇਣ ਬਾਰੇ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?",
+        "scheme_question": "ਕਿਸੇ ਯੋਜਨਾ ਬਾਰੇ ਹੋਰ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?",
+        "which_scheme": "ਕਿਸ ਯੋਜਨਾ ਬਾਰੇ ਪੁੱਛ ਰਹੇ ਹੋ?",
+        "error_message": "ਮਾਫ਼ ਕਰਨਾ, ਮੈਂ ਤੁਹਾਡੇ ਸਵਾਲ ਦਾ ਪ੍ਰੋਸੈਸ ਨਹੀਂ ਕਰ ਸਕਿਆ।",
+        "haqdarshak_message": "ਇਹ ਦਸਤਾਵੇਜ਼ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ ਹਕਦਰਸ਼ਕ ਤੁਹਾਡੀ ਮਦਦ ਕਰ ਸਕਦਾ ਹੈ। ਐਪ ਵਿੱਚ ਬੁੱਕ ਕਰੋ।"
+    },
+    "Urdu": {
+        "greeting": "آداب",
+        "out_of_scope": "معذرت، میں صرف حکومتی اسکیموں، ڈیجیٹل یا مالی خواندگی اور کاروباری ترقی میں مدد کر سکتا ہوں۔",
+        "gratitude_fallback": "شکریہ! کیا میں اور کوئی مدد کر سکتا ہوں؟",
+        "no_info": "اس کے بارے میں میرے پاس ابھی معلومات نہیں ہیں۔",
+        "rag_search": "[scheme name] کے بارے میں مزید معلومات درکار ہیں۔ کیا آپ اسی اسکیم کی بات کر رہے ہیں؟",
+        "eligibility_question": "اہلیت یا درخواست دینے کے بارے میں جاننا چاہتے ہیں؟",
+        "scheme_question": "کسی اسکیم کے بارے میں مزید جاننا چاہتے ہیں؟",
+        "which_scheme": "کس اسکیم کے بارے میں پوچھ رہے ہیں؟",
+        "error_message": "معذرت، میں آپ کا سوال پروسیس نہیں کر سکا۔",
+        "haqdarshak_message": "حق درشک آپ کو یہ دستاویز حاصل کرنے میں مدد کر سکتا ہے۔ براہ کرم ایپ میں بک کریں۔"
+    },
+    "Hinglish": {
+    "greeting": "Namaste",
+    "out_of_scope": "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon.",
+    "gratitude_fallback": "Dhanyawad! Kya main aur madad kar sakta hoon?",
+    "no_info": "Mujhe iske baare mein abhi jaankari nahi hai.",
+    "rag_search": "Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?",
+    "eligibility_question": "Eligibility ya apply karne ke baare mein jaanna chahte hain?",
+    "scheme_question": "Kisi yojana ke baare mein aur jaanna chahte hain?",
+    "which_scheme": "Kaunsi scheme ke baare mein?",
+    "error_message": "Sorry, main aapka query process nahi kar saka.",
+    "haqdarshak_message": "Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. Kripya app mein book karein."
+}
+}
 
 # Enhanced Cache Manager
 class CacheManager:
@@ -403,8 +590,6 @@ def welcome_user(state_name, user_name, query_language, user_type):
     if query_language  in ["hi", "en", "Hinglish"]:
         query_language = "Hindi"
 
-    print(f"user_type is {user_type} and kits query_language is {query_language}")
-
     if user_type == 1:
         if query_language == "Hindi":
             return f"नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!"
@@ -448,234 +633,6 @@ def welcome_user(state_name, user_name, query_language, user_type):
 
 def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
-
-# class FastIntentClassifier:
-#     def __init__(self):
-#         # Pre-compiled regex patterns for faster matching
-#         self.out_of_scope_pattern = re.compile(
-#             r'\b(?:hello|hi|hey|weather|time|namaste|mausam|samay|नमस्ते|मौसम|समय)\b', 
-#             re.IGNORECASE
-#         )
-        
-#         # Specific scheme patterns (most specific first)
-#         self.scheme_patterns = {
-#             'fssai': re.compile(r'\bfssai\b', re.IGNORECASE),
-#             'pmfme': re.compile(r'\bpmfme\b', re.IGNORECASE),
-#             'mudra': re.compile(r'\bmudra\b', re.IGNORECASE),
-#             'udyam': re.compile(r'\budyam\b', re.IGNORECASE),
-#             'pmegp': re.compile(r'\bpmegp\b', re.IGNORECASE),
-#             'savitribai_phule': re.compile(r'\bsavitribai\s+phule\b', re.IGNORECASE),
-#             'pashu_kisan': re.compile(r'\bpashu\s+kisan\b', re.IGNORECASE),
-#         }
-        
-#         # Action keywords
-#         self.apply_keywords = {'apply', 'application', 'kaise karna hai', 'कैसे करें', 'आवेदन'}
-#         self.eligibility_keywords = {'eligibility', 'eligible', 'पात्रता', 'योग्यता'}
-#         self.gratitude_keywords = {'thanks', 'thank you', 'धन्यवाद', 'शुक्रिया', 'theek hai', 'accha', 'got it', 'ok thanks'}
-#         self.confirmation_keywords = {'yes', 'haan', 'han', 'हाँ', 'search again', 'dikhao', 'batao'}
-#         self.followup_keywords = {'tell me more', 'aur batao', 'और बताएं', 'more info', 'jaankaari chahiye'}
-        
-#         # DFL keywords
-#         self.dfl_keywords = {
-#             'current account', 'upi', 'digital payment', 'bank account', 'insurance', 
-#             'internet banking', 'online safety', 'डिजिटल भुगतान', 'बैंक खाता'
-#         }
-        
-#         # General scheme keywords
-#         self.general_scheme_keywords = {
-#             'scheme', 'schemes', 'loan', 'credit', 'योजना', 'योजनाएं', 'ऋण', 'लोन', 'msme'
-#         }
-        
-#         # In-memory cache for frequent queries
-#         self.memory_cache: Dict[str, str] = {}
-#         self.cache_hit_count = 0
-#         self.cache_miss_count = 0
-
-#     def _generate_cache_key(self, query: str, conversation_history: str = "") -> str:
-#         """Generate a fast hash-based cache key"""
-#         combined = f"{query.lower().strip()}|{conversation_history[:100]}"  # Limit history for consistency
-#         return hashlib.md5(combined.encode()).hexdigest()[:16]  # Short hash for speed
-
-#     @lru_cache(maxsize=1000)  # LRU cache for regex results
-#     def _cached_regex_search(self, pattern_key: str, text: str) -> bool:
-#         """Cached regex matching"""
-#         if pattern_key == 'out_of_scope':
-#             return bool(self.out_of_scope_pattern.search(text))
-#         elif pattern_key in self.scheme_patterns:
-#             return bool(self.scheme_patterns[pattern_key].search(text))
-#         return False
-
-#     def _fast_keyword_check(self, query_lower: str, keywords: Set[str]) -> bool:
-#         """Optimized keyword matching using set intersection"""
-#         query_words = set(query_lower.split())
-#         return bool(query_words.intersection(keywords))
-
-#     def _has_specific_scheme(self, query: str) -> Optional[str]:
-#         """Check for specific scheme mentions"""
-#         query_lower = query.lower()
-        
-#         # Fast keyword-based check first
-#         for scheme_name, pattern in self.scheme_patterns.items():
-#             if self._cached_regex_search(scheme_name, query):
-#                 return scheme_name
-#         return None
-
-#     def _classify_with_rules(self, query: str, conversation_history: str = "") -> str:
-#         """Fast rule-based classification"""
-#         query_lower = query.lower().strip()
-        
-#         # 1. Out of scope check (fastest)
-#         if self._cached_regex_search('out_of_scope', query):
-#             return "Out_of_Scope"
-        
-#         # 2. Gratitude check
-#         if self._fast_keyword_check(query_lower, self.gratitude_keywords):
-#             return "Gratitude_Intent"
-        
-#         # 3. Follow-up check
-#         if self._fast_keyword_check(query_lower, self.followup_keywords):
-#             return "Contextual_Follow_Up"
-        
-#         # 4. Confirmation check (need conversation history context)
-#         if (self._fast_keyword_check(query_lower, self.confirmation_keywords) and 
-#             "fetch more details" in conversation_history.lower()[-200:]):
-#             return "Confirmation_New_RAG"
-        
-#         # 5. Specific scheme checks
-#         specific_scheme = self._has_specific_scheme(query)
-#         if specific_scheme:
-#             # Check for apply/eligibility with specific scheme
-#             if self._fast_keyword_check(query_lower, self.apply_keywords):
-#                 return "Specific_Scheme_Apply_Intent"
-#             elif self._fast_keyword_check(query_lower, self.eligibility_keywords):
-#                 return "Specific_Scheme_Eligibility_Intent"
-#             else:
-#                 return "Specific_Scheme_Know_Intent"
-        
-#         # 6. DFL check
-#         if self._fast_keyword_check(query_lower, self.dfl_keywords):
-#             return "DFL_Intent"
-        
-#         # 7. General schemes check
-#         if self._fast_keyword_check(query_lower, self.general_scheme_keywords):
-#             return "Schemes_Know_Intent"
-        
-#         # 8. Default fallback
-#         return "Out_of_Scope"
-
-#     async def classify_intent_ultra_fast(self, query: str, conversation_history: str = "") -> str:
-#         """Ultra-fast intent classification with multi-level caching"""
-        
-#         # Level 1: Memory cache check (fastest - ~0.001ms)
-#         cache_key = self._generate_cache_key(query, conversation_history)
-#         if cache_key in self.memory_cache:
-#             self.cache_hit_count += 1
-#             return self.memory_cache[cache_key]
-        
-#         # Level 2: Rule-based classification (fast - ~1-5ms)
-#         intent = self._classify_with_rules(query, conversation_history)
-        
-#         # Cache the result in memory
-#         if len(self.memory_cache) < 10000:  # Prevent memory bloat
-#             self.memory_cache[cache_key] = intent
-        
-#         self.cache_miss_count += 1
-#         return intent
-
-#     async def classify_intent_hybrid(self, query: str, conversation_history: str = "") -> str:
-#         """Hybrid approach: rules first, then LLM fallback for edge cases"""
-        
-#         # Try fast classification first
-#         cache_key = self._generate_cache_key(query, conversation_history)
-        
-#         # Memory cache
-#         if cache_key in self.memory_cache:
-#             return self.memory_cache[cache_key]
-        
-#         # Rule-based classification
-#         intent = self._classify_with_rules(query, conversation_history)
-        
-#         # For ambiguous cases, you could add LLM fallback here
-#         # But for 30ms target, stick to rules only
-        
-#         # Cache result
-#         if len(self.memory_cache) < 10000:
-#             self.memory_cache[cache_key] = intent
-            
-#         return intent
-
-#     def get_cache_stats(self) -> Dict:
-#         """Get caching statistics"""
-#         total = self.cache_hit_count + self.cache_miss_count
-#         hit_rate = (self.cache_hit_count / total * 100) if total > 0 else 0
-        
-#         return {
-#             'cache_hits': self.cache_hit_count,
-#             'cache_misses': self.cache_miss_count,
-#             'hit_rate_percent': round(hit_rate, 2),
-#             'memory_cache_size': len(self.memory_cache)
-#         }
-
-# # Usage example with your existing code structure
-# fast_classifier = FastIntentClassifier()
-
-# async def classify_intent_async(query: str, conversation_history: str = "") -> str:
-#     """Optimized async version - target: 0.03s (30ms)"""
-#     try:
-#         # Check external cache first (Redis/database)
-#         cached_intent = await cache_manager.get_intent_cache(query, conversation_history)
-#         if cached_intent:
-#             logger.info(f"External cache hit: {cached_intent}")
-#             return cached_intent
-        
-#         # Use ultra-fast classification
-#         intent = await fast_classifier.classify_intent_ultra_fast(query, conversation_history)
-        
-#         # Store in external cache for persistence
-#         await cache_manager.set_intent_cache(query, intent, conversation_history)
-        
-#         return intent
-        
-#     except Exception as e:
-#         logger.error(f"Failed to classify intent: {str(e)}")
-#         return "Out_of_Scope"
-
-# # Alternative: Pure rule-based version (even faster)
-# async def classify_intent_rules_only(query: str, conversation_history: str = "") -> str:
-#     """Pure rule-based classification - target: 0.001-0.01s"""
-#     return await fast_classifier.classify_intent_ultra_fast(query, conversation_history)
-
-# # Performance testing function
-# async def benchmark_classification():
-#     """Test performance with sample queries"""
-#     import time
-    
-#     test_queries = [
-#         "fssai ke baare mein batao",
-#         "loan chahiye",
-#         "how to apply for mudra",
-#         "schemes dikhao",
-#         "what is udyam eligibility",
-#         "thank you",
-#         "tell me more",
-#         "weather today",
-#         "current account kaise khole",
-#         "pmmy ke liye apply kaise karen",
-#     ]
-    
-#     total_time = 0
-#     for query in test_queries:
-#         start_time = time.perf_counter()
-#         intent = await fast_classifier.classify_intent_ultra_fast(query)
-#         end_time = time.perf_counter()
-        
-#         duration = (end_time - start_time) * 1000  # Convert to ms
-#         total_time += duration
-#         print(f"Query: '{query[:30]}...' -> Intent: {intent} -> Time: {duration:.3f}ms")
-    
-#     avg_time = total_time / len(test_queries)
-#     print(f"\nAverage classification time: {avg_time:.3f}ms")
-#     print(f"Cache stats: {fast_classifier.get_cache_stats()}")
 
 
 # NEW: Async versions of your core functions
@@ -842,7 +799,17 @@ async def get_dfl_response_async(query, vector_store, state=None, gender=None, b
         business_category=business_category,
     )
 
-# @lru_cache(maxsize=100)
+def get_language_config(language):
+    """Get language-specific configuration"""
+    # Handle language code to name mapping
+    if language in LANGUAGE_LABELS:
+        language_name = LANGUAGE_LABELS[language]
+    else:
+        language_name = language
+    
+    # Return config for the language, fallback to English if not found
+    return LANGUAGE_CONFIG.get(language_name, LANGUAGE_CONFIG["English"]), language_name
+
 async def generate_response_async(
     intent: str, 
     rag_response: str, 
@@ -853,17 +820,16 @@ async def generate_response_async(
     scheme_guid: str = None, 
     stream: bool = False
 ):
-    """Async version of generate_response with proper streaming support"""
+    """Updated async version with proper multilingual support"""
     print(f"Generating response for intent: {intent}, language: {language}, query: {query} and rag_response: {rag_response}...")
-    # Handle non-streaming cases first (these return strings)
+    
+    # Get language configuration
+    lang_config, language_name = get_language_config(language)
+    
+    print(f"Using language config for: {language_name} and {lang_config}")
+    # Handle out of scope
     if intent == "Out_of_Scope":
-        if language == "Hindi" or language == "English":
-            response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
-        elif language == "Hinglish":
-            response = "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
-        else:
-            response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
-        
+        response = lang_config["out_of_scope"]
         if stream:
             async def stream_response():
                 for char in response:
@@ -871,27 +837,23 @@ async def generate_response_async(
             return stream_response()
         return response
 
+    # Handle gratitude
     if intent == "Gratitude_Intent":
-        response_language = "Hindi" if language in ["hi", "en"] else language
-        
         gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
 
         **Instructions**:
-        - Respond briefly in {response_language} acknowledging the thanks and offering further help. 
-        - For Hindi: Use Devanagari script with simple words.
-        - For Hinglish: Use a natural mix of Hindi and English words in Roman script.
+        - Respond briefly in {language_name} acknowledging the thanks and offering further help.
         - Keep the message under 30 words.
+        - Use natural, conversational tone appropriate for {language_name}.
 
         **Output**:
-        - Only the acknowledgement message in the specified language."""
+        - Only the acknowledgement message in {language_name}."""
         
         try:
             if stream:
                 async def stream_gratitude():
-                    buffer = ""
                     async for chunk in llm.astream([{"role": "user", "content": gratitude_prompt}]):
                         token = chunk.content or ""
-                        buffer += token
                         if token:
                             yield token
                 return stream_gratitude()
@@ -900,13 +862,7 @@ async def generate_response_async(
                 return response.content.strip()
         except Exception as e:
             logger.error(f"Failed to generate gratitude response: {str(e)}")
-            fallback_response = ""
-            if language == "Hindi":
-                fallback_response = "धन्यवाद! क्या मैं और मदद कर सकता हूँ?"
-            elif language == "Hinglish":
-                fallback_response = "Thanks! Kya main aur madad kar sakta hoon?"
-            else:
-                fallback_response = "धन्यवाद! क्या मैं और मदद कर सकता हूँ?"
+            fallback_response = lang_config["gratitude_fallback"]
             
             if stream:
                 async def stream_fallback():
@@ -917,10 +873,9 @@ async def generate_response_async(
 
     # Build the main prompt for other intents
     word_limit = 150 if intent == "Schemes_Know_Intent" else 100
-    tone_prompt = get_system_prompt(language, user_info.name, word_limit)
+    tone_prompt = get_system_prompt(language_name, user_info.name, word_limit)
 
-    greeting_lang = "Hindi" if language in ["Hindi", "English"] else language
-    greeting_text = 'नमस्ते' if greeting_lang == "Hindi" else 'Namaste'
+    greeting_text = lang_config["greeting"]
 
     base_prompt = f"""You are a helpful assistant for Haqdarshak, supporting small business owners in India with government schemes, digital/financial literacy, and business growth.
 
@@ -934,79 +889,50 @@ async def generate_response_async(
     - Business Name: {user_info.business_name}
     - Business Category: {user_info.business_category}
     - Conversation Context: {context}
-    - Language: {language}"""
+    - Language: {language_name}"""
+    
     if scheme_guid:
         base_prompt += f"\n    - Scheme GUID: {scheme_guid}"
 
     base_prompt += f"""
 
-    **Language Handling and Tone Instructions**:
+    **Language Instructions**:
+    - Respond ONLY in {language_name}
+    - Use natural, conversational tone appropriate for {language_name}
+    - Maintain cultural context and appropriate formality level
     {tone_prompt}
 
     **Formatting Instructions**:
-    - Start with greeting on its own line: '{greeting_text} {user_info.name}!'
+    - Start with greeting: '{greeting_text} {user_info.name}!'
     - After greeting, add a blank line
-    - Structure the answer in multiple short paragraphs (1-2 lines each)
-    - Add a blank line between each paragraph for better readability
-    - Use clear, simple formatting with bullet bullet points
+    - Structure answer in multiple short paragraphs (1-2 lines each)
+    - Add blank line between paragraphs for readability
+    - Use clear, simple formatting with bullet points when appropriate
 
     **Task**:
-    Use any user-provided scheme details to pick relevant schemes from retrieved data and personalise the scheme information wherever applicable.
-    Prioritise the **Current Query** over the **Conversation Context** when determining the response.
+    Use user-provided scheme details to pick relevant schemes from retrieved data and personalise information.
+    Prioritise the **Current Query** over **Conversation Context**.
     """
 
     special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST", "Mudra", "PMEGP", "PMFME", "CMEGP", "Yuva Udyami", "PMSBY", "PMJJBY", "PMJAY (Ayushman Bharat)"]
-    link = "https://haqdarshak.com/contact"
 
+    # Build intent-specific prompts using language config
     if intent == "Specific_Scheme_Know_Intent":
         intent_prompt = (
-            "Share scheme name, purpose, benefits and other fetched relevant details in a structured format from **RAG Response**. "
+            "Share scheme name, purpose, benefits and other fetched relevant details in structured format from **RAG Response**. "
+            f"Ask: '{lang_config['eligibility_question']}'"
         )
-        # Modified to use Hindi for both English and Hindi queries
-        if language in ["Hindi", "English"]:
-            intent_prompt += "पूछें: 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?'"
-        elif language == "Hinglish":
-            intent_prompt += "Ask: 'Eligibility ya apply karne ke baare mein jaanna chahte hain?'"
-        else:
-            intent_prompt += "पूछें: 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?'"
-        
-        # Modified Haqdarshak message
-        if language in ["Hindi", "English"]:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
-            )
-        elif language == "Hinglish":
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-                f"Kripya app mein book karein.'"
-            )
-        else:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
-            )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: '{lang_config['haqdarshak_message']}'"
+        )
             
     elif intent == "Specific_Scheme_Apply_Intent":
         intent_prompt = (
             "Share application process from **RAG Response**."
         )
-        # Modified Haqdarshak message
-        if language in ["Hindi", "English"]:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
-            )
-        elif language == "Hinglish":
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-                f"Kripya app mein book karein.'"
-            )
-        else:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
-            )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: '{lang_config['haqdarshak_message']}'"
+        )
             
     elif intent == "Specific_Scheme_Eligibility_Intent":
         intent_prompt = (
@@ -1014,109 +940,56 @@ async def generate_response_async(
             f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
             "Ask the user to verify their eligibility there."
         )
-        # Modified Haqdarshak message
-        if language in ["Hindi", "English"]:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
-            )
-        elif language == "Hinglish":
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-                f"Kripya app mein book karein.'"
-            )
-        else:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।'"
-            )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: '{lang_config['haqdarshak_message']}'"
+        )
             
     elif intent == "Schemes_Know_Intent":
         intent_prompt = (
-            "List 3-4 schemes from **RAG Response** with a short one-line description for each. "
+            "List 3-4 schemes from **RAG Response** with short one-line description for each. "
             "Always include Pradhan Mantri Mudra Yojana as one of the schemes. "
-            "Use any user provided scheme details to choose the most relevant schemes. "
-            "If no close match is found, still list the top schemes applicable to the user in their state or CSS. "
+            "Use user provided scheme details to choose most relevant schemes. "
+            "If no close match found, list top schemes applicable to user in their state or CSS. "
+            f"Finally ask: '{lang_config['scheme_question']}'"
         )
-        # Modified final question
-        if language in ["Hindi", "English"]:
-            intent_prompt += "अंत में पूछें: 'किसी योजना के बारे में और जानना चाहते हैं?'"
-        elif language == "Hinglish":
-            intent_prompt += "Finally Ask: 'Kisi yojana ke baare mein aur jaanna chahte hain?'"
-        else:
-            intent_prompt += "अंत में पूछें: 'किसी योजना के बारे में और जानना चाहते हैं?'"
-        
-        # Modified Haqdarshak message
-        if language in ["Hindi", "English"]:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।' Add this only in the description for the applicable scheme/s, not under the entire list."
-            )
-        elif language == "Hinglish":
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-                f"Kripya app mein book karein.' Add this only in the description for the applicable scheme/s, not under the entire list."
-            )
-        else:
-            intent_prompt += (
-                f" For {', '.join(special_schemes)}, add: 'हकदर्शक आपको यह दस्तावेज़ "
-                f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें।' Add this only in the description for the applicable scheme/s, not under the entire list."
-            )
+        intent_prompt += (
+            f" For {', '.join(special_schemes)}, add: '{lang_config['haqdarshak_message']}' "
+            "Add this only in description for applicable scheme/s, not under entire list."
+        )
             
     elif intent == "DFL_Intent":
         intent_prompt = (
-            "Use the **RAG Response** if available, augmenting with your own knowledge "
-            "where relevant. If the RAG Response is empty or not relevant, do not mention that to user and provide a helpful answer "
-            "smoothly from your own knowledge in simple language "
-            "with helpful examples."
+            f"Use **RAG Response** if available, augmenting with your knowledge where relevant. "
+            f"If RAG Response is empty or not relevant, provide helpful answer from your knowledge "
+            f"in simple {language_name} with helpful examples."
         )
         
     elif intent == "Contextual_Follow_Up":
         intent_prompt = (
-            "Use the Previous Assistant Response and Conversation Context to identify the topic. "
-            "If the RAG Response does not match the referenced scheme, indicate a new RAG search "
-            "is needed. Provide a relevant follow-up response using the RAG Response, "
-            "filtering for schemes where 'applicability' includes state_id or 'scheme type' is "
-            "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification."
+            "Use Previous Assistant Response and Conversation Context to identify topic. "
+            "If RAG Response doesn't match referenced scheme, indicate new RAG search needed. "
+            "Provide relevant follow-up response using RAG Response, filtering for schemes where "
+            "'applicability' includes state_id or 'scheme type' is 'Centrally Sponsored Scheme' (CSS). "
+            f"If unclear, ask for clarification (e.g., '{lang_config['which_scheme']}')"
         )
-        # Modified clarification questions
-        if language in ["Hindi", "English"]:
-            intent_prompt += " (e.g., 'कौन सी योजना के बारे में?')"
-        elif language == "Hinglish":
-            intent_prompt += " (e.g., 'Kaunsi scheme ke baare mein?')"
-        else:
-            intent_prompt += " (e.g., 'कौन सी योजना के बारे में?')"
             
     elif intent == "Confirmation_New_RAG":
         intent_prompt = (
-            "If the user confirms to initiate a new RAG search, respond with the details of the "
+            "If user confirms to initiate new RAG search, respond with details of "
             "scheme they are interested in, refer to conversation context for details."
         )
     else:
         intent_prompt = ""
 
-    # Updated output_prompt section
-    output_prompt_rag_search = ""
-    output_prompt_no_info = ""
-    
-    if language in ["Hindi", "English"]:
-        output_prompt_rag_search = "मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?"
-        output_prompt_no_info = "मुझे इसके बारे में अभी जानकारी नहीं है।"
-    elif language == "Hinglish":
-        output_prompt_rag_search = "Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?"
-        output_prompt_no_info = "Mujhe iske baare mein abhi jaankari nahi hai."
-    else:
-        output_prompt_rag_search = "मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?"
-        output_prompt_no_info = "मुझे इसके बारे में अभी जानकारी नहीं है।"
-
     output_prompt = f"""
     **Output**:
-       - Return only the final response in the appropriate language (no intent label or intermediate steps). If a new RAG search is needed for schemes, indicate with: '{output_prompt_rag_search}'
-       - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: '{output_prompt_no_info}'
-       - Do not mention any other scheme when a specific scheme is being talked about.
-       - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
-       - No need to mention user profile details in every response, only include where contextually relevant.
-       - Scheme answers must come only from scheme data. For DFL answers, use the DFL document supplemented by your own knowledge when possible, but rely on your own knowledge if nothing relevant is found.
+    - Return only the final response in {language_name} (no intent label or intermediate steps)
+    - If new RAG search needed for schemes, indicate with: '{lang_config['rag_search']}'
+    - If RAG Response is empty or 'No relevant scheme information found,' and query is Contextual_Follow_Up referring to specific scheme, indicate new RAG search needed. Otherwise, say: '{lang_config['no_info']}'
+    - Do not mention other schemes when specific scheme is being discussed
+    - When intent is Schemes_Know, only mention current relevant schemes, not past conversation schemes
+    - Include user profile details only where contextually relevant
+    - Scheme answers must come only from scheme data. For DFL answers, use DFL document supplemented by your knowledge when possible
     """
 
     prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
@@ -1132,23 +1005,17 @@ async def generate_response_async(
                         if token:
                             yield token
                 
-                     # Add eligibility link for specific intent after streaming
+                    # Add eligibility link for specific intent after streaming
                     if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
                         screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
                         if screening_link not in buffer:
                             link_text = f"\n{screening_link}"
                             for char in link_text:
-                             yield char
+                                yield char
                             
                 except Exception as e:
                     logger.error(f"Failed to stream response: {str(e)}")
-                    # Modified error message based on language
-                    if language in ["Hindi", "English"]:
-                        error_msg = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
-                    elif language == "Hinglish":
-                        error_msg = "Sorry, main aapka query process nahi kar saka."
-                    else:
-                        error_msg = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
+                    error_msg = lang_config["error_message"]
                     for char in error_msg:
                         yield char
             
@@ -1163,32 +1030,9 @@ async def generate_response_async(
                     final_text += f"\n{screening_link}"
             
             return final_text
-            
-    # except Exception as e:
-    #     logger.error(f"Failed to generate response: {str(e)}")
-    #     error_response = ""
-    #     if language == "Hindi":
-    #         error_response = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
-    #     elif language == "Hinglish":
-    #         error_response = "Sorry, main aapka query process nahi kar saka."
-    #     else:
-    #         error_response = "Sorry, I couldn't process your query."
-        
-    #     if stream:
-    #         async def stream_error():
-    #             for char in error_response:
-    #                 yield char
-    #         return stream_error()
-    #     return error_response
     except Exception as e:
         logger.error(f"Failed to generate response: {str(e)}")
-        # Modified to use Hindi for English queries
-        if language == "Hindi" or language == "English":
-            error_response = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
-        elif language == "Hinglish":
-            error_response = "Sorry, main aapka query process nahi kar saka."
-        else:
-            error_response = "क्षमा करें, मैं आपका प्रश्न संसाधित नहीं कर सका।"
+        error_response = lang_config["error_message"]
         
         if stream:
             async def stream_error():
@@ -1463,7 +1307,7 @@ async def process_query_optimized(
     # Step 8: Get intent result
     intent = await intent_task
     tracker.end_timer("intent_classification")
-    logger.info(f"Classified intent: kits {intent}")
+    logger.info(f"Classified intent: {intent}")
 
     # Step 9: Determine context and prepare for RAG
     follow_up_intents = {
@@ -1502,7 +1346,7 @@ async def process_query_optimized(
         # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
         if intent == "Specific_Scheme_Know_Intent" or "Schemes_Know_Intent":
             rag_response = await get_popular_scheme_response_fast(query, intent,userType)
-            logger.info(f"Fast path tobi response: {rag_response}")
+            logger.info(f"Fast path response: {rag_response}")
         # FALLBACK to full pipeline if fast path didn't work
         if not rag_response:
             logger.info("Using full scheme response pipeline")
