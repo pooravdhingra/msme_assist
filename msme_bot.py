@@ -25,7 +25,7 @@ import re
 import os
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Dict, Any, AsyncGenerator, Tuple
+from typing import Optional, Dict, Any, AsyncGenerator, Tuple , Set
 import redis.asyncio as redis
 
 # Set up logging
@@ -43,8 +43,8 @@ executor = ThreadPoolExecutor(max_workers=8)
 
 WELCOME_MESSAGES = {
     "en": {
-        "full": "Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes. If you need support with digital skills, financial literacy, or growing your business, just ask. Let's work together to make your business successful!",
-        "short": "Hi {user_name}! Welcome to Haqdarshak. I'm here to help you find government schemes and documents for {state_name} and central schemes."
+        "full": "नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!",
+        "short": "नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करूंगा।"
     },
     "hi": {
         "full": "नमस्ते {user_name}! हकदर्शक में स्वागत है। मैं यहाँ आपको {state_name} और केंद्रीय योजनाओं के लिए सरकारी योजनाएं और दस्तावेज़ खोजने में मदद करने के लिए हूँ। यदि आपको डिजिटल कौशल, वित्तीय साक्षरता, या अपने व्यवसाय को बढ़ाने में सहायता चाहिए, तो बस पूछें। आइए मिलकर आपके व्यवसाय को सफल बनाते हैं!",
@@ -356,26 +356,6 @@ def get_system_prompt(language, user_name="User", word_limit=200):
 
     """Return tone and style instructions."""
 
-    # system_rules = f"""1. **Language Handling**:
-    #    - The query language is provided as {language} (English, Hindi, or Hinglish).
-    #    - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
-    #    - For Hinglish queries, use a natural mix of simple English and Hindi words in Roman script, prioritizing hindi words in the mix.
-    #    - For English queries, respond in simple English.
-       
-    #    2. **Response Guidelines**:
-    #    - Scope: Only respond to queries about government schemes, digital/financial literacy, or business growth.
-    #    - Tone and Style: Use simple, clear words, short sentences, friendly tone, relatable examples.
-    #    - Give structured responses with formatting like bullets or headings/subheadings. Do not give long paragraphs of text.
-    #    - Response must be <={word_limit} words.
-
-    #    - Never mention agent fees unless specified in RAG Response for scheme queries.
-    #    - Never repeat user query or bring up ambiguity in the response, proceed directly to answering.
-    #    - Never mention technical terms like RAG, LLM, Database etc. to the user.
-    #    - Use scheme names exactly as provided in the RAG Response without paraphrasing (underscores may be replaced with spaces).
-    #    - Start the response with 'Hi {user_name}!' (English), 'Namaste {user_name}!' (Hinglish), or 'नमस्ते {user_name}!' (Hindi) unless Out_of_Scope."""
-
-    # system_prompt = system_rules.format(language=language, user_name=user_name)
-    # return system_prompt
     system_rules = f"""1. **Language Handling**:
        - The query language is provided as {language} (English, Hindi, or Hinglish).
        - For Hindi queries, respond in Devanagari script using simple, clear words suitable for micro business owners with low Hindi proficiency.
@@ -468,6 +448,235 @@ def welcome_user(state_name, user_name, query_language, user_type):
 
 def generate_interaction_id(query, timestamp):
     return f"{query[:500]}_{timestamp.strftime('%Y%m%d%H%M%S')}"
+
+# class FastIntentClassifier:
+#     def __init__(self):
+#         # Pre-compiled regex patterns for faster matching
+#         self.out_of_scope_pattern = re.compile(
+#             r'\b(?:hello|hi|hey|weather|time|namaste|mausam|samay|नमस्ते|मौसम|समय)\b', 
+#             re.IGNORECASE
+#         )
+        
+#         # Specific scheme patterns (most specific first)
+#         self.scheme_patterns = {
+#             'fssai': re.compile(r'\bfssai\b', re.IGNORECASE),
+#             'pmfme': re.compile(r'\bpmfme\b', re.IGNORECASE),
+#             'mudra': re.compile(r'\bmudra\b', re.IGNORECASE),
+#             'udyam': re.compile(r'\budyam\b', re.IGNORECASE),
+#             'pmegp': re.compile(r'\bpmegp\b', re.IGNORECASE),
+#             'savitribai_phule': re.compile(r'\bsavitribai\s+phule\b', re.IGNORECASE),
+#             'pashu_kisan': re.compile(r'\bpashu\s+kisan\b', re.IGNORECASE),
+#         }
+        
+#         # Action keywords
+#         self.apply_keywords = {'apply', 'application', 'kaise karna hai', 'कैसे करें', 'आवेदन'}
+#         self.eligibility_keywords = {'eligibility', 'eligible', 'पात्रता', 'योग्यता'}
+#         self.gratitude_keywords = {'thanks', 'thank you', 'धन्यवाद', 'शुक्रिया', 'theek hai', 'accha', 'got it', 'ok thanks'}
+#         self.confirmation_keywords = {'yes', 'haan', 'han', 'हाँ', 'search again', 'dikhao', 'batao'}
+#         self.followup_keywords = {'tell me more', 'aur batao', 'और बताएं', 'more info', 'jaankaari chahiye'}
+        
+#         # DFL keywords
+#         self.dfl_keywords = {
+#             'current account', 'upi', 'digital payment', 'bank account', 'insurance', 
+#             'internet banking', 'online safety', 'डिजिटल भुगतान', 'बैंक खाता'
+#         }
+        
+#         # General scheme keywords
+#         self.general_scheme_keywords = {
+#             'scheme', 'schemes', 'loan', 'credit', 'योजना', 'योजनाएं', 'ऋण', 'लोन', 'msme'
+#         }
+        
+#         # In-memory cache for frequent queries
+#         self.memory_cache: Dict[str, str] = {}
+#         self.cache_hit_count = 0
+#         self.cache_miss_count = 0
+
+#     def _generate_cache_key(self, query: str, conversation_history: str = "") -> str:
+#         """Generate a fast hash-based cache key"""
+#         combined = f"{query.lower().strip()}|{conversation_history[:100]}"  # Limit history for consistency
+#         return hashlib.md5(combined.encode()).hexdigest()[:16]  # Short hash for speed
+
+#     @lru_cache(maxsize=1000)  # LRU cache for regex results
+#     def _cached_regex_search(self, pattern_key: str, text: str) -> bool:
+#         """Cached regex matching"""
+#         if pattern_key == 'out_of_scope':
+#             return bool(self.out_of_scope_pattern.search(text))
+#         elif pattern_key in self.scheme_patterns:
+#             return bool(self.scheme_patterns[pattern_key].search(text))
+#         return False
+
+#     def _fast_keyword_check(self, query_lower: str, keywords: Set[str]) -> bool:
+#         """Optimized keyword matching using set intersection"""
+#         query_words = set(query_lower.split())
+#         return bool(query_words.intersection(keywords))
+
+#     def _has_specific_scheme(self, query: str) -> Optional[str]:
+#         """Check for specific scheme mentions"""
+#         query_lower = query.lower()
+        
+#         # Fast keyword-based check first
+#         for scheme_name, pattern in self.scheme_patterns.items():
+#             if self._cached_regex_search(scheme_name, query):
+#                 return scheme_name
+#         return None
+
+#     def _classify_with_rules(self, query: str, conversation_history: str = "") -> str:
+#         """Fast rule-based classification"""
+#         query_lower = query.lower().strip()
+        
+#         # 1. Out of scope check (fastest)
+#         if self._cached_regex_search('out_of_scope', query):
+#             return "Out_of_Scope"
+        
+#         # 2. Gratitude check
+#         if self._fast_keyword_check(query_lower, self.gratitude_keywords):
+#             return "Gratitude_Intent"
+        
+#         # 3. Follow-up check
+#         if self._fast_keyword_check(query_lower, self.followup_keywords):
+#             return "Contextual_Follow_Up"
+        
+#         # 4. Confirmation check (need conversation history context)
+#         if (self._fast_keyword_check(query_lower, self.confirmation_keywords) and 
+#             "fetch more details" in conversation_history.lower()[-200:]):
+#             return "Confirmation_New_RAG"
+        
+#         # 5. Specific scheme checks
+#         specific_scheme = self._has_specific_scheme(query)
+#         if specific_scheme:
+#             # Check for apply/eligibility with specific scheme
+#             if self._fast_keyword_check(query_lower, self.apply_keywords):
+#                 return "Specific_Scheme_Apply_Intent"
+#             elif self._fast_keyword_check(query_lower, self.eligibility_keywords):
+#                 return "Specific_Scheme_Eligibility_Intent"
+#             else:
+#                 return "Specific_Scheme_Know_Intent"
+        
+#         # 6. DFL check
+#         if self._fast_keyword_check(query_lower, self.dfl_keywords):
+#             return "DFL_Intent"
+        
+#         # 7. General schemes check
+#         if self._fast_keyword_check(query_lower, self.general_scheme_keywords):
+#             return "Schemes_Know_Intent"
+        
+#         # 8. Default fallback
+#         return "Out_of_Scope"
+
+#     async def classify_intent_ultra_fast(self, query: str, conversation_history: str = "") -> str:
+#         """Ultra-fast intent classification with multi-level caching"""
+        
+#         # Level 1: Memory cache check (fastest - ~0.001ms)
+#         cache_key = self._generate_cache_key(query, conversation_history)
+#         if cache_key in self.memory_cache:
+#             self.cache_hit_count += 1
+#             return self.memory_cache[cache_key]
+        
+#         # Level 2: Rule-based classification (fast - ~1-5ms)
+#         intent = self._classify_with_rules(query, conversation_history)
+        
+#         # Cache the result in memory
+#         if len(self.memory_cache) < 10000:  # Prevent memory bloat
+#             self.memory_cache[cache_key] = intent
+        
+#         self.cache_miss_count += 1
+#         return intent
+
+#     async def classify_intent_hybrid(self, query: str, conversation_history: str = "") -> str:
+#         """Hybrid approach: rules first, then LLM fallback for edge cases"""
+        
+#         # Try fast classification first
+#         cache_key = self._generate_cache_key(query, conversation_history)
+        
+#         # Memory cache
+#         if cache_key in self.memory_cache:
+#             return self.memory_cache[cache_key]
+        
+#         # Rule-based classification
+#         intent = self._classify_with_rules(query, conversation_history)
+        
+#         # For ambiguous cases, you could add LLM fallback here
+#         # But for 30ms target, stick to rules only
+        
+#         # Cache result
+#         if len(self.memory_cache) < 10000:
+#             self.memory_cache[cache_key] = intent
+            
+#         return intent
+
+#     def get_cache_stats(self) -> Dict:
+#         """Get caching statistics"""
+#         total = self.cache_hit_count + self.cache_miss_count
+#         hit_rate = (self.cache_hit_count / total * 100) if total > 0 else 0
+        
+#         return {
+#             'cache_hits': self.cache_hit_count,
+#             'cache_misses': self.cache_miss_count,
+#             'hit_rate_percent': round(hit_rate, 2),
+#             'memory_cache_size': len(self.memory_cache)
+#         }
+
+# # Usage example with your existing code structure
+# fast_classifier = FastIntentClassifier()
+
+# async def classify_intent_async(query: str, conversation_history: str = "") -> str:
+#     """Optimized async version - target: 0.03s (30ms)"""
+#     try:
+#         # Check external cache first (Redis/database)
+#         cached_intent = await cache_manager.get_intent_cache(query, conversation_history)
+#         if cached_intent:
+#             logger.info(f"External cache hit: {cached_intent}")
+#             return cached_intent
+        
+#         # Use ultra-fast classification
+#         intent = await fast_classifier.classify_intent_ultra_fast(query, conversation_history)
+        
+#         # Store in external cache for persistence
+#         await cache_manager.set_intent_cache(query, intent, conversation_history)
+        
+#         return intent
+        
+#     except Exception as e:
+#         logger.error(f"Failed to classify intent: {str(e)}")
+#         return "Out_of_Scope"
+
+# # Alternative: Pure rule-based version (even faster)
+# async def classify_intent_rules_only(query: str, conversation_history: str = "") -> str:
+#     """Pure rule-based classification - target: 0.001-0.01s"""
+#     return await fast_classifier.classify_intent_ultra_fast(query, conversation_history)
+
+# # Performance testing function
+# async def benchmark_classification():
+#     """Test performance with sample queries"""
+#     import time
+    
+#     test_queries = [
+#         "fssai ke baare mein batao",
+#         "loan chahiye",
+#         "how to apply for mudra",
+#         "schemes dikhao",
+#         "what is udyam eligibility",
+#         "thank you",
+#         "tell me more",
+#         "weather today",
+#         "current account kaise khole",
+#         "pmmy ke liye apply kaise karen",
+#     ]
+    
+#     total_time = 0
+#     for query in test_queries:
+#         start_time = time.perf_counter()
+#         intent = await fast_classifier.classify_intent_ultra_fast(query)
+#         end_time = time.perf_counter()
+        
+#         duration = (end_time - start_time) * 1000  # Convert to ms
+#         total_time += duration
+#         print(f"Query: '{query[:30]}...' -> Intent: {intent} -> Time: {duration:.3f}ms")
+    
+#     avg_time = total_time / len(test_queries)
+#     print(f"\nAverage classification time: {avg_time:.3f}ms")
+#     print(f"Cache stats: {fast_classifier.get_cache_stats()}")
+
 
 # NEW: Async versions of your core functions
 async def classify_intent_async(query: str, conversation_history: str = "") -> str:
@@ -596,119 +805,8 @@ async def get_scheme_response_async(
 
     guid = None
     rag = None
-    # guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
-    # if guid:
-    #     logger.info(f"guid found with {query} and guid {guid} for pinecone search")
-    # else:
-    #    guid = None
-    # For specific scheme queries, try direct MongoDB lookup first
-    # if intent == "Specific_Scheme_Know_Intent" and MONGO_SCHEME_AVAILABLE:
-    #     guid_start = time.perf_counter()
-    #     logger.info(f"Using MongoDB for specific scheme lookup - Query: {query}")
-        
-    #     # First, try to find GUID
-    #     loop = asyncio.get_event_loop()
-    #     guid = await loop.run_in_executor(executor, find_scheme_guid_by_query, query,userType)
-
-    #     guid_time = time.perf_counter() - guid_start
-    #     logger.info(f"GUID lookup time: {guid_time:.3f}s, found: {guid}")
-        
-    #     if guid:
-    #         fetch_start = time.perf_counter()
-    #         logger.info(f"Found popular scheme GUID: {guid} for query: '{query}'")
-    #         # Fetch docs directly from MongoDB
-    #         docs = await loop.run_in_executor(
-    #             executor, 
-    #             fetch_scheme_docs_by_guid, 
-    #             guid, 
-    #             None, 
-    #             True,
-    #             userType
-    #         )
-    #         fetch_time = time.perf_counter() - fetch_start
-            
-    #         if docs:
-    #             llm_start = time.perf_counter()
-    #             logger.info(f"Retrieved {len(docs)} documents from MongoDB for GUID: {guid} (fetch time: {fetch_time:.3f}s)")
-    #             def run_qa_chain():
-    #                 retriever = DocumentListRetriever(docs)
-    #                 qa_chain = RetrievalQA.from_chain_type(
-    #                     llm=llm,
-    #                     chain_type="stuff",
-    #                     retriever=retriever,
-    #                     return_source_documents=True,
-    #                 )
-    #                 return qa_chain.invoke({"query": query})
-                
-    #             result = await loop.run_in_executor(executor, run_qa_chain)
-    #             llm_time = time.perf_counter() - llm_start
-               
-    #             rag = {"text": result["result"], "sources": result["source_documents"]}
-    #             logger.info(f"LLM processing time: {llm_time:.3f}s, response length: {len(rag['text'])} chars")
-    #             logger.info("Successfully retrieved scheme data from MongoDB")
-    #         else:
-    #             logger.warning("No documents found in MongoDB for GUID; falling back to search")
     
-    #     # If direct GUID lookup didn't work, try MongoDB search
-    #     if not rag and use_mongo and MONGO_SCHEME_AVAILABLE:
-    #         search_start = time.perf_counter()
-    #         logger.info("Using MongoDB search for scheme lookup")
-            
-    #         loop = asyncio.get_event_loop()
-            
-    #         def run_mongo_search():
-    #             # Search schemes in MongoDB
-    #             logger.info(f"Searching schemes by query: {query} with limit 5")
-    #             docs = search_schemes_by_query(query, limit=5)
-                
-    #             if docs:
-    #                 retriever = DocumentListRetriever(docs)
-    #                 qa_chain = RetrievalQA.from_chain_type(
-    #                     llm=llm,
-    #                     chain_type="stuff",
-    #                     retriever=retriever,
-    #                     return_source_documents=True,
-    #                 )
-    #                 return qa_chain.invoke({"query": query})
-    #             return None
-            
-    #         result = await loop.run_in_executor(executor, run_mongo_search)
-    #         search_time = time.perf_counter() - search_start
-            
-    #         if result:
-    #             rag = {"text": result["result"], "sources": result["source_documents"]}
-    #             logger.info(f"MongoDB search + LLM time: {search_time:.3f}s, response length: {len(rag['text'])} chars")
-    #             logger.info("Successfully retrieved scheme data from MongoDB search")
-    
-    # Fallback to Pinecone if MongoDB didn't work
-    # if not rag:
-    #     logger.info("Falling back to Pinecone search")
-    #     if guid:
-    #         # Try Pinecone with known GUID
-    #         docs = await loop.run_in_executor(
-    #             executor, 
-    #             fetch_scheme_docs_by_guid, 
-    #             guid, 
-    #             vector_store,
-    #             False,
-    #             userType  
-    #         )
-            
-    #         if docs:
-    #             def run_qa_chain():
-    #                 retriever = DocumentListRetriever(docs)
-    #                 qa_chain = RetrievalQA.from_chain_type(
-    #                     llm=llm,
-    #                     chain_type="stuff",
-    #                     retriever=retriever,
-    #                     return_source_documents=True,
-    #                 )
-    #                 return qa_chain.invoke({"query": query})
-                
-    #             result = await loop.run_in_executor(executor, run_qa_chain)
-    #             rag = {"text": result["result"], "sources": result["source_documents"]}
-    #     else:
-            # Regular Pinecone search
+    # Regular Pinecone search
     logger.info(f"userType is equal too {userType}")
     rag = await get_rag_response_async(
                 query,
@@ -718,58 +816,6 @@ async def get_scheme_response_async(
                 business_category=business_category,
                 userType=userType
             )
-
-    # # Handle Mudra inclusion (if needed)
-    # if include_mudra:
-    #     logger.info("Including Pradhan Mantri Mudra Yojana details")
-    #     loop = asyncio.get_event_loop()
-        
-    #     mudra_guid = await loop.run_in_executor(
-    #         executor, 
-    #         find_scheme_guid_by_query, 
-    #         "pradhan mantri mudra yojana",
-    #         userType  # Assuming userType 1 for Mudra
-    #     ) or "SH0008BK"
-        
-    #     # Try MongoDB first for Mudra
-    #     mudra_docs = None
-    #     if use_mongo and MONGO_SCHEME_AVAILABLE:
-    #         mudra_docs = await loop.run_in_executor(
-    #             executor, 
-    #             fetch_scheme_docs_by_guid, 
-    #             mudra_guid, 
-    #             None, 
-    #             True,
-    #             userType
-    #         )
-        
-    #     # Fallback to Pinecone for Mudra if needed
-    #     if not mudra_docs:
-    #         mudra_docs = await loop.run_in_executor(
-    #             executor, 
-    #             fetch_scheme_docs_by_guid, 
-    #             mudra_guid, 
-    #             vector_store,
-    #             False,
-    #             userType
-    #         )
-
-    #     if mudra_docs:
-    #         def run_mudra_qa():
-    #             retriever = DocumentListRetriever(mudra_docs)
-    #             qa_chain = RetrievalQA.from_chain_type(
-    #                 llm=llm,
-    #                 chain_type="stuff",
-    #                 retriever=retriever,
-    #                 return_source_documents=True,
-    #             )
-    #             return qa_chain.invoke({"query": "Pradhan Mantri Mudra Yojana"})
-            
-    #         result = await loop.run_in_executor(executor, run_mudra_qa)
-    #         mudra_rag = {"text": result["result"], "sources": result["source_documents"]}
-    #     else:
-    #         logger.warning("Mudra documents not found; skipping")
-    #         mudra_rag = {"text": "", "sources": []}
 
     if not isinstance(rag, dict):
         rag = {"text": str(rag), "sources": []}
@@ -811,12 +857,6 @@ async def generate_response_async(
     print(f"Generating response for intent: {intent}, language: {language}, query: {query} and rag_response: {rag_response}...")
     # Handle non-streaming cases first (these return strings)
     if intent == "Out_of_Scope":
-        # if language == "Hindi":
-        #     response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
-        # elif language == "Hinglish":
-        #     response = "Maaf kijiye, main sirf sarkari yojanaon, digital ya financial literacy aur business growth mein madad kar sakta hoon."
-        # else:
-        #     response = "Sorry, I can only help with government schemes, digital/financial literacy or business growth."
         if language == "Hindi" or language == "English":
             response = "क्षमा करें, मैं केवल सरकारी योजनाओं, डिजिटल या वित्तीय साक्षरता और व्यावसायिक वृद्धि पर मदद कर सकता हूँ।"
         elif language == "Hinglish":
@@ -832,16 +872,7 @@ async def generate_response_async(
         return response
 
     if intent == "Gratitude_Intent":
-        # gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
-
-        # **Instructions**:
-        # - Respond briefly in the same language ({language}) acknowledging the thanks and offering further help. 
-        # - Use Devanagari script for Hindi and a natural mix of Hindi and English words in Roman script for Hinglish.
-        # - Keep the message under 30 words.
-
-        # **Output**:
-        # - Only the acknowledgement message in the user's language."""
-        response_language = "Hindi" if language in ["Hindi", "English"] else language
+        response_language = "Hindi" if language in ["hi", "en"] else language
         
         gratitude_prompt = f"""You are a friendly assistant for Haqdarshak. The user {user_info.name} has thanked you.
 
@@ -926,129 +957,6 @@ async def generate_response_async(
 
     special_schemes = ["Udyam", "FSSAI", "Shop Act", "GST", "Mudra", "PMEGP", "PMFME", "CMEGP", "Yuva Udyami", "PMSBY", "PMJJBY", "PMJAY (Ayushman Bharat)"]
     link = "https://haqdarshak.com/contact"
-
-    # if intent == "Specific_Scheme_Know_Intent":
-    #     intent_prompt = (
-    #         "Share scheme name, purpose, benefits and other fetched relevant details in a structured format from **RAG Response**. "
-    #         "Ask: 'Want details on eligibility or how to apply?' "
-    #         "(English), 'Eligibility ya apply karne ke baare mein jaanna chahte hain?' "
-    #         "(Hinglish), or 'पात्रता या आवेदन करने के बारे में जानना चाहते हैं?' (Hindi)."
-    #     )
-    #     intent_prompt += (
-    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
-    #     )
-    # elif intent == "Specific_Scheme_Apply_Intent":
-    #     intent_prompt = (
-    #         "Share application process from **RAG Response**."
-    #     )
-    #     intent_prompt += (
-    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
-    #     )
-    # elif intent == "Specific_Scheme_Eligibility_Intent":
-    #     intent_prompt = (
-    #         "Summarize eligibility rules from **RAG Response** and provide a link "
-    #         f"to check eligibility: https://customer.haqdarshak.com/check-eligibility/{scheme_guid}. "
-    #         "Ask the user to verify their eligibility there."
-    #     )
-    #     intent_prompt += (
-    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi)."
-    #     )
-    # elif intent == "Schemes_Know_Intent":
-    #     intent_prompt = (
-    #         "List 3-4 schemes from **RAG Response** with a short one-line description for each. "
-    #         "Always include Pradhan Mantri Mudra Yojana as one of the schemes. "
-    #         "Use any user provided scheme details to choose the most relevant schemes. "
-    #         "If no close match is found, still list the top schemes applicable to the user in their state or CSS. "
-    #         "Finally Ask: 'Want more details on any scheme?' (English), 'Kisi yojana ke baare mein aur jaanna chahte hain?' (Hinglish), or "
-    #         "'किसी योजना के बारे में और जानना चाहते हैं?' (Hindi)."
-    #     )
-    #     intent_prompt += (
-    #         f" For {', '.join(special_schemes)}, add: 'Haqdarshak can help you apply for this document. "
-    #         f"Please book in the app.' (English), 'Haqdarshak aapko yeh document dilaane mein madad kar sakta hai. "
-    #         f"Kripya app mein book karein.' (Hinglish), or 'हकदर्शक आपको यह दस्तावेज़ "
-    #         f"दिलाने में मदद कर सकता है। कृपया ऐप में बुक करें' (Hindi). Add this only in the description for the applicable scheme/s, not under the entire list."
-    #     )
-    # elif intent == "DFL_Intent":
-    #     intent_prompt = (
-    #         "Use the **RAG Response** if available, augmenting with your own knowledge "
-    #         "where relevant. If the RAG Response is empty or not relevant, do not mention that to user and provide a helpful answer "
-    #         "smoothly from your own knowledge in simple language "
-    #         "with helpful examples."
-    #     )
-    # elif intent == "Contextual_Follow_Up":
-    #     intent_prompt = (
-    #         "Use the Previous Assistant Response and Conversation Context to identify the topic. "
-    #         "If the RAG Response does not match the referenced scheme, indicate a new RAG search "
-    #         "is needed. Provide a relevant follow-up response using the RAG Response, "
-    #         "filtering for schemes where 'applicability' includes state_id or 'scheme type' is "
-    #         "'Centrally Sponsored Scheme' (CSS). If unclear, ask for clarification (e.g., "
-    #         "'Could you specify which scheme?' or 'Kaunsi scheme ke baare mein?' or 'कौन सी योजना के बारे में?')."
-    #     )
-    # elif intent == "Confirmation_New_RAG":
-    #     intent_prompt = (
-    #         "If the user confirms to initiate a new RAG search, respond with the details of the "
-    #         "scheme they are interested in, refer to conversation context for details."
-    #     )
-    # else:
-    #     intent_prompt = ""
-
-    # output_prompt = """
-    # **Output**:
-    #    - Return only the final response in the query's language (no intent label or intermediate steps). If a new RAG search is needed for schemes, indicate with: 'I need to fetch more details about [scheme name]. Please confirm if this is the scheme you meant.' (English), 'Mujhe [scheme name] ke baare mein aur jaankari leni hogi. Kya aap isi scheme ki baat kar rahe hain?' (Hinglish), or 'मुझे [scheme name] के बारे में और जानकारी लेनी होगी। क्या आप इसी योजना की बात कर रहे हैं?' (Hindi).
-    #    - If RAG Response is empty or 'No relevant scheme information found,' and the query is a Contextual_Follow_Up referring to a specific scheme, indicate a new RAG search is needed. Otherwise, say: 'I don't have information on this right now.' (English), 'Mujhe iske baare mein abhi jaankari nahi hai.' (Hinglish), or 'मुझे इसके बारे में अभी जानकारी नहीं है।' (Hindi).
-    #    - Do not mention any other scheme when a specific scheme is being talked about.
-    #    - When intent is Schemes_Know, do not mention other schemes from past conversation, only the current relevant ones.
-    #    - No need to mention user profile details in every response, only include where contextually relevant.
-    #    - Scheme answers must come only from scheme data. For DFL answers, use the DFL document supplemented by your own knowledge when possible, but rely on your own knowledge if nothing relevant is found.
-    # """
-
-    # prompt = f"{base_prompt}{intent_prompt}\n{output_prompt}"
-
-    # try:
-    #     if stream:
-    #         async def stream_main_response():
-    #             buffer = ""
-    #             try:
-    #                 async for chunk in llm.astream([{"role": "user", "content": prompt}]):
-    #                     token = chunk.content or ""
-    #                     buffer += token
-    #                     if token:
-    #                         yield token
-                
-    #                  # Add eligibility link for specific intent after streaming
-    #                 if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
-    #                     screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
-    #                     if screening_link not in buffer:
-    #                         link_text = f"\n{screening_link}"
-    #                         for char in link_text:
-    #                          yield char
-                            
-    #             except Exception as e:
-    #                 logger.error(f"Failed to stream response: {str(e)}")
-    #                 error_msg = "Sorry, I couldn't process your query."
-    #                 for char in error_msg:
-    #                     yield char
-            
-    #         return stream_main_response()
-    #     else:
-    #         response = await llm.ainvoke([{"role": "user", "content": prompt}])
-    #         final_text = response.content.strip()
-            
-    #         if intent == "Specific_Scheme_Eligibility_Intent" and scheme_guid:
-    #             screening_link = f"https://customer.haqdarshak.com/check-eligibility/{scheme_guid}"
-    #             if screening_link not in final_text:
-    #                 final_text += f"\n{screening_link}"
-            
-    #         return final_text
 
     if intent == "Specific_Scheme_Know_Intent":
         intent_prompt = (
@@ -1545,6 +1453,7 @@ async def process_query_optimized(
     # Step 6: Start intent classification early (parallel with conversation fetch)
     tracker.start_timer("intent_classification")
     intent_task = asyncio.create_task(classify_intent_async(query, conversation_history))
+    # intent_task = asyncio.create_task(classify_intent_rules_only(query, conversation_history))
     
     # Step 7: Wait for conversations and get user type
     conversations = await conversations_task
@@ -1554,7 +1463,7 @@ async def process_query_optimized(
     # Step 8: Get intent result
     intent = await intent_task
     tracker.end_timer("intent_classification")
-    logger.info(f"Classified intent: {intent}")
+    logger.info(f"Classified intent: kits {intent}")
 
     # Step 9: Determine context and prepare for RAG
     follow_up_intents = {
