@@ -6,11 +6,11 @@ pinecone_api_key = 'pcsk_6VEd7N_wHVyxWDAivkgSB5f83AGD8oKb9puRUk4SaMPwLfhm7Hviibs
 
 # Source Pinecone setup
 source_pinecone_environment = 'us-east-1'
-source_pinecone_index_name = 'msme-discovery'
+source_pinecone_index_name = 'msme-dfl-training'
 
 # Target Pinecone setup
 target_pinecone_environment = 'us-east-1'
-target_pinecone_index_name = 'hq-chatbot-msme'
+target_pinecone_index_name = 'msme-dfl-chatbot'
 
 pc = Pinecone(api_key=pinecone_api_key)
 
