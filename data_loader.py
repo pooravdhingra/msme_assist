@@ -362,7 +362,7 @@ def load_rag_data(
     index = get_index_by_host(host)
     
     # Use safe upsert instead of direct upsert
-    safe_upsert_records(index, "__default__", records, chunk_size)
+    # safe_upsert_records(index, "__default__", records, chunk_size)
 
     try:
         with open(version_file, "w") as f:
@@ -444,8 +444,8 @@ def load_dfl_data(
             "chunk_text": chunk  # Keep for backward compatibility
         })
     
-    # Use safe upsert for DFL data too
-    safe_upsert_records(index, "__default__", records, 100)
+    # # Use safe upsert for DFL data too
+    # safe_upsert_records(index, "__default__", records, 100)
 
     try:
         with open(version_file, "w") as vf:
