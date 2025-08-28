@@ -162,7 +162,7 @@ async def chat_get_optimized(session_id: str, query: str):
                     script_task = asyncio.create_task(audio_task(final_text))
                     
                     # Wait for audio script with timeout
-                    script = await asyncio.wait_for(script_task, timeout=3.0)
+                    script = await asyncio.wait_for(script_task, timeout=6.0)
                     
                     # Generate actual audio in thread pool (CPU intensive)
                     loop = asyncio.get_event_loop()
@@ -188,7 +188,7 @@ async def chat_get_optimized(session_id: str, query: str):
             }
             sess.messages.append(assistant_msg)
 
-            yield {"event": "done", "data": ""}
+            yield {"event": "done", "data": None}
 
         except Exception as e:
             import traceback
