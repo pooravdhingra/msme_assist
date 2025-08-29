@@ -805,10 +805,13 @@ def get_language_config(language):
     if language in LANGUAGE_LABELS:
         language_name = LANGUAGE_LABELS[language]
     else:
+        if language == "English":
+            language_name = "Hindi"
         language_name = language
     
     # Return config for the language, fallback to English if not found
-    return LANGUAGE_CONFIG.get(language_name, LANGUAGE_CONFIG["English"]), language_name
+
+    return LANGUAGE_CONFIG.get(language_name, LANGUAGE_CONFIG["Hindi"]), language_name
 
 async def generate_response_async(
     intent: str, 
@@ -825,7 +828,7 @@ async def generate_response_async(
     
     # Get language configuration
     lang_config, language_name = get_language_config(language)
-    
+    print(f"Language :{lang_config} detected: {language_name}")
     print(f"Using language config for: {language_name} and {lang_config}")
     # Handle out of scope
     if intent == "Out_of_Scope":
