@@ -97,7 +97,7 @@ WELCOME_MESSAGES = {
 }
 
 LANGUAGE_LABELS = {
-    "en": "English",
+    "en": "Hindi",
     "mr": "Marathi", 
     "hi": "Hindi",
     "as": "Assamese",
@@ -805,12 +805,13 @@ def get_language_config(language):
     if language in LANGUAGE_LABELS:
         language_name = LANGUAGE_LABELS[language]
     else:
+        if languge == "English":
+            language_name = "Hindi"
         if language == "English":
             language_name = "Hindi"
         language_name = language
     
     # Return config for the language, fallback to English if not found
-
     return LANGUAGE_CONFIG.get(language_name, LANGUAGE_CONFIG["Hindi"]), language_name
 
 async def generate_response_async(
