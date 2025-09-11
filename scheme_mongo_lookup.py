@@ -242,6 +242,14 @@ class MongoSchemeRetriever:
                             elapsed = time.perf_counter() - start_time
                             logger.info(f"Found scheme tobi GUID via mapping: {guid} for query: '{query}' (matched: '{keyword}') in {elapsed:.3f}s")
                             return guid
+                
+                # Non-MSME mappings as fallback
+                for guid, keywords in SCHEME_KEYWORDS_NON_MSME.items():
+                    for keyword in keywords:
+                        if keyword.lower() in query_lower:
+                            elapsed = time.perf_counter() - start_time
+                            logger.info(f"Found scheme tobi GUID via mapping: {guid} for query: '{query}' (matched: '{keyword}') in {elapsed:.3f}s")
+                            return guid
             else:  # Non-MSME user type
                 for guid, keywords in SCHEME_KEYWORDS_NON_MSME.items():
                     for keyword in keywords:

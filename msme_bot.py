@@ -825,12 +825,9 @@ async def generate_response_async(
     stream: bool = False
 ):
     """Updated async version with proper multilingual support"""
-    print(f"Generating response for intent: {intent}, language: {language}, query: {query} and rag_response: {rag_response}...")
     
     # Get language configuration
     lang_config, language_name = get_language_config(language)
-    print(f"Language :{lang_config} detected: {language_name}")
-    print(f"Using language config for: {language_name} and {lang_config}")
     # Handle out of scope
     if intent == "Out_of_Scope":
         response = lang_config["out_of_scope"]
@@ -1132,7 +1129,7 @@ async def generate_audio_script_background(response: str, user_info: UserContext
         logger.error(f"Background audio script generation failed: {str(e)}")
         return "ऑडियो स्क्रिप्ट उत्पन्न करने में त्रुटि हुई है।"
 
-async def get_popular_scheme_response_fast(query: str, intent: str,userType: int) -> Optional[dict]:
+async def get_popular_scheme_response_fast(query: str, intent: str,userType: int) -> Tuple[Optional[dict], Optional[str]]:
     """Ultra-fast response for popular schemes using MongoDB (1-2 seconds)"""
 
     logger.info(f"Processing popular userType {userType} scheme query: {query} with intent: {intent}")
@@ -1145,14 +1142,14 @@ async def get_popular_scheme_response_fast(query: str, intent: str,userType: int
     
     if not guid:
         logger.info(f"No popular scheme GUID found for query: '{query}' - using regular path")
-        return None
+        return None ,None
     
     logger.info(f"Found popular scheme GUID: {guid} for query: '{query}' - using fast path")
     
     # Step 2: Fast MongoDB fetch (< 200ms)  
     if not MONGO_SCHEME_AVAILABLE:
         logger.warning("MongoDB not available - falling back to regular path")
-        return None
+        return None , None
     
     try:
         # Single fast operation - fetch docs from MongoDB
@@ -1167,7 +1164,7 @@ async def get_popular_scheme_response_fast(query: str, intent: str,userType: int
         )
         if not docs:
             logger.warning(f"No docs found for {docs} popular scheme GUID: {guid}")
-            return None
+            return None ,None
         
         # Step 3: Fast QA chain (< 1000ms)
         def run_fast_qa():
@@ -1184,11 +1181,11 @@ async def get_popular_scheme_response_fast(query: str, intent: str,userType: int
         result = await loop.run_in_executor(executor, run_fast_qa)
         rag_response = {"text": result["result"], "sources": result["source_documents"]}
         logger.info(f"Fast path completed for popular scheme: {guid}")
-        return rag_response
+        return rag_response,guid
         
     except Exception as e:
         logger.error(f"Fast path failed for GUID {guid}: {str(e)} - falling back")
-        return None
+        return None,None
 
 def create_audio_task_background(response: str, user_info: UserContext, rag_response: str = ""):
     """Create a background audio task that returns a coroutine"""
@@ -1344,13 +1341,15 @@ async def process_query_optimized(
     logger.info(f"Processing query: '{query}' with intent: {intent}")
 
     rag_response = None
+    scheme_guid = None
     if intent in scheme_intents:
         tracker.start_timer("rag_retrieval")
         logger.info(f"Retrieving RAG response for kittu intent: {intent}")
         # TRY FAST PATH FIRST for popular schemes (1-2 seconds)
         if intent == "Specific_Scheme_Know_Intent" or "Schemes_Know_Intent":
-            rag_response = await get_popular_scheme_response_fast(query, intent,userType)
-            logger.info(f"Fast path response: {rag_response}")
+            rag_response,guid = await get_popular_scheme_response_fast(query, intent,userType)
+            scheme_guid = guid
+            logger.info(f"Fast path response: {rag_response} and guid: {guid}")
         # FALLBACK to full pipeline if fast path didn't work
         if not rag_response:
             logger.info("Using full scheme response pipeline")
@@ -1383,13 +1382,12 @@ async def process_query_optimized(
         
         tracker.end_timer("dfl_retrieval")
 
-    # Step 11: Generate response (this is where the fix is important)
+    # Step 11: Generate response 
     tracker.start_timer("generate_response")
     rag_text = rag_response.get("text") if isinstance(rag_response, dict) else rag_response
     if intent == "DFL_Intent" and (rag_text is None or "No relevant" in rag_text):
         rag_text = ""
-    scheme_guid = None
-    if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent":
+    if isinstance(rag_response, dict) and intent == "Specific_Scheme_Eligibility_Intent" and not scheme_guid:
         scheme_guid = extract_scheme_guid(rag_response.get("sources", []))
 
     response_result = await generate_response_async(
