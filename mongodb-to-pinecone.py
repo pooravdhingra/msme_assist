@@ -5,7 +5,7 @@ import json
 
 def import_data_and_create_indexes():
     # MongoDB connection
-    client = MongoClient("mongodb+srv://pooravdhingra:Poorav123@msmeassist.womwsrv.mongodb.net/")
+    client = MongoClient("mongodb+srv://hq_chatbot:Hqchatbot12@cluster0.j4zzjdm.mongodb.net/")
     db = client["haqdarshak"]
     collection = db["schemes"]
     
@@ -15,7 +15,7 @@ def import_data_and_create_indexes():
     print("\n📊 STEP 1: Importing data from Excel...")
     
     # Read Excel
-    df = pd.read_excel("scheme_db_latest_new.xlsx")
+    df = pd.read_excel("scheme_db_latest.xlsx")
     df.columns = df.columns.str.strip()
     
     print(f"Found {len(df)} rows to import")
